@@ -1,0 +1,40 @@
+{include file="global/header.html"}
+
+    <main class="upload-image">
+        <h1>Upload Image</h1>
+
+        {if $error}
+        <div class="alert alert-danger">
+            {foreach $error as $err}
+                <b>Error:</b> {$err}
+            {/foreach}
+        </div>
+        {/if}
+
+        {if $success}
+        <div class="alert alert-success">
+            <b>Success!</b> {$success}
+        </div>
+        {/if}
+
+        <div class="alert alert-info">
+            <b>Message:</b> Please read our <b>image upload rules</b> before continuing.
+        </div>
+
+        <form method="post" action="/upload-image" enctype="multipart/form-data">
+            <!-- Image File -->
+            <label for="image">Select Image</label>
+            <input type="file" id="image" name="image" accept="image/jpeg, image/png, image/gif, image/webp" required>
+
+            <!-- Description -->
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="4" required></textarea>
+
+            <!-- Submit -->
+            <button type="submit">Upload</button>
+        </form>
+
+        <p>Don't know the rules? Please read our <a href="#">Image Upload Rules</a>.</p>
+    </main>
+
+{include file="global/footer.html"}

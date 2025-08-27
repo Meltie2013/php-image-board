@@ -1,0 +1,60 @@
+/* 404 Container */
+.error-container {
+    margin: 50px auto;
+    width: 800px;
+    max-width: 90%;
+    background-color: #1b222b;
+    border-radius: 12px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+    text-align: center;
+    padding: 50px 30px;
+}
+
+/* Big 404 text */
+.error-container h1 {
+    font-size: 6rem;
+    color: #00a8ff;
+    margin-bottom: 20px;
+}
+
+/* Subtitle */
+.error-container h2 {
+    font-size: 1.8rem;
+    margin-bottom: 15px;
+    color: #f0f0f0;
+}
+
+/* Description */
+.error-container p {
+    font-size: 1rem;
+    margin-bottom: 30px;
+    color: #b0b6be;
+}
+
+/* Back to Home button */
+.error-container a {
+    display: inline-block;
+    padding: 12px 24px;
+    background-color: #00a8ff;
+    color: #ffffff;
+    font-size: 1rem;
+    border-radius: 6px;
+    text-decoration: none;
+}
+
+.error-container a:hover {
+    background-color: #007bb5;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .error-container {
+        padding: 30px 20px;
+    }
+    .error-container h1 {
+        font-size: 4rem;
+    }
+    .error-container h2 {
+        font-size: 1.4rem;
+    }
+}

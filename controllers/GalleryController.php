@@ -1,0 +1,424 @@
+<?php
+
+/**
+ * Controller responsible for handling gallery views, image display,
+ * and serving stored image files to the client.
+ */
+class GalleryController
+{
+    /**
+     * Cached config for controller usage.
+     *
+     * @var array
+     */
+    private static array $config;
+
+    /**
+     * Retrieve a username by user ID.
+     *
+     * @param int|null $userId ID of the user, or null if not available.
+     * @return string Username if found, otherwise empty string.
+     */
+    private static function getUsernameById(?int $userId): string
+    {
+        if ($userId === null)
+        {
+            return '';
+        }
+
+        // Query to fetch username by user ID
+        $sql = "SELECT username FROM app_users WHERE id = :id LIMIT 1";
+        $result = Database::fetch($sql, [':id' => $userId]);
+
+        return $result['username'] ?? '';
+    }
+
+    /**
+     * Load and cache config once per request.
+     *
+     * @return array
+     */
+    private static function getConfig(): array
+    {
+        if (empty(self::$config))
+        {
+            self::$config = require __DIR__ . '/../config/config.php';
+        }
+
+        return self::$config;
+    }
+
+    /**
+     * Initialize template engine with optional cache clearing.
+     *
+     * @return TemplateEngine
+     */
+    private static function initTemplate(): TemplateEngine
+    {
+        $config = self::getConfig();
+        $template = new TemplateEngine(__DIR__ . '/../templates', __DIR__ . '/../cache/templates', $config);
+        if (!empty($config['template']['disable_cache']))
+        {
+            $template->clearCache();
+        }
+
+        return $template;
+    }
+
+    /**
+     * Check if a user has access to age-sensitive content.
+     *
+     * @param array|null $user Array containing user's date_of_birth and age_verified_at
+     * @param string $minBirthDate Calculated minimum birth date
+     * @return bool True if allowed, false otherwise
+     */
+    private static function checkAgeSensitiveAccess(?array $user, string $minBirthDate): bool
+    {
+        return $user && !empty($user['date_of_birth']) && !empty($user['age_verified_at']) && $user['date_of_birth'] <= $minBirthDate;
+    }
+
+    /**
+     * Display the gallery index with paginated images.
+     *
+     * @param int|null $page Current page number, defaults to 1.
+     * @return void
+     */
+    public static function index($page = null): void
+    {
+        $config = self::getConfig();
+        $imagesPerPage = $config['gallery']['images_displayed'];
+
+        $page = max(1, (int)($page ?? 1));
+        $limit = $imagesPerPage;
+        $offset = ($page - 1) * $limit;
+
+        $userId = SessionManager::get('user_id');
+        $currentUser = null;
+
+        // Fetch logged-in user's DOB and verification status if available
+        if ($userId)
+        {
+            $currentUser = Database::fetch(
+                "SELECT date_of_birth, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
+                [':id' => $userId]
+            );
+        }
+
+        $requiredYears = (int)($config['profile']['years'] ?? 0);
+        $minBirthDate = (new DateTime())->modify("-{$requiredYears} years")->format('Y-m-d');
+
+        // Fetch all approved images
+        $sql = "SELECT i.image_hash, i.age_sensitive, i.created_at, u.date_of_birth, u.age_verified_at
+                FROM app_images i
+                LEFT JOIN app_users u ON i.user_id = u.id
+                WHERE i.status = 'approved'
+                ORDER BY i.created_at DESC";
+
+        $stmt = Database::getPDO()->prepare($sql);
+        $stmt->execute();
+        $images = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Filter images based on age-sensitive access
+        $filteredImages = array_filter($images, function ($img) use ($currentUser, $minBirthDate)
+        {
+            return (int)$img['age_sensitive'] === 0
+                || self::checkAgeSensitiveAccess($currentUser, $minBirthDate);
+        });
+
+        $totalImages = count($filteredImages);
+        $totalPages = max(1, ceil($totalImages / $limit));
+
+        // Slice array for pagination
+        $pageImages = array_slice($filteredImages, $offset, $limit);
+
+        $loopImages = [];
+        foreach ($pageImages as $img)
+        {
+            $loopImages[] = [
+                "/image/original/" . $img['image_hash'],
+                "/image/" . $img['image_hash'],
+            ];
+        }
+
+        // Pagination navigation links
+        $pagination_prev = $page > 1 ? ($page - 1 === 1 ? '/' : '/page/' . ($page - 1)) : null;
+        $pagination_next = $page < $totalPages ? '/page/' . ($page + 1) : null;
+
+        $range = $config['gallery']['pagination_range'];
+        $start = max(1, $page - $range);
+        $end = min($totalPages, $page + $range);
+
+        $pagination_pages = [];
+        if ($start > 1)
+        {
+            $pagination_pages[] = ['/page/1', 1, false];
+            if ($start > 2)
+            {
+                $pagination_pages[] = [null, '...', false];
+            }
+        }
+
+        for ($i = $start; $i <= $end; $i++)
+        {
+            $pagination_pages[] = [
+                $i === 1 ? '/page/1' : '/page/' . $i,
+                $i,
+                $i === $page
+            ];
+        }
+
+        if ($end < $totalPages)
+        {
+            if ($end < $totalPages - 1)
+            {
+                $pagination_pages[] = [null, '...', false];
+            }
+
+            $pagination_pages[] = ['/page/' . $totalPages, $totalPages, false];
+        }
+
+        $template = self::initTemplate();
+        $template->assign('images', $loopImages);
+        $template->assign('pagination_prev', $pagination_prev);
+        $template->assign('pagination_next', $pagination_next);
+        $template->assign('pagination_pages', $pagination_pages);
+
+        $template->render('gallery/gallery_index.html');
+    }
+
+    /**
+     * Display a single image view with metadata.
+     *
+     * @param string $hash Unique hash identifier for the image.
+     * @return void
+     */
+    public static function view(string $hash): void
+    {
+        $template = self::initTemplate();
+        $userId = SessionManager::get('user_id');
+        $currentUser = null;
+
+        if ($userId)
+        {
+            $currentUser = Database::fetch(
+                "SELECT date_of_birth, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
+                [':id' => $userId]
+            );
+        }
+
+        $sql = "
+            SELECT
+                i.user_id,
+                i.image_hash,
+                i.status,
+                i.description,
+                i.original_path,
+                i.age_sensitive,
+                i.created_at,
+                i.mime_type,
+                i.width,
+                i.height,
+                i.size_bytes,
+                i.md5,
+                i.sha1,
+                i.reject_reason,
+                u.date_of_birth,
+                u.age_verified_at
+            FROM app_images i
+            LEFT JOIN app_users u ON i.user_id = u.id
+            WHERE i.image_hash = :hash
+              AND (i.status = 'approved' AND NOT i.status = 'deleted')
+            LIMIT 1
+        ";
+
+        $img = Database::fetch($sql, ['hash' => $hash]);
+
+        if (!$img)
+        {
+            http_response_code(404);
+            $template->assign('title', 'Image Not Found');
+            $template->assign('message', 'The requested image could not be found.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        if ((int)$img['age_sensitive'] === 1 && !self::checkAgeSensitiveAccess($currentUser, (new DateTime())->modify("-" . (int)(self::$config['profile']['years'] ?? 0) . " years")->format('Y-m-d')))
+        {
+            http_response_code(403);
+            $template->assign('title', 'Access Denied');
+            $template->assign('message', 'The server understood your request, but you are not authorized to view this image.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $username = self::getUsernameById((int)$img['user_id']);
+
+        $template->assign('img_hash', $img['image_hash']);
+        $template->assign('img_username', ucfirst($username));
+        $template->assign('img_description', $img['description']);
+        $template->assign('img_mime_type', $img['mime_type']);
+        $template->assign('img_width', $img['width']);
+        $template->assign('img_height', $img['height']);
+        $template->assign('img_size', GlobalHelper::formatFileSize($img['size_bytes']));
+        $template->assign('img_md5', $img['md5']);
+        $template->assign('img_sha1', $img['sha1']);
+        $template->assign('img_reject_reason', $img['reject_reason']);
+        $template->assign('img_approved_status', ucfirst($img['status']));
+        $template->assign('img_created_at', DateHelper::format($img['created_at']));
+        $template->assign('img_age_sensitive', $img['age_sensitive']);
+
+        $template->render('gallery/gallery_view.html');
+    }
+
+    /**
+     * Soft delete an image by hash (Administrator or Moderator only).
+     *
+     * Marks the image as deleted instead of permanently removing it.
+     *
+     * @param string $hash
+     */
+    public static function delete(string $hash): void
+    {
+        $template = self::initTemplate();
+        $userId = SessionManager::get('user_id');
+
+        // Require login
+        if (!$userId)
+        {
+            header('Location: /user/login');
+            exit();
+        }
+
+        // Fetch user's role from the database
+        $sql = "
+            SELECT r.name AS role_name
+            FROM app_users u
+            JOIN app_roles r ON u.role_id = r.id
+            WHERE u.id = :user_id
+            LIMIT 1
+        ";
+        $userRoleData = Database::fetch($sql, [':user_id' => $userId]);
+        $role = $userRoleData['role_name'] ?? null;
+
+        // Only admins and moderators can delete
+        if (!$role || !in_array(strtolower($role), ['administrator','moderator'], true))
+        {
+            http_response_code(403);
+            $template->assign('title', 'Access Denied');
+            $template->assign('message', 'You do not have permission to delete images.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        // Ensure hash is provided
+        $hash = trim($hash);
+        if ($hash === '')
+        {
+            http_response_code(404);
+            $template->assign('title', '404 Not Found');
+            $template->assign('message', 'Oops! We couldn’t find that image.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        // Find the image
+        $sql = "SELECT image_hash, description, status
+                  FROM app_images
+                 WHERE image_hash = :hash LIMIT 1";
+        $image = Database::fetch($sql, [':hash' => $hash]);
+
+        if (!$image)
+        {
+            http_response_code(404);
+            $template->assign('title', 'Image Not Found');
+            $template->assign('message', 'The requested image could not be found.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        // Soft delete: update status instead of deleting row
+        $sql = "UPDATE app_images
+                   SET status = 'deleted'
+                 WHERE image_hash = :hash";
+        Database::execute($sql, [':hash' => $hash]);
+
+        // Render confirmation template
+        $template->assign('title', 'Image Deleted');
+        $template->assign('message', "This image has been deleted: {$image['image_hash']}");
+        $template->render('gallery/gallery_image_deleted.html');
+    }
+
+    /**
+     * Serve an image file directly from the uploads directory.
+     *
+     * @param string $hash Unique hash identifier for the image.
+     * @return void
+     */
+    public static function serveImage(string $hash): void
+    {
+        $template = self::initTemplate();
+        $userId = SessionManager::get('user_id');
+        $currentUser = null;
+
+        if ($userId)
+        {
+            $currentUser = Database::fetch(
+                "SELECT date_of_birth, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
+                [':id' => $userId]
+            );
+        }
+
+        $sql = "
+            SELECT
+                original_path,
+                mime_type,
+                age_sensitive,
+                i.user_id,
+                u.date_of_birth,
+                u.age_verified_at
+            FROM app_images i
+            LEFT JOIN app_users u ON i.user_id = u.id
+            WHERE i.image_hash = :hash
+              AND (i.status = 'approved' OR i.status = 'deleted')
+            LIMIT 1
+        ";
+        $image = Database::fetch($sql, ['hash' => $hash]);
+
+        if (!$image)
+        {
+            http_response_code(404);
+            $template->assign('title', 'Image Not Found');
+            $template->assign('message', 'The requested image could not be found.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        if ((int)$image['age_sensitive'] === 1 && !self::checkAgeSensitiveAccess($currentUser,
+            (new DateTime())->modify("-" . (int)(self::$config['profile']['years'] ?? 0) . " years")->format('Y-m-d')))
+        {
+            http_response_code(403);
+            $template->assign('title', 'Access Denied');
+            $template->assign('message', 'You are not authorized to view this image.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $baseDir = realpath(__DIR__ . '/../uploads/');
+        $fullPath = realpath($baseDir . '/' . ltrim(str_replace("uploads/", "", $image['original_path']), '/'));
+
+        if (!$fullPath || strpos($fullPath, $baseDir) !== 0 || !file_exists($fullPath))
+        {
+            http_response_code(404);
+            $template->assign('title', 'Image Not Found');
+            $template->assign('message', 'The requested image could not be found.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        header('Content-Type: ' . $image['mime_type']);
+        header('Content-Length: ' . filesize($fullPath));
+        header('Cache-Control: public, max-age=604800'); // Allow caching (7 days)
+        readfile($fullPath);
+        exit;
+    }
+}

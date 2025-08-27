@@ -1,0 +1,35 @@
+{include file="global/header.html"}
+
+    <div class="profile-container">
+        {include file="profile/profile_menu.html"}
+
+        <section class="profile-content">
+            <h1>Edit Date of Birth</h1>
+
+            {if $error}
+            <div class="alert alert-danger">
+                {foreach $error as $err}
+                    {$err}
+                {/foreach}
+            </div>
+            {/if}
+
+            {if $success}
+            <div class="alert alert-success">
+                {$success}
+            </div>
+            {/if}
+
+            <div class="alert alert-info">
+                <b>Message:</b> To view sensitive content, you must verify your age.
+            </div>
+
+            <form method="post">
+                <label for="date_of_birth">Date of Birth:</label>
+                <input type="date" name="date_of_birth" value="{$date_of_birth}">
+                <button type="submit" name="update_dob">Update Date of Birth</button>
+            </form>
+        </section>
+    </div>
+
+{include file="global/footer.html"}

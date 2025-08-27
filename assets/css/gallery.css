@@ -1,0 +1,257 @@
+/* Gallery Index Template */
+.gallery-container {
+    max-width: 1400px;
+    margin: 50px auto;
+    padding: 30px;
+    border-radius: 10px;
+    background-color: #161d23; /* dark background */
+}
+
+.gallery-container h5,
+.gallery-container a {
+    margin-top: 10px;
+    text-decoration: none;
+    color: #e0e0e0; /* light text for dark theme */
+}
+
+/* Gallery grid */
+.gallery-container .gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, max-content));
+    gap: 15px;
+    justify-content: center;
+}
+
+/* Center last row if it has fewer items */
+.gallery-container .gallery-grid:after {
+    content: "";
+    grid-column: 1 / -1;
+}
+
+/* Individual gallery item */
+.gallery-container .gallery-item {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+/* Image itself */
+.gallery-container .gallery-item img {
+    display: block;
+    max-width: 150px;
+    max-height: 150px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5); /* stronger shadow for dark theme */
+}
+
+/* Gallery title */
+.gallery-container .gallery-title {
+    margin-top: 5px;
+    font-size: 0.9rem;
+    color: #e0e0e0;
+    text-align: center;
+}
+
+/* Pagination */
+.gallery-container .gallery-pagination {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 25px;
+    flex-wrap: wrap;
+}
+
+.gallery-container .gallery-pagination a {
+    padding: 8px 12px;
+    border-radius: 4px;
+    text-decoration: none;
+    color: #e0e0e0;
+}
+
+.gallery-container .gallery-pagination a.current {
+    background-color: #00a8ff;
+    color: #fff;
+}
+
+.gallery-container .gallery-pagination a:not(.current) {
+    background-color: #3a3f46;
+    color: #e0e0e0;
+}
+
+.gallery-container .gallery-pagination a:hover {
+    background-color: #0097e6;
+    color: #fff;
+}
+
+/* Gallery Image View Template */
+.gallery-container-view {
+    max-width: 1400px;
+    margin: 50px auto;
+    padding: 20px;
+}
+
+.gallery-container-view .gallery-left-side {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 450px; /* match the original details box width */
+}
+
+.gallery-container-view .gallery-item-view {
+    display: flex;
+    gap: 30px;
+    align-items: flex-start;
+}
+
+/* Left Side Details Box */
+.gallery-container-view .gallery-details-view {
+    flex: 0 0 450px;
+    background: #1f272f;
+    color: #e0e0e0;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #3a3f46;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+
+.gallery-container-view .gallery-details-view h3 {
+    margin-bottom: 15px;
+    font-size: 1.4rem;
+    border-bottom: 1px solid #3a3f46;
+    padding-bottom: 8px;
+}
+
+.gallery-container-view .gallery-details-view h5,
+.gallery-container-view .gallery-details-view a {
+    text-decoration: none;
+    color: #00a8ff;
+    margin-bottom: 10px;
+}
+
+.gallery-container-view .gallery-details-view a:hover {
+    text-decoration: underline;
+}
+
+.gallery-container-view .gallery-details-view ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.gallery-container-view .gallery-details-view li {
+    margin-bottom: 8px;
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+.gallery-container-view .gallery-details-view strong {
+    display: inline-block;
+    width: 140px;
+}
+
+.gallery-container-view .gallery-details-view section {
+    margin-bottom: 20px;
+}
+
+/* Right Side Image */
+.gallery-container-view .gallery-image-wrapper {
+    flex: 2;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.gallery-container-view .gallery-image-wrapper img {
+    max-width: 100%;
+    max-height: 850px;
+    width: auto;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+
+/* Toolbar above details box */
+.gallery-container-view .gallery-toolbar {
+    display: flex;
+    justify-content: center; /* center buttons horizontally */
+    gap: 12px;
+    margin-bottom: 20px;
+    padding: 10px;
+    background: #1f272f;
+    border: 1px solid #3a3f46;
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+
+.gallery-container-view .gallery-toolbar button {
+    background: #2f3b47;
+    color: #e0e0e0;
+    border: 1px solid #3a3f46;
+    border-radius: 5px;
+    padding: 6px 12px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+/* Make toolbar forms match button sizing */
+.gallery-container-view .gallery-toolbar form {
+    display: inline-block; /* treat form like a button container */
+    margin: 0; /* remove default margin */
+    padding: 0; /* remove default padding */
+}
+
+.gallery-container-view .gallery-toolbar form button {
+    display: inline-block; /* ensure button fills form space */
+    vertical-align: middle; /* align with other buttons */
+}
+
+/* Optional: original image shadow style */
+.gallery-container-view .gallery-image-view {
+    border-radius: 8px;
+}
+
+.gallery-container-view .hash-tooltip-btn {
+    position: relative;
+    font-size: 0.85rem;
+    padding: 6px 6px;
+    cursor: pointer;
+    color: #ffff;
+}
+
+/* Tooltip hidden by default */
+.gallery-container-view .hash-tooltip-btn::after {
+    content: attr(data-hash);
+    position: absolute;
+    left: 50%;
+    bottom: 125%;
+    transform: translateX(-50%);
+    background: #262f3a;
+    color: #e0e0e0;
+    font-family: monospace;
+    font-size: 0.85rem;
+    padding: 6px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    display: none;
+    z-index: 100;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+
+/* Tooltip arrow */
+.gallery-container-view .hash-tooltip-btn::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 115%;
+    transform: translateX(-50%);
+    border-width: 5px;
+    border-style: solid;
+    border-color: #262f3a transparent transparent transparent;
+    display: none;
+}
+
+/* Active tooltip */
+.gallery-container-view .hash-tooltip-btn.active::after,
+.gallery-container-view .hash-tooltip-btn.active::before {
+    display: block;
+}

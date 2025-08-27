@@ -1,0 +1,68 @@
+<?php
+
+return [
+
+    // General
+    'timezone' => 'America/Chicago', // Default timezone
+
+    // Database
+    'db' => [
+        'host'    => '', // MySQL host
+        'dbname'  => '', // Database name
+        'user'    => '', // Database user
+        'pass'    => '', // Database password
+        'charset' => 'utf8mb4', // Charset for connection
+    ],
+
+    // Site
+    'site' => [
+        'name'    => 'PHP Image Board', // Site name (todo: move to database)
+        'version' => 'v0.0.1',      // Build version (todo: move to database)
+    ],
+
+    // Session
+    'session' => [
+        'name'            => 'cms_session', // Custom session name
+        'timeout_minutes' => 15,            // Inactivity timeout (auto logout)
+    ],
+
+    // Security
+    'security' => [
+        'csrf_token_name'  => '_csrf',                // CSRF token name
+        'password_algo'    => PASSWORD_ARGON2ID,      // Password hashing algorithm
+        'password_options' => [
+            'memory_cost' => 1 << 17, // 128MB
+            'time_cost'   => 4,       // Number of iterations
+            'threads'     => 2,       // Parallelism
+        ],
+    ],
+
+    // Debugging
+    'debugging' => [
+        'allow_approve_uploads' => false, // Allow approving uploads
+    ],
+
+    // Template
+    'template' => [
+        'disable_cache'     => false, // Disable template cache
+        'allowed_functions' => [
+            'strtoupper',
+            'strtolower',
+            'ucfirst',
+            'lcfirst',
+        ],
+    ],
+
+    // Image Board
+    'gallery' => [
+        'images_displayed' => 32, // total images displayed per page (default 32 - 8 x 4)
+        'pagination_range' => 3,  // number of pages to show before and after current page
+    ],
+
+    // Profile
+    'profile' => [
+        'years' => 13,        // User must be this age to view sensitive content
+        'avatar_size' => 250, // Avatar height/width (todo: move to database)
+    ],
+
+];

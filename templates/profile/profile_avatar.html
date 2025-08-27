@@ -1,0 +1,38 @@
+{include file="global/header.html"}
+
+    <div class="profile-container">
+        {include file="profile/profile_menu.html"}
+
+        <section class="profile-content">
+            <h1>Change Avatar</h1>
+
+            {if $error}
+            <div class="alert alert-danger">
+                {foreach $error as $err}
+                    {$err}
+                {/foreach}
+            </div>
+            {/if}
+
+            {if $success}
+            <div class="alert alert-success">
+                {$success}
+            </div>
+            {/if}
+
+            {if $avatar_path}
+            <img src="{$avatar_path}" alt="Avatar" class="profile-avatar-upload">
+            {/if}
+
+            <div class="alert alert-warning">
+                Avatar size {$avatar_size}x{$avatar_size} pixels recommended. Uploaded images are resized.
+            </div>
+
+            <form method="post" enctype="multipart/form-data">
+                <input type="file" name="avatar" accept="image/png, image/jpeg, image/gif" required>
+                <button type="submit" name="update_avatar">Update Avatar</button>
+            </form>
+        </section>
+    </div>
+
+{include file="global/footer.html"}

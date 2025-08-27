@@ -1,0 +1,148 @@
+/* Profile page layout */
+.profile-container {
+    display: flex;
+    max-width: 1000px;
+    margin: 50px auto;
+    padding: 0 15px;
+}
+
+.profile-menu {
+    width: 250px;
+    background-color: #262f3a; /* dark background */
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.5); /* stronger shadow for dark theme */
+    margin-right: 20px;
+}
+
+.profile-menu h2 {
+    margin-bottom: 15px;
+    color: #e0e0e0; /* light text */
+    font-size: 1.2rem;
+}
+
+.profile-menu ul {
+    list-style: none;
+}
+
+.profile-menu ul li {
+    margin-bottom: 10px;
+}
+
+.profile-menu ul li a {
+    color: #b0b6be; /* lighter text */
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.profile-menu ul li a:hover,
+.profile-menu ul li a.active {
+    color: #00a8ff; /* accent highlight */
+}
+
+.profile-content {
+    flex: 1;
+    background-color: #262f3a; /* dark content background */
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+}
+
+.profile-content h1 {
+    margin-bottom: 20px;
+    color: #e0e0e0;
+}
+
+.profile-content small {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+    color: #ff6b6b; /* slightly darker red for dark theme */
+    text-align: left;
+}
+
+.profile-avatar {
+    border-radius: 50%;
+    display: block;
+    margin-bottom: 15px;
+    width: 150px;
+    height: 150px;
+    border: 2px solid #00a8ff; /* subtle accent border */
+}
+
+.profile-avatar-upload {
+    border-radius: 50%;
+    margin: 0 auto 15px auto;
+    width: 200px;
+    height: 200px;
+    display: block;
+    border: 2px solid #00a8ff;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .profile-container {
+        flex-direction: column;
+    }
+
+    .profile-menu {
+        width: 100%;
+        margin-bottom: 20px;
+    }
+
+    .profile-content {
+        padding: 20px;
+    }
+}
+
+/* Profile info two-column layout */
+.profile-info {
+    display: flex;
+    gap: 40px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+}
+
+/* Avatar column → acts like a sidebar card */
+.profile-info-column:first-child {
+    flex: 0 0 40%;
+    max-width: 300px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+/* Avatar image */
+.profile-avatar {
+    border-radius: 50%;
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    margin-bottom: 15px;
+    border: 2px solid #00a8ff;
+}
+
+/* Optional: style role/status to feel like tags */
+.profile-info-column:first-child p {
+    margin: 5px 0;
+    font-weight: 500;
+    color: #e0e0e0;
+}
+
+.profile-info-column:last-child {
+    flex: 1;
+    min-width: 300px;
+}
+
+.profile-info-column h3 {
+    margin-top: 15px;
+    font-size: 1rem;
+    color: #e0e0e0;
+}
+
+.profile-info-column p {
+    margin-bottom: 10px;
+    color: #d0d4da;
+}

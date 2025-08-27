@@ -1,0 +1,29 @@
+    {include file="global/header.html"}
+
+    <main>
+        <h1>Login</h1>
+
+        {if $error}
+            <div class="error">
+            {foreach $error as $err}
+                <p>{ucfirst($err)}</p>
+            {/foreach}
+            </div>
+        {/if}
+
+        <form method="post" action="/user/login">
+            <input type="hidden" name="csrf_token" value="{$csrf_token}">
+
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required>
+
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
+
+            <button type="submit">Login</button>
+        </form>
+
+        <p>Don't have an account? <a href="/user/register">Register here</a></p>
+    </main>
+
+    {include file="global/footer.html"}

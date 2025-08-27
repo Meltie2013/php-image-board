@@ -1,0 +1,43 @@
+{include file="global/header.html"}
+
+    <div class="profile-container">
+        {include file="profile/profile_menu.html"}
+
+        <section class="profile-content">
+            <h1>Welcome, {$username}!</h1>
+
+            <div class="profile-info">
+                <div class="profile-info-column">
+                    {if $avatar_path}
+                    <h3>Avatar</h3>
+                    <img src="{$avatar_path}" alt="Avatar" class="profile-avatar">
+                    {/if}
+
+                    <h3>Status</h3>
+                    {$account_status}
+
+                    <h3>Role</h3>
+                    {$account_role}
+                </div>
+
+                <div class="profile-info-column">
+                    <h3>Email Address</h3>
+                    {$email}
+
+                    <h3>Date of Birth</h3>
+                    {$date_of_birth}
+
+                    <h3>Registered Date</h3>
+                    {$registered_date}
+
+                    <h3>Last Login Date</h3>
+                    {$last_login}
+
+                    <h3>Uploaded Images</h3>
+                    ---
+                </div>
+            </div>
+        </section>
+    </div>
+
+{include file="global/footer.html"}

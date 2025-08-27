@@ -1,0 +1,19 @@
+#
+# This ignore file will block requested files from being committed.
+# If something you don't want on GitHub, place it below.
+#
+
+# ignore configuration file without the .dist
+/config/config.php
+
+# ignore tools folder
+/tools
+
+# ignore cache templates if in development environment
+/cache/templates/*
+
+# ingore uploaded avatar in folder
+/uploads/avatars/*
+
+# ignore uploaded images in images folder
+/uploads/images/*
