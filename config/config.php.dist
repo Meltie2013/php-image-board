@@ -40,6 +40,7 @@ return [
     // Debugging
     'debugging' => [
         'allow_approve_uploads' => false, // Allow approving uploads
+        'allow_error_outputs'   => false, // Allow errors to be printed client side (default: false)
     ],
 
     // Template

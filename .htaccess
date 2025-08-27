@@ -10,7 +10,7 @@ RewriteEngine On
 # RESTRICT ACCESS TO SENSITIVE DIRECTORIES AND FILES
 # ----------------------------------------------------------------------
 # Block direct web access to sensitive directories
-RewriteRule ^(core|helpers|templates|config)/ - [F,L]
+RewriteRule ^(core|helpers|templates|config|logs)/ - [F,L]
 
 # Deny direct access to config.php specifically
 <Files "config.php">

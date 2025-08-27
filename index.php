@@ -1,14 +1,38 @@
 <?php
 
-// Enable full error reporting for development
-ini_set('display_errors', '1');
-ini_set('display_startup_errors', '1');
-error_reporting(E_ALL);
-
 // -------------------------
 // Load configuration
 // -------------------------
 $config = require __DIR__ . '/config/config.php';
+
+// -------------------------
+// Error reporting (based on config)
+// -------------------------
+if (!empty($config['debugging']['allow_error_outputs']) && $config['debugging']['allow_error_outputs'] === true)
+{
+    // Development mode - show errors
+    ini_set('display_errors', '1');
+    ini_set('display_startup_errors', '1');
+    error_reporting(E_ALL);
+}
+else
+{
+    // Production mode - hide errors but log them
+    ini_set('display_errors', '0');
+    ini_set('display_startup_errors', '0');
+    error_reporting(E_ALL);
+
+    // Ensure logs directory exists
+    $logDir = __DIR__ . '/logs';
+    if (!is_dir($logDir))
+    {
+        mkdir($logDir, 0755, true);
+    }
+
+    // Log all errors to file
+    ini_set('log_errors', '1');
+    ini_set('error_log', $logDir . '/logs/errors.log');
+}
 
 // -------------------------
 // Autoloader for core classes
@@ -59,10 +83,12 @@ $router->setDefault(function () {
 });
 
 // 404 page
-$router->setNotFound(function () {
+$router->setNotFound(function ()
+{
     $config = require __DIR__ . '/config/config.php';
     $template = new TemplateEngine(__DIR__ . '/templates', __DIR__ . '/cache/templates', $config);
-    if (!empty($config['template']['disable_cache'])) {
+    if (!empty($config['template']['disable_cache']))
+    {
         $template->clearCache();
     }
 

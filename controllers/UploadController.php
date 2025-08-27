@@ -7,6 +7,45 @@
 class UploadController
 {
     /**
+     * Cached config for controller usage.
+     *
+     * @var array
+     */
+    private static array $config;
+
+    /**
+     * Load and cache config once per request.
+     *
+     * @return array
+     */
+    private static function getConfig(): array
+    {
+        if (empty(self::$config))
+        {
+            self::$config = require __DIR__ . '/../config/config.php';
+        }
+
+        return self::$config;
+    }
+
+    /**
+     * Initialize template engine with optional cache clearing.
+     *
+     * @return TemplateEngine
+     */
+    private static function initTemplate(): TemplateEngine
+    {
+        $config = self::getConfig();
+        $template = new TemplateEngine(__DIR__ . '/../templates', __DIR__ . '/../cache/templates', $config);
+        if (!empty($config['template']['disable_cache']))
+        {
+            $template->clearCache();
+        }
+
+        return $template;
+    }
+
+    /**
     * Base directory where uploaded files are stored.
     */
     private static $uploadDir = __DIR__ . "/../uploads/";
@@ -87,12 +126,10 @@ class UploadController
         $errors = [];
         $success = '';
 
-        $config = require __DIR__ . '/../config/config.php';
-        $template = new TemplateEngine(__DIR__ . '/../templates', __DIR__ . '/../cache/templates', $config);
-        if (!empty($config['template']['disable_cache']))
-        {
-            $template->clearCache();
-        }
+        $config = self::getConfig();
+
+        // Initialize template engine with caching support
+        $template = self::initTemplate();
 
         $userId = SessionManager::get('user_id');
         if (!$userId)
@@ -179,7 +216,7 @@ class UploadController
                     $phashBlocks[$i] = substr($phash, $i * 4, 4);
                 }
 
-                // Insert MD5/SHA hashes into app_images (existing table)
+                // Insert MD5/SHA hashes into app_images
                 Database::insert("
                     INSERT INTO app_images
                         (image_hash, user_id, description, status,
