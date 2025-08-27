@@ -1,7 +1,7 @@
 /* Gallery Index Template */
 .gallery-container {
     max-width: 1400px;
-    margin: 50px auto;
+    margin: 30px auto;
     padding: 30px;
     border-radius: 10px;
     background-color: #161d23; /* dark background */
@@ -82,6 +82,40 @@
 .gallery-container .gallery-pagination a:hover {
     background-color: #0097e6;
     color: #fff;
+}
+
+/* Wrapper for gallery action buttons */
+.gallery-actions-wrapper {
+    max-width: 1400px;     /* same as gallery-container */
+    margin: 20px auto 0;   /* centered with same spacing */
+    padding: 0px;       /* same side padding as gallery-container */
+}
+
+/* Buttons aligned right */
+.gallery-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 15px;
+}
+
+.gallery-actions .gallery-btn {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 42px;   /* fixed size since no text */
+    height: 42px;
+    font-size: 18px; /* icon size */
+    border-radius: 6px;
+    background-color: #00a8ff;
+    color: #fff;
+}
+
+.gallery-actions .gallery-btn.danger {
+    background-color: #e84118;
+}
+
+.gallery-actions .gallery-btn.danger:hover {
+    background-color: #c23616;
 }
 
 /* Gallery Image View Template */
@@ -188,7 +222,7 @@
     color: #e0e0e0;
     border: 1px solid #3a3f46;
     border-radius: 5px;
-    padding: 6px 12px;
+    padding: 8px 14px;
     font-size: 0.9rem;
     cursor: pointer;
 }
@@ -205,7 +239,6 @@
     vertical-align: middle; /* align with other buttons */
 }
 
-/* Optional: original image shadow style */
 .gallery-container-view .gallery-image-view {
     border-radius: 8px;
 }
