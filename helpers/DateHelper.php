@@ -23,11 +23,16 @@ class DateHelper
         return $datetime->format($format) ?? '';
     }
 
-    public static function birthday_format(string $date, string $format = "F jS, Y"): string
+    public static function birthday_format(?string $date, string $format = "F jS, Y"): string
     {
+        if (empty($date))
+        {
+            return 'Not set yet';
+        }
+
         $datetime = new DateTime($date);
         $datetime->setTimezone(self::$appTimezone);
 
-        return $datetime->format($format);
+        return $datetime->format($format) ?? '';
     }
 }
