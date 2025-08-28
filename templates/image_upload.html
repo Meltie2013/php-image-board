@@ -1,6 +1,6 @@
 {include file="global/header.html"}
 
-    <main class="upload-image">
+    <div class="upload-image">
         <h1>Upload Image</h1>
 
         {if $error}
@@ -18,23 +18,20 @@
         {/if}
 
         <div class="alert alert-info">
-            <b>Message:</b> Please read our <b>image upload rules</b> before continuing.
+            <b>Note:</b> Maximum image size allowed per upload is <b>{$max_image_size} MB</b>.
         </div>
 
         <form method="post" action="/upload-image" enctype="multipart/form-data">
-            <!-- Image File -->
             <label for="image">Select Image</label>
             <input type="file" id="image" name="image" accept="image/jpeg, image/png, image/gif, image/webp" required>
 
-            <!-- Description -->
             <label for="description">Description</label>
             <textarea id="description" name="description" rows="4" required></textarea>
 
-            <!-- Submit -->
             <button type="submit">Upload</button>
         </form>
 
         <p>Don't know the rules? Please read our <a href="#">Image Upload Rules</a>.</p>
-    </main>
+    </div>
 
 {include file="global/footer.html"}

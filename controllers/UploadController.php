@@ -149,6 +149,15 @@ class UploadController
             }
             else
             {
+                // Maximum allowed image size for upload
+                $maxSizeMb = $config['gallery']['upload_max_image_size'];
+                $maxSizeBytes = $maxSizeMb * 1024 * 1024;
+                
+                if ($file['size'] > $maxSizeBytes)
+                {
+                    $errors[] = "File exceeds maximum allowed size of {$maxSizeMb} MB.";
+                }
+
                 $finfo = finfo_open(FILEINFO_MIME_TYPE);
                 $mimeType = finfo_file($finfo, $file['tmp_name']);
                 finfo_close($finfo);
@@ -270,7 +279,8 @@ class UploadController
 
         $template->assign('error', $errors);
         $template->assign('success', $success);
-        $template->render('gallery/image_upload.html');
+        $template->assign('max_image_size', $config['gallery']['upload_max_image_size']);
+        $template->render('image_upload.html');
     }
 
     /**
