@@ -1,0 +1,54 @@
+{include file="global/header.html"}
+
+    <div class="gallery-container moderation-dashboard">
+        <h2>Moderation Dashboard - Image Rehash</h2>
+
+        <div class="dashboard-content-wrapper">
+            {include file="panel/moderation_menu.html"}
+
+            <div class="dashboard-rehash-wrapper">
+                {if $message}
+                    <div class="alert alert-success">{$message}</div>
+                {/if}
+
+                <form method="post">
+                    <div class="rehash-options">
+                        <div class="form-group">
+                            <label for="image_hash">Select Single Image (safe, rehash only one image):</label>
+                            <select name="image_hash" id="image_hash">
+                                <option value="">-- Select Image --</option>
+                                {foreach $image_hashes as $hash}
+                                    <option value="{$hash}">{$hash}</option>
+                                {/foreach}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Rehash Mode:</label>
+                            <div>
+                                <input type="radio" name="rehash_mode" value="single" checked> Single Image
+                            </div>
+                            <div>
+                                <input type="radio" name="rehash_mode" value="batch"> Batch of 10 per run 
+                            </div>
+                        </div>
+
+                        <button type="submit" class="rehash-button">Start Rehashing</button>
+                    </div>
+                </form>
+
+                {if $processed_images && count($processed_images) > 0}
+                    <div class="rehash-results">
+                        <h3>Processed Images</h3>
+                        <ul>
+                            {foreach $processed_images as $imgHash}
+                                <li>{$imgHash}</li>
+                            {/foreach}
+                        </ul>
+                    </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+
+{include file="global/footer.html"}

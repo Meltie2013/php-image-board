@@ -1,18 +1,11 @@
 {include file="global/header.html"}
 
     <main class="gallery-container-view">
-        {if $img_reject_reason}
-        <div class="alert alert-danger">
-            <b>Rejected! Moderator Message</b>: {$img_reject_reason}<br/>
-            Please review the guidelines before making more image uploads. <a href="#">Learn more</a>
+        {if $img_age_sensitive || $img_reject_reason}
+        <div class="alert {$alert_color}">
+            <b>{$alert_tag}</b> {$alert_message} <a href="#">Learn more</a>
         </div>
         {/if}
-        {if $img_age_sensitive}
-        <div class="alert alert-warning">
-            <b>Heads up!</b> This image is marked <b>sensitive</b> and may not be suitable for users under {$age_requirement}.
-            <a href="#">Learn more</a>
-        </div>{/if}
-
         <div class="gallery-item-view">
             <div class="gallery-left-side">
                 {if $is_logged_in}

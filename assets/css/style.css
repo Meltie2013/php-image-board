@@ -1,0 +1,10 @@
+/*
+ * Main Image Board Style Sheet
+ */
+
+@import "default/alerts.css";
+@import "default/main.css";
+@import "default/error.css";
+@import "default/gallery.css";
+@import "default/moderation.css";
+@import "default/profile.css";

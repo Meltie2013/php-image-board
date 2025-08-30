@@ -1,0 +1,89 @@
+/*
+ * Alert Component Styles
+ *
+ * This CSS defines styles for alert messages, including:
+ * - Base alert container styling (.alert)
+ * - Text and link styling inside alerts
+ * - Different alert types: success, danger, warning, info
+ * - Close button styling for dismissible alerts
+ * - Optional fade-out effect for JavaScript-driven dismissal
+ *
+ * Alerts are designed with padding, rounded corners, colored backgrounds,
+ * and smooth transitions for opacity and movement.
+ */
+
+/* Base alert style */
+.alert {
+    position: relative; /* Allows positioning of child elements like the close button */
+    padding: 1rem 1.5rem; /* Space inside the alert: top/bottom 1rem, left/right 1.5rem */
+    margin-bottom: 1rem; /* Space below each alert */
+    border: 1px solid transparent; /* Default border; becomes colored depending on alert type */
+    border-radius: 0.25rem; /* Slightly rounded corners */
+    font-family: Arial, sans-serif; /* Font for alert text */
+    font-size: 1rem; /* Base font size */
+    line-height: 1.5; /* Space between lines */
+    transition: opacity 0.3s ease, transform 0.3s ease; /* Smooth fade and slide animations */
+}
+
+/* Style for links inside alerts */
+.alert a {
+    color: #0c5460; /* Default link color matching alert-info text */
+    text-decoration: none; /* Remove underline from links */
+    font-weight: 500; /* Slightly bold for better visibility */
+    transition: color 0.3s ease; /* Smooth color change on hover */
+}
+
+/* Hover state for links inside alerts */
+.alert a:hover {
+    color: #00a8ff; /* Changes link color on hover for better user feedback */
+}
+
+/* Alert types with different background, border, and text colors */
+
+/* Success alert */
+.alert-success {
+    color: #155724; /* Dark green text */
+    background-color: #d4edda; /* Light green background */
+    border-color: #c3e6cb; /* Slightly darker green border */
+}
+
+/* Danger alert */
+.alert-danger {
+    color: #721c24; /* Dark red text */
+    background-color: #f8d7da; /* Light red/pink background */
+    border-color: #f5c6cb; /* Slightly darker red border */
+}
+
+/* Warning alert */
+.alert-warning {
+    color: #856404; /* Dark yellow/brown text */
+    background-color: #fff3cd; /* Light yellow background */
+    border-color: #ffeeba; /* Slightly darker yellow border */
+}
+
+/* Info alert */
+.alert-info {
+    color: #0c5460; /* Dark teal text */
+    background-color: #d1ecf1; /* Light teal background */
+    border-color: #bee5eb; /* Slightly darker teal border */
+}
+
+/* Close button inside alerts */
+.alert .close-btn {
+    position: absolute; /* Positioned relative to .alert container */
+    top: 0.25rem; /* Slightly below the top edge */
+    right: 0.5rem; /* Slightly away from the right edge */
+    color: inherit; /* Matches the alert text color */
+    background: none; /* No background */
+    border: none; /* No border */
+    font-size: 1.25rem; /* Slightly larger font for the "X" */
+    cursor: pointer; /* Pointer cursor on hover */
+    line-height: 1; /* Align the "X" correctly */
+    padding: 0; /* Remove extra spacing */
+}
+
+/* Optional fade out effect (for JS-driven dismissal) */
+.alert.fade-out {
+    opacity: 0; /* Makes the alert invisible */
+    transform: translateY(-10px); /* Slightly moves the alert upwards */
+}

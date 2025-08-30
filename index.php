@@ -8,7 +8,7 @@ $config = require __DIR__ . '/config/config.php';
 // -------------------------
 // Error reporting (based on config)
 // -------------------------
-if (!empty($config['debugging']['allow_error_outputs']) && $config['debugging']['allow_error_outputs'] === true)
+if (!empty($config['debugging']['allow_error_outputs']) || $config['debugging']['allow_error_outputs'] === true)
 {
     // Development mode - show errors
     ini_set('display_errors', '1');
@@ -132,6 +132,11 @@ $router->add('/profile/avatar', [ProfileController::class, 'avatar']);
 $router->add('/profile/email', [ProfileController::class, 'email']);
 $router->add('/profile/dob', [ProfileController::class, 'dob']);
 $router->add('/profile/change-password', [ProfileController::class, 'change_password']);
+
+// Moderation routes
+$router->add('/moderation', [ModerationController::class, 'dashboard']);
+$router->add('/moderation/image-comparison', [ModerationController::class, 'comparison']);
+$router->add('/moderation/image-rehash', [ModerationController::class, 'rehash']);
 
 // Delete image route (POST only)
 $router->add(

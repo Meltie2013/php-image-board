@@ -128,20 +128,18 @@ class UploadController
 
         $config = self::getConfig();
 
+        // Require login
+        RoleHelper::requireLogin();
+
         // Initialize template engine with caching support
         $template = self::initTemplate();
-
-        $userId = SessionManager::get('user_id');
-        if (!$userId)
-        {
-            header('Location: /user/login');
-            exit();
-        }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image']))
         {
             $file = $_FILES['image'];
             $description = $_POST['description'] ?? '';
+
+            $userId = SessionManager::get('user_id');
 
             if ($file['error'] !== UPLOAD_ERR_OK)
             {
@@ -156,6 +154,11 @@ class UploadController
                 if ($file['size'] > $maxSizeBytes)
                 {
                     $errors[] = "File exceeds maximum allowed size of {$maxSizeMb} MB.";
+                }
+
+                if (!StorageHelper::canStoreFile($file['size']))
+                {
+                    $errors[] = "Upload failed. Not enough storage available.";
                 }
 
                 $finfo = finfo_open(FILEINFO_MIME_TYPE);

@@ -1,0 +1,218 @@
+/*
+ * Global Styles and Layout
+ *
+ * This CSS file handles the general styling of the site, including:
+ * - Resetting defaults and box-sizing
+ * - Body styling with dark theme and light text
+ * - Top navigation bar and logo
+ * - Main content area and upload image form
+ * - Headings, forms, and input fields
+ * - Buttons, links, and interactive elements
+ * - Error and success messages
+ * - Footer
+ * - Responsive adjustments for smaller screens
+ */
+
+/* Reset some defaults */
+* {
+    box-sizing: border-box; /* include padding/border in element size */
+    margin: 0;               /* remove default margin */
+    padding: 0;              /* remove default padding */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* global font */
+}
+
+/* Body styling */
+body {
+    background-color: #161d23; /* dark background to match nav */
+    color: #e0e0e0;            /* light text for contrast */
+    line-height: 1.6;          /* readable line spacing */
+    min-height: 100vh;         /* ensure body covers full viewport height */
+}
+
+/* Top navigation bar */
+header {
+    background-color: #0f141a; /* darker than main body for contrast */
+    padding: 10px 30px;        /* spacing inside header */
+    display: flex;             /* flex for horizontal layout */
+    justify-content: space-between; /* space between logo and nav links */
+    align-items: center;       /* vertical alignment */
+    color: #ffffff;            /* white text */
+    box-shadow: 0 6px 18px rgba(0,0,0,0.25); /* subtle shadow for depth */
+}
+
+/* Logo styling */
+header .logo {
+    font-size: 1.5rem; /* larger font for logo */
+    font-weight: bold;  /* bold text */
+    letter-spacing: 1px; /* slight spacing between letters */
+}
+
+/* Navigation links */
+header nav a {
+    color: #b0b6be;       /* light gray links */
+    text-decoration: none; /* remove underline */
+    margin-left: 20px;     /* spacing between links */
+    font-weight: 500;      /* medium weight text */
+    transition: color 0.3s ease; /* smooth color change on hover */
+}
+
+header nav a:hover {
+    color: #00a8ff; /* blue accent on hover */
+}
+
+/* Main content area */
+main {
+    max-width: 500px;       /* limit width */
+    margin: 50px auto;      /* center horizontally with vertical spacing */
+    padding: 30px;          /* internal spacing */
+    background-color: #1b222b; /* slightly lighter dark background */
+    border-radius: 10px;    /* rounded corners */
+    box-shadow: 0 6px 18px rgba(0,0,0,0.5); /* subtle shadow */
+    color: #e0e0e0;         /* text color */
+}
+
+/* Upload image container */
+.upload-image {
+    max-width: 600px;       /* wider for upload forms */
+    margin: 50px auto;      /* center horizontally */
+    padding: 30px;          /* internal spacing */
+    background-color: #1b222b; /* dark background */
+    border-radius: 10px;    /* rounded corners */
+    box-shadow: 0 6px 18px rgba(0,0,0,0.5); /* subtle shadow */
+}
+
+/* Headings */
+h1 {
+    text-align: center;     /* center heading text */
+    margin-bottom: 25px;    /* spacing below heading */
+    color: #f0f0f0;         /* light text */
+}
+
+/* Forms */
+form {
+    display: flex;           /* flex column layout */
+    flex-direction: column;
+    margin-bottom: 10px;     /* spacing below form */
+}
+
+/* Form labels */
+form label {
+    margin-bottom: 5px;     /* spacing below label */
+    font-weight: 600;       /* semi-bold */
+    color: #e0e0e0;         /* light text */
+}
+
+/* Form input fields */
+form input[type="checkbox"],
+form input[type="file"],
+form input[type="date"],
+form input[type="text"],
+form input[type="email"],
+form input[type="password"] {
+    padding: 10px 15px;     /* inner spacing */
+    margin-bottom: 20px;    /* spacing below input */
+    border: 1px solid #3a3f46; /* darker border for dark theme */
+    border-radius: 6px;     /* rounded corners */
+    background-color: #262f3a; /* dark input background */
+    color: #e0e0e0;         /* light text */
+    transition: border 0.3s ease, box-shadow 0.3s ease; /* smooth focus effects */
+}
+
+/* Input focus state */
+form input[type="checkbox"],
+form input[type="file"]:focus,
+form input[type="date"]:focus,
+form input[type="text"]:focus,
+form input[type="email"]:focus,
+form input[type="password"]:focus,
+form textarea:focus {
+    border-color: #00a8ff; /* blue border on focus */
+    box-shadow: 0 0 5px rgba(0,168,255,0.3); /* subtle glow */
+    outline: none; /* remove default outline */
+}
+
+/* Textarea styling */
+form textarea {
+    padding: 10px 15px;
+    margin-bottom: 20px;
+    border: 1px solid #3a3f46;
+    border-radius: 6px;
+    background-color: #262f3a;
+    color: #e0e0e0;
+    transition: border 0.3s ease, box-shadow 0.3s ease;
+    resize: vertical; /* allow vertical resizing */
+    min-height: 100px; /* minimum height */
+    font-family: inherit; /* match form font */
+    font-size: 14px;
+}
+
+/* Buttons */
+button {
+    padding: 12px;           /* inner spacing */
+    background-color: #00a8ff; /* blue background */
+    color: #ffffff;          /* white text */
+    font-size: 1rem;         /* standard font */
+    border: none;            /* remove border */
+    border-radius: 6px;      /* rounded corners */
+    cursor: pointer;         /* pointer cursor */
+    transition: background-color 0.3s ease, transform 0.2s ease; /* hover effects */
+}
+
+button:hover {
+    background-color: #007bb5; /* darker blue on hover */
+    transform: translateY(-2px); /* slight lift effect */
+}
+
+/* Paragraph links */
+p a {
+    color: #00a8ff;         /* blue link */
+    text-decoration: none;
+    font-weight: 500;
+}
+
+p a:hover {
+    text-decoration: underline; /* underline on hover */
+}
+
+/* Error messages */
+.error {
+    background-color: #c0392b; /* red background */
+    color: #ffffff;
+    padding: 10px 15px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
+/* Success messages */
+.success {
+    background-color: #27ae60; /* green background */
+    color: #ffffff;
+    padding: 10px 15px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
+/* Footer */
+footer {
+    text-align: center; /* center text */
+    color: #999;        /* light gray */
+    font-size: 0.9rem;  /* slightly smaller font */
+    margin-bottom: 20px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+    main {
+        margin: 30px 15px; /* reduce margins on small screens */
+        padding: 20px;     /* reduce padding */
+    }
+
+    header {
+        flex-direction: column; /* stack logo and nav vertically */
+        align-items: flex-start; /* left align items */
+    }
+
+    header nav a {
+        margin: 10px 0 0 0; /* vertical spacing between links */
+    }
+}

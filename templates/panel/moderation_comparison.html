@@ -1,0 +1,52 @@
+{include file="global/header.html"}
+
+    <div class="gallery-container moderation-dashboard">
+        <h2>Moderation Dashboard - Image Comparison</h2>
+
+        <div class="dashboard-content-wrapper">
+            {include file="panel/moderation_menu.html"}
+
+            <div class="dashboard-comparison-wrapper">
+                <form method="post" class="compare-dropdowns">
+                    <div class="selects-row">
+                        <div class="form-group">
+                            <label for="image1_hash">Select Image 1:</label>
+                            <select name="image1_hash" id="image1_hash">
+                                {foreach $image_hashes as $hash}
+                                    <option value="{$hash}" {if $selected_image1_hash == $hash}selected{/if}>{$hash}</option>
+                                {/foreach}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="image2_hash">Select Image 2:</label>
+                            <select name="image2_hash" id="image2_hash">
+                                {foreach $image_hashes as $hash}
+                                    <option value="{$hash}" {if $selected_image2_hash == $hash}selected{/if}>{$hash}</option>
+                                {/foreach}
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="compare-button">Compare</button>
+                </form>
+
+                {if $ahash_distance !== null}
+                <div class="hash-meter-container">
+                    <label>Similarity Meter:</label>
+                    <div class="hash-meter-bg">
+                        <div class="hash-meter-fill" style="width: {$similarity_percent}%;"></div>
+                    </div>
+                    <span>Images are {$similarity_percent}% similar</span>
+                </div>
+
+                <div class="compare-images">
+                    <img src="{$selected_image1_original_path}" alt="Image 1 Preview">
+                    <img src="{$selected_image2_original_path}" alt="Image 2 Preview">
+                </div>
+                {/if}
+            </div>
+        </div>
+    </div>
+
+{include file="global/footer.html"}

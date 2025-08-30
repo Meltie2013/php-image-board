@@ -1,0 +1,75 @@
+/*
+ * 404 Error Page Styles
+ *
+ * This CSS defines the styling for a custom 404 error page, including:
+ * - Main container for the error content (.error-container)
+ * - Large 404 heading (.error-container h1)
+ * - Subtitle and description (.error-container h2, p)
+ * - "Back to Home" button (.error-container a)
+ * - Responsive adjustments for smaller screens
+ *
+ * The design uses a dark background, bright accent color for the 404 text,
+ * rounded corners, and subtle shadows for visual depth.
+ */
+
+/* 404 Container */
+.error-container {
+    margin: 50px auto; /* Center container with 50px top/bottom spacing */
+    width: 800px; /* Fixed width for larger screens */
+    max-width: 90%; /* Ensure container is not wider than 90% of viewport */
+    background-color: #1b222b; /* Dark background for contrast */
+    border-radius: 12px; /* Rounded corners */
+    box-shadow: 0 6px 18px rgba(0,0,0,0.5); /* Shadow for depth */
+    text-align: center; /* Center-align all text inside container */
+    padding: 50px 30px; /* Inner spacing: top/bottom 50px, left/right 30px */
+}
+
+/* Big 404 text */
+.error-container h1 {
+    font-size: 6rem; /* Very large font for "404" */
+    color: #00a8ff; /* Bright blue accent color */
+    margin-bottom: 20px; /* Space below the heading */
+}
+
+/* Subtitle */
+.error-container h2 {
+    font-size: 1.8rem; /* Slightly larger than body text */
+    margin-bottom: 15px; /* Space below subtitle */
+    color: #f0f0f0; /* Light gray/white color for readability */
+}
+
+/* Description */
+.error-container p {
+    font-size: 1rem; /* Standard body text size */
+    margin-bottom: 30px; /* Space before button or other elements */
+    color: #b0b6be; /* Medium gray for secondary text */
+}
+
+/* Back to Home button */
+.error-container a {
+    display: inline-block; /* Allows padding and block-like behavior */
+    padding: 12px 24px; /* Button padding */
+    background-color: #00a8ff; /* Bright blue button background */
+    color: #ffffff; /* White text on button */
+    font-size: 1rem; /* Standard font size */
+    border-radius: 6px; /* Rounded corners for button */
+    text-decoration: none; /* Remove underline from link */
+}
+
+/* Hover state for Back to Home button */
+.error-container a:hover {
+    background-color: #007bb5; /* Darker blue for hover effect */
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 600px) {
+    .error-container {
+        padding: 30px 20px; /* Reduce padding for small screens */
+    }
+    .error-container h1 {
+        font-size: 4rem; /* Smaller heading on mobile */
+    }
+    .error-container h2 {
+        font-size: 1.4rem; /* Smaller subtitle on mobile */
+    }
+}

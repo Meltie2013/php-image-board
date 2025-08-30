@@ -1,0 +1,329 @@
+/*
+ * Gallery Page Styles
+ *
+ * This CSS handles both the gallery index and individual gallery view pages:
+ * - .gallery-container: main grid layout for thumbnails
+ * - .gallery-item: individual gallery items and images
+ * - .gallery-title: titles below images
+ * - .gallery-pagination: page navigation
+ * - .gallery-actions-wrapper & .gallery-actions: action buttons for galleries
+ * - .gallery-container-view: full view layout with left details and right image
+ * - .gallery-details-view: details box with metadata, links, and sections
+ * - .gallery-image-wrapper: large gallery image
+ * - .gallery-toolbar: buttons above the details box
+ * - .hash-tooltip-btn: tooltip displaying image hash on hover
+ *
+ * Dark theme with blue accents, rounded corners, shadows, and responsive layouts.
+ */
+
+/* Gallery Index Template */
+.gallery-container {
+    max-width: 1400px; /* limit container width */
+    margin: 30px auto; /* center container with vertical spacing */
+    padding: 30px; /* internal spacing */
+    border-radius: 10px; /* rounded corners */
+    background-color: #161d23; /* dark background */
+}
+
+/* Headings and links inside gallery */
+.gallery-container h5,
+.gallery-container a {
+    margin-top: 10px; /* spacing above element */
+    text-decoration: none; /* remove underline from links */
+    color: #e0e0e0; /* light text for contrast on dark background */
+}
+
+/* Gallery grid layout */
+.gallery-container .gallery-grid {
+    display: grid; /* use CSS grid */
+    grid-template-columns: repeat(auto-fit, minmax(140px, max-content)); /* flexible columns */
+    gap: 15px; /* spacing between items */
+    justify-content: center; /* center grid horizontally */
+}
+
+/* Center last row if fewer items */
+.gallery-container .gallery-grid:after {
+    content: ""; /* pseudo-element to fill grid space */
+    grid-column: 1 / -1; /* span entire row */
+}
+
+/* Individual gallery item */
+.gallery-container .gallery-item {
+    display: flex; /* flexbox for centering image */
+    justify-content: center;
+    align-items: center;
+    overflow: hidden; /* hide overflow for image */
+}
+
+/* Gallery image */
+.gallery-container .gallery-item img {
+    display: block; /* remove inline spacing */
+    max-width: 150px; /* limit image width */
+    max-height: 150px; /* limit image height */
+    border-radius: 8px; /* rounded corners */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5); /* subtle shadow */
+}
+
+/* Gallery title */
+.gallery-container .gallery-title {
+    margin-top: 5px; /* spacing above title */
+    font-size: 0.9rem; /* slightly smaller font */
+    color: #e0e0e0; /* light text */
+    text-align: center; /* center title */
+}
+
+/* Pagination */
+.gallery-container .gallery-pagination {
+    display: flex; /* flex container for pages */
+    justify-content: center; /* center horizontally */
+    gap: 8px; /* space between page links */
+    margin-top: 25px; /* spacing above pagination */
+    flex-wrap: wrap; /* wrap to next line if needed */
+}
+
+.gallery-container .gallery-pagination a {
+    padding: 8px 12px; /* padding inside page link */
+    border-radius: 4px; /* rounded corners */
+    text-decoration: none; /* remove underline */
+    color: #e0e0e0; /* light text */
+}
+
+/* Active page */
+.gallery-container .gallery-pagination a.current {
+    background-color: #00a8ff; /* highlight current page */
+    color: #fff; /* white text */
+}
+
+/* Non-active page links */
+.gallery-container .gallery-pagination a:not(.current) {
+    background-color: #3a3f46; /* dark background for inactive pages */
+    color: #e0e0e0;
+}
+
+/* Hover effect for pagination */
+.gallery-container .gallery-pagination a:hover {
+    background-color: #0097e6; /* lighter blue on hover */
+    color: #fff; /* white text on hover */
+}
+
+/* Wrapper for gallery action buttons */
+.gallery-actions-wrapper {
+    max-width: 1400px;     /* same as gallery container */
+    margin: 20px auto 0;   /* centered with spacing from gallery */
+    padding: 0px;           /* no extra padding */
+}
+
+/* Buttons aligned to the right */
+.gallery-actions {
+    display: flex; /* flex layout for buttons */
+    justify-content: flex-end; /* align to right */
+    gap: 15px; /* spacing between buttons */
+}
+
+/* Individual action buttons */
+.gallery-actions .gallery-btn {
+    display: inline-flex; /* flex for centering icon */
+    justify-content: center;
+    align-items: center;
+    width: 42px;   /* fixed square size for icons */
+    height: 42px;
+    font-size: 18px; /* icon size */
+    border-radius: 6px; /* rounded corners */
+    background-color: #00a8ff; /* default blue */
+    color: #fff; /* white icon */
+}
+
+/* Danger button variant */
+.gallery-actions .gallery-btn.danger {
+    background-color: #e84118; /* red for delete/danger */
+}
+
+/* Danger button hover */
+.gallery-actions .gallery-btn.danger:hover {
+    background-color: #c23616; /* darker red on hover */
+}
+
+/* Gallery Image View Template */
+.gallery-container-view {
+    max-width: 1400px; /* container width */
+    margin: 50px auto; /* centered with top spacing */
+    padding: 20px; /* internal spacing */
+}
+
+/* Left side column */
+.gallery-container-view .gallery-left-side {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 450px; /* fixed width for details box */
+}
+
+/* Gallery item layout */
+.gallery-container-view .gallery-item-view {
+    display: flex;
+    gap: 30px; /* spacing between left and right */
+    align-items: flex-start; /* align top edges */
+}
+
+/* Left Side Details Box */
+.gallery-container-view .gallery-details-view {
+    flex: 0 0 450px; /* fixed width */
+    background: #1f272f; /* dark background */
+    color: #e0e0e0; /* light text */
+    padding: 20px; /* internal spacing */
+    border-radius: 8px; /* rounded corners */
+    border: 1px solid #3a3f46; /* subtle border */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5); /* shadow */
+}
+
+/* Heading inside details */
+.gallery-container-view .gallery-details-view h3 {
+    margin-bottom: 15px; /* spacing below heading */
+    font-size: 1.4rem; /* slightly larger font */
+    border-bottom: 1px solid #3a3f46; /* underline border */
+    padding-bottom: 8px; /* space under text */
+}
+
+/* Links and subheadings inside details */
+.gallery-container-view .gallery-details-view h5,
+.gallery-container-view .gallery-details-view a {
+    text-decoration: none; /* remove underline */
+    color: #00a8ff; /* blue links */
+    margin-bottom: 10px; /* spacing below element */
+}
+
+/* Hover for links */
+.gallery-container-view .gallery-details-view a:hover {
+    text-decoration: underline; /* underline on hover */
+}
+
+/* Lists inside details box */
+.gallery-container-view .gallery-details-view ul {
+    list-style: none; /* remove default bullets */
+    padding: 0; 
+    margin: 0;
+}
+
+/* List items */
+.gallery-container-view .gallery-details-view li {
+    margin-bottom: 8px; /* spacing between items */
+    font-size: 0.95rem; /* slightly smaller text */
+    line-height: 1.4; /* spacing between lines */
+}
+
+/* Labels for list items */
+.gallery-container-view .gallery-details-view strong {
+    display: inline-block; /* align labels */
+    width: 140px; /* fixed width for label alignment */
+}
+
+/* Sections inside details box */
+.gallery-container-view .gallery-details-view section {
+    margin-bottom: 20px; /* spacing between sections */
+}
+
+/* Right Side Image */
+.gallery-container-view .gallery-image-wrapper {
+    flex: 2; /* flexible space for image */
+    display: flex;
+    justify-content: center; /* center horizontally */
+    align-items: center; /* center vertically */
+}
+
+/* Main gallery image */
+.gallery-container-view .gallery-image-wrapper img {
+    max-width: 100%; /* scale down for container */
+    max-height: 850px; /* max image height */
+    width: auto; 
+    height: auto;
+    border-radius: 8px; /* rounded corners */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5); /* subtle shadow */
+}
+
+/* Toolbar above details box */
+.gallery-container-view .gallery-toolbar {
+    display: flex;
+    justify-content: center; /* center buttons horizontally */
+    gap: 12px; /* spacing between buttons */
+    margin-bottom: 20px; /* space below toolbar */
+    padding: 10px; /* internal spacing */
+    background: #1f272f; /* dark background */
+    border: 1px solid #3a3f46; /* subtle border */
+    border-radius: 6px; /* rounded corners */
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4); /* shadow */
+}
+
+/* Toolbar buttons */
+.gallery-container-view .gallery-toolbar button {
+    background: #2f3b47; /* button background */
+    color: #e0e0e0; /* light text */
+    border: 1px solid #3a3f46; /* border matching theme */
+    border-radius: 5px; /* rounded corners */
+    padding: 8px 14px; /* internal spacing */
+    font-size: 0.9rem; /* font size */
+    cursor: pointer; /* pointer on hover */
+}
+
+/* Forms inside toolbar */
+.gallery-container-view .gallery-toolbar form {
+    display: inline-block; /* inline like buttons */
+    margin: 0; /* remove default spacing */
+    padding: 0;
+}
+
+/* Buttons inside forms */
+.gallery-container-view .gallery-toolbar form button {
+    display: inline-block; /* ensure fills form */
+    vertical-align: middle; /* align with other buttons */
+}
+
+/* Gallery image view element */
+.gallery-container-view .gallery-image-view {
+    border-radius: 8px; /* rounded corners */
+}
+
+/* Tooltip button for image hash */
+.gallery-container-view .hash-tooltip-btn {
+    position: relative; /* needed for tooltip positioning */
+    font-size: 0.85rem;
+    padding: 6px 6px; 
+    cursor: pointer; /* pointer cursor */
+    color: #ffff; /* white text */
+}
+
+/* Tooltip hidden by default */
+.gallery-container-view .hash-tooltip-btn::after {
+    content: attr(data-hash); /* show hash from data attribute */
+    position: absolute; 
+    left: 50%;
+    bottom: 125%; /* position above button */
+    transform: translateX(-50%); /* center horizontally */
+    background: #262f3a; /* tooltip background */
+    color: #e0e0e0; /* tooltip text color */
+    font-family: monospace; /* monospace for hashes */
+    font-size: 0.85rem;
+    padding: 6px 8px;
+    border-radius: 4px;
+    white-space: nowrap; /* prevent wrapping */
+    display: none; /* hidden by default */
+    z-index: 100; /* on top of other elements */
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5); /* subtle shadow */
+}
+
+/* Tooltip arrow */
+.gallery-container-view .hash-tooltip-btn::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 115%;
+    transform: translateX(-50%);
+    border-width: 5px; 
+    border-style: solid;
+    border-color: #262f3a transparent transparent transparent; /* arrow pointing down */
+    display: none; /* hidden by default */
+}
+
+/* Show tooltip when active */
+.gallery-container-view .hash-tooltip-btn.active::after,
+.gallery-container-view .hash-tooltip-btn.active::before {
+    display: block; /* show tooltip */
+}

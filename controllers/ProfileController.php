@@ -51,14 +51,11 @@ class ProfileController
      */
     public static function index(): void
     {
-        $userId = SessionManager::get('user_id');
-        if (!$userId)
-        {
-            header('Location: /user/login');
-            exit();
-        }
+        // Require login
+        RoleHelper::requireLogin();
 
         // Fetch current user data from database
+        $userId = SessionManager::get('user_id');
         $user = Database::fetch(
             "SELECT id, role_id, username, email, avatar_path, date_of_birth, status, last_login, created_at
              FROM app_users
@@ -147,15 +144,8 @@ class ProfileController
 
         $config = self::getConfig();
 
-        // Ensure the user is logged in
-        $userId = SessionManager::get('user_id');
-        if (!$userId)
-        {
-            header('Location: /user/login');
-            exit();
-        }
-
         // Fetch user record
+        $userId = SessionManager::get('user_id');
         $user = Database::fetch(
             "SELECT id, username, display_name, email, avatar_path, date_of_birth, password_hash, age_verified_at
              FROM app_users

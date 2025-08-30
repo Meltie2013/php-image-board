@@ -83,9 +83,9 @@ class TemplateEngine
                 '\{include\s+file="(.+?)"\}|' . // {include file="..."}
                 '\{raw\s+\$([a-zA-Z0-9_]+)\}/s', // {raw $var}
                 function($m) {
-                    if (!empty($m[1])) return '<?= htmlspecialchars($' . $m[1] . ', ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8") ?>';
+                    if (!empty($m[1])) return '<?= strip_tags((string)($' . $m[1] . ' ?? ""), "<b><i><u><strong><em>") ?>';
                     if (!empty($m[2])) return '<?= htmlspecialchars(' . $m[2] . '(' . trim($m[3]) . '), ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8") ?>';
-                    if (!empty($m[4])) return "\n<?php if (" . trim($m[4]) . "): ?>";
+                    if (!empty($m[4])) return "\n<?php if (" . str_replace('||', ' || ', trim($m[4])) . "): ?>";
                     if (!empty($m[5])) return "\n<?php elseif (" . trim($m[5]) . "): ?>";
                     if (isset($m[0]) && $m[0] === '{else}') return "\n<?php else: ?>";
                     if (isset($m[0]) && $m[0] === '{/if}') return "\n<?php endif; ?>";

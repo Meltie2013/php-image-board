@@ -251,6 +251,28 @@ class GalleryController
             return;
         }
 
+        if ((int)$img['age_sensitive'] === 1)
+        {
+            $alertColor   = 'alert-warning';
+            $alertTag     = '<b>Heads Up!</b>';
+            $alertMessage = 'This image is marked <b>sensitive</b> and may not be suitable for users under ' . self::$config['profile']['years'] . '.';
+
+            $template->assign('alert_color', $alertColor);
+            $template->assign('alert_tag', $alertTag);
+            $template->assign('alert_message', $alertMessage);
+        }
+
+        if ($img['status'] === 'rejected' && $img['reject_reason'] != null)
+        {
+            $alertColor   = 'alert-danger';
+            $alertTag     = '<b>Rejected</b>! <b>Message</b>: ';
+            $alertMessage = $img['reject_reason'];
+
+            $template->assign('alert_color', $alertColor);
+            $template->assign('alert_tag', $alertTag);
+            $template->assign('alert_message', $alertMessage);
+        }
+
         $username = self::getUsernameById((int)$img['user_id']);
 
         $template->assign('img_hash', $img['image_hash']);
@@ -259,7 +281,7 @@ class GalleryController
         $template->assign('img_mime_type', $img['mime_type']);
         $template->assign('img_width', $img['width']);
         $template->assign('img_height', $img['height']);
-        $template->assign('img_size', GlobalHelper::formatFileSize($img['size_bytes']));
+        $template->assign('img_size', StorageHelper::formatFileSize($img['size_bytes']));
         $template->assign('img_md5', $img['md5']);
         $template->assign('img_sha1', $img['sha1']);
         $template->assign('img_reject_reason', $img['reject_reason']);
@@ -283,11 +305,7 @@ class GalleryController
         $userId = SessionManager::get('user_id');
 
         // Require login
-        if (!$userId)
-        {
-            header('Location: /user/login');
-            exit();
-        }
+        RoleHelper::requireLogin();
 
         // Fetch user's role from the database
         $sql = "

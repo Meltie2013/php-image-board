@@ -1,0 +1,49 @@
+{include file="global/header.html"}
+
+    <div class="gallery-container moderation-dashboard">
+        <h2>Moderation Dashboard</h2>
+
+        <div class="dashboard-content-wrapper">
+            {include file="panel/moderation_menu.html"}
+
+            <div class="dashboard-cards-wrapper">
+                <div class="dashboard-cards">
+                    <div class="dashboard-card small">
+                        <h3 class="total">Total Users</h3>
+                        <p class="total">{$total_users}</p>
+                    </div>
+
+                    <div class="dashboard-card small">
+                        <h3 class="total">Total Images</h3>
+                        <p class="total">{$total_images}</p>
+                    </div>
+
+                    <div class="dashboard-card small">
+                        <h3 class="approved">Approved</h3>
+                        <p class="approved">{$approved_count}</p>
+                    </div>
+
+                    <div class="dashboard-card small">
+                        <h3 class="pending">Pending</h3>
+                        <p class="pending">{$pending_count}</p>
+                    </div>
+
+                    <div class="dashboard-card small">
+                        <h3 class="removed">Removed</h3>
+                        <p class="removed">{$removed_count}</p>
+                    </div>
+
+                    <div class="dashboard-card small">
+                        <div class="dashboard-card storage-graph" style="--used-percent: {$storage_usage_percent};">
+                            <div class="progress-circle"></div>
+                            <div class="progress-text">
+                                {$storage_used} / {$storage_total}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{include file="global/footer.html"}

@@ -56,9 +56,10 @@ return [
 
     // Image Board
     'gallery' => [
-        'images_displayed'      => 32, // total images displayed per page (default 32 - 8 x 4)
-        'pagination_range'      => 3,  // number of pages to show before and after current page
-        'upload_max_image_size' => 2,  // Default is 2 MB (keep this reasonable, depending on your storage total size)
+        'upload_max_storage'    => '10gb', // maximum size of host storage (default: 10gb)
+        'images_displayed'      => 32,     // total images displayed per page (default 32 - 8 x 4)
+        'pagination_range'      => 3,      // number of pages to show before and after current page
+        'upload_max_image_size' => 2,      // Default is 2 MB (keep this reasonable, depending on your storage total size)
     ],
 
     // Profile

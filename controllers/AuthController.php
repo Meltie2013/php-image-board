@@ -17,6 +17,45 @@
 class AuthController
 {
     /**
+     * Cached config for controller usage.
+     *
+     * @var array
+     */
+    private static array $config;
+
+    /**
+     * Load and cache config once per request.
+     *
+     * @return array
+     */
+    private static function getConfig(): array
+    {
+        if (empty(self::$config))
+        {
+            self::$config = require __DIR__ . '/../config/config.php';
+        }
+
+        return self::$config;
+    }
+
+    /**
+     * Initialize template engine with optional cache clearing.
+     *
+     * @return TemplateEngine
+     */
+    private static function initTemplate(): TemplateEngine
+    {
+        $config = self::getConfig();
+        $template = new TemplateEngine(__DIR__ . '/../templates', __DIR__ . '/../cache/templates', $config);
+        if (!empty($config['template']['disable_cache']))
+        {
+            $template->clearCache();
+        }
+
+        return $template;
+    }
+
+    /**
      * Handle user login requests.
      *
      * - Displays login form
@@ -30,9 +69,6 @@ class AuthController
     public static function login(): void
     {
         $errors = [];
-
-        // Load configuration settings
-        $config = require __DIR__ . '/../config/config.php';
 
         // Check if user is already logged in
         $userId = SessionManager::get('user_id');
@@ -66,9 +102,10 @@ class AuthController
             // Attempt login only if no validation errors
             if (empty($errors))
             {
-                // Fetch user by username
+                // Fetch user by username with role details
                 $user = Database::fetch(
-                    "SELECT * FROM app_users WHERE username = :username LIMIT 1",
+                    "SELECT u.id, u.username, u.password_hash, r.name AS role_name FROM app_users u
+                        INNER JOIN app_roles r ON u.role_id = r.id WHERE u.username = :username LIMIT 1",
                     ['username' => $username]
                 );
 
@@ -77,9 +114,8 @@ class AuthController
                 {
                     // Store important user details in session
                     SessionManager::set('user_id', $user['id']);
-                    SessionManager::set('user_role', $user['role_id']);
+                    SessionManager::set('user_role', $user['role_name']); // role name instead of ID
                     SessionManager::set('username', $user['username']);
-                    SessionManager::set('display_name', $user['display_name']);
 
                     // Update last login timestamp
                     Database::query("UPDATE app_users SET last_login = NOW() WHERE id = :id", ['id' => $user['id']]);
@@ -97,13 +133,7 @@ class AuthController
         }
 
         // Initialize template engine for rendering login page
-        $template = new TemplateEngine(__DIR__ . '/../templates', __DIR__ . '/../cache/templates', $config);
-
-        // Clear template cache if disabled in config
-        if (!empty($config['template']['disable_cache']))
-        {
-            $template->clearCache();
-        }
+        $template = self::initTemplate();
 
         // Pass CSRF token and error messages to template
         $template->assign('csrf_token', Security::generateCsrfToken());
@@ -128,9 +158,6 @@ class AuthController
     {
         $errors = [];
         $success = '';
-
-        // Load configuration settings
-        $config = require __DIR__ . '/../config/config.php';
 
         // Prevent already logged-in users from accessing registration
         $userId = SessionManager::get('user_id');
@@ -213,13 +240,7 @@ class AuthController
         }
 
         // Initialize template engine for rendering registration page
-        $template = new TemplateEngine(__DIR__ . '/../templates', __DIR__ . '/../cache/templates', $config);
-
-        // Clear template cache if disabled in config
-        if (!empty($config['template']['disable_cache']))
-        {
-            $template->clearCache();
-        }
+        $template = self::initTemplate();
 
         // Pass CSRF token, errors, and success message to template
         $template->assign('csrf_token', Security::generateCsrfToken());
@@ -244,7 +265,7 @@ class AuthController
         SessionManager::destroy();
 
         // Redirect to login page
-        header('Location: /user/login');
+        header('Location: /index.php');
         exit();
     }
 }

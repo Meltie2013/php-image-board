@@ -33,19 +33,6 @@ class SessionManager
 
         self::checkTimeout();
 
-        // If user_id is set, ensure DOB and age verification are cached
-        $userId = $_SESSION['user_id'] ?? null;
-        if ($userId !== null && !isset($_SESSION['date_of_birth'], $_SESSION['age_verified_at']))
-        {
-            $user = Database::fetch(
-                "SELECT date_of_birth, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
-                ['id' => $userId]
-            );
-
-            $_SESSION['date_of_birth'] = $user['date_of_birth'] ?? null;
-            $_SESSION['age_verified_at'] = $user['age_verified_at'] ?? null;
-        }
-
         // Save session to database
         self::persistSession();
     }
@@ -56,7 +43,7 @@ class SessionManager
      */
     private static function checkTimeout(): void
     {
-        $timeout = (self::$config['timeout_minutes'] ?? 15) * 60;
+        $timeout = (self::$config['timeout_minutes']) * 60;
 
         if (isset($_SESSION['last_activity']))
         {
@@ -148,19 +135,6 @@ class SessionManager
             ['new' => self::$dbSessionId, 'old' => $oldSession]
         );
 
-        // Ensure date_of_birth and age_verified_at persist after regenerating session
-        $userId = $_SESSION['user_id'] ?? null;
-        if ($userId !== null)
-        {
-            $user = Database::fetch(
-                "SELECT date_of_birth, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
-                ['id' => $userId]
-            );
-
-            $_SESSION['date_of_birth'] = $user['date_of_birth'] ?? null;
-            $_SESSION['age_verified_at'] = $user['age_verified_at'] ?? null;
-        }
-
         self::persistSession();
     }
 
@@ -200,19 +174,6 @@ class SessionManager
     public static function set(string $key, mixed $value): void
     {
         $_SESSION[$key] = $value;
-
-        // If setting user_id, also cache date_of_birth and age_verified_at
-        if ($key === 'user_id' && $value !== null)
-        {
-            $user = Database::fetch(
-                "SELECT date_of_birth, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
-                ['id' => $value]
-            );
-
-            $_SESSION['date_of_birth'] = $user['date_of_birth'] ?? null;
-            $_SESSION['age_verified_at'] = $user['age_verified_at'] ?? null;
-        }
-
         self::persistSession();
     }
 

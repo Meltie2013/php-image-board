@@ -1,0 +1,371 @@
+/* Moderation Dashboard Panel
+ *
+ * This CSS handles the layout and styling for the moderation dashboard,
+ * including dashboard cards, sidebar, comparison tools, and rehash tools.
+ */
+
+/* Main moderation dashboard container */
+.moderation-dashboard {
+    max-width: 1400px; /* match gallery-container width */
+    margin: 50px auto; /* center horizontally with vertical spacing */
+    padding: 30px;     /* inner padding */
+    background-color: #161d23; /* dark background consistent with app */
+    border-radius: 10px;        /* rounded corners */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5); /* subtle shadow */
+    color: #e0e0e0;             /* light text color */
+}
+
+/* Dashboard heading */
+.moderation-dashboard h2 {
+    text-align: center; /* center heading */
+    margin-bottom: 30px; /* spacing below heading */
+    color: #f0f0f0;     /* light heading text */
+}
+
+/* Container for all dashboard cards */
+.moderation-dashboard .dashboard-cards {
+    display: flex;      /* flex layout for cards */
+    flex-wrap: wrap;    /* wrap cards to next line if needed */
+    gap: 25px;          /* spacing between cards */
+    justify-content: center; /* center cards horizontally */
+}
+
+/* Individual dashboard card */
+.moderation-dashboard .dashboard-card {
+    flex: 1;            /* flexible width */
+    max-width: 300px;   /* prevent oversized cards */
+    background-color: #1b222b; /* dark card background */
+    padding: 20px;      /* inner padding */
+    border-radius: 8px; /* rounded corners */
+    border: 1px solid #3a3f46; /* subtle border */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5); /* subtle shadow */
+    text-align: center; /* center text */
+    margin-bottom: 25px;
+}
+
+/* Card headings */
+.moderation-dashboard .dashboard-card h3 {
+    margin-top: 15px;
+    margin-bottom: 15px;
+    font-size: 1.1rem; /* slightly larger font */
+    color: #e0e0e0;    /* light text */
+}
+
+/* Card numbers (Used / Total, etc.) */
+.moderation-dashboard .dashboard-card p {
+    font-size: 1.1rem; /* default font size */
+    font-weight: bold; /* bold numbers */
+    margin: 0;          /* remove default margin */
+}
+
+/* Smaller cards for specific metrics (Total / Approved / Pending) */
+.moderation-dashboard .dashboard-card.small {
+    flex: 0 0 160px; /* fixed width */
+    max-width: 160px;
+    padding: 15px;   /* slightly smaller padding */
+}
+
+/* Status-specific colors */
+.moderation-dashboard .dashboard-card .approved {
+    color: #27ae60; /* green for approved */
+}
+
+.moderation-dashboard .dashboard-card .pending {
+    color: #f39c12; /* orange for pending */
+}
+
+.moderation-dashboard .dashboard-card .removed {
+    color: #ff0000; /* red for removed */
+}
+
+.moderation-dashboard .dashboard-card .total,
+.moderation-dashboard .dashboard-card .storage {
+    color: #00a8ff; /* blue for totals or storage */
+}
+
+/* Circle graph wrapper (scaled down 25% for smaller size) */
+.moderation-dashboard .dashboard-card.storage-graph {
+    position: relative;
+    width: 105px;   /* 140px * 0.75 */
+    height: 105px;  /* 140px * 0.75 */
+    margin: 0 auto; /* center the circle in card */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #1f272f; /* dark circle background */
+    border-radius: 50%;         /* circular shape */
+    border: 1px solid #3a3f46; /* subtle border */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5); /* shadow */
+}
+
+/* Actual progress circle using conic-gradient */
+.moderation-dashboard .dashboard-card.storage-graph .progress-circle {
+    position: absolute;
+    inset: 0; /* stretch to parent circle */
+    border-radius: 50%;
+    background: conic-gradient(
+        #00a8ff var(--used-percent),
+        #3a3f46 var(--used-percent)
+    );
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Inner circle to create donut shape */
+.moderation-dashboard .dashboard-card.storage-graph .progress-circle::before {
+    content: '';
+    width: 75px;   /* scale down inner circle */
+    height: 75px;
+    background-color: #1f272f;
+    border-radius: 50%;
+}
+
+/* Center text inside donut */
+.moderation-dashboard .dashboard-card.storage-graph .progress-text {
+    position: absolute;
+    max-width: 75px;  /* match inner circle */
+    font-size: 0.75rem;
+    font-weight: bold;
+    color: #00a8ff;   /* blue text */
+}
+
+/* Wrap sidebar + dashboard cards in flex layout */
+.moderation-dashboard .dashboard-content-wrapper {
+    display: flex;
+    gap: 30px;
+}
+
+/* Sidebar styling */
+.moderation-dashboard .moderation-sidebar {
+    flex: 0 0 220px;       /* fixed width */
+    background-color: #1b222b;
+    border-radius: 8px;
+    border: 1px solid #3a3f46;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    padding: 20px;
+    color: #e0e0e0;
+    height: fit-content;
+}
+
+.moderation-dashboard .moderation-sidebar h3 {
+    padding-left: 2px;
+    border-bottom: 1px solid #3a3f46;
+}
+
+.moderation-dashboard .moderation-sidebar ul {
+    list-style: none; /* remove bullets */
+    padding: 0;
+    margin: 0;
+}
+
+.moderation-dashboard .moderation-sidebar ul li {
+    margin-bottom: 5px; /* spacing between items */
+}
+
+.moderation-dashboard .moderation-sidebar ul li a {
+    color: #e0e0e0;         /* light text */
+    text-decoration: none;  /* remove underline */
+    display: block;          /* full width clickable area */
+    padding-left: 8px;       /* padding for alignment */
+    border-radius: 6px;
+}
+
+.moderation-dashboard .moderation-sidebar .spacer {
+    margin-bottom: 15px; /* extra spacing */
+}
+
+/* Dashboard cards wrapper grows to fill remaining space */
+.moderation-dashboard .dashboard-cards-wrapper {
+    flex: 1;
+}
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+    .moderation-dashboard .dashboard-cards {
+        flex-direction: column; /* stack cards vertically */
+        align-items: center;    /* center cards */
+    }
+}
+
+/* Dashboard Comparison Tool wrapper */
+.moderation-dashboard .dashboard-comparison-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 15px;
+    background-color: #1b222b;
+    border-radius: 8px;
+    border: 1px solid #3a3f46;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    flex: 1;           /* expand to fill parent */
+    box-sizing: border-box;
+}
+
+.moderation-dashboard .dashboard-comparison-wrapper .compare-dropdowns,
+.moderation-dashboard .dashboard-comparison-wrapper .compare-dropdowns label {
+    margin: 5px auto;
+    max-width: 1200px;
+}
+
+/* Comparison Form Row */
+.moderation-dashboard .dashboard-comparison-wrapper .selects-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+/* Form groups inside comparison */
+.moderation-dashboard .dashboard-comparison-wrapper .form-group {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0; /* prevent overflow */
+}
+
+/* Select dropdowns */
+.moderation-dashboard .dashboard-comparison-wrapper select {
+    padding: 6px 8px;
+    border-radius: 4px;
+    border: 1px solid #3a3f46;
+    background-color: #161d23;
+    color: #e0e0e0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Compare button */
+.moderation-dashboard .dashboard-comparison-wrapper .compare-button {
+    margin-top: 10px;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 5px;
+    background-color: #00a8ff;
+    color: #fff;
+    font-weight: bold;
+    align-self: flex-start; /* align left by default */
+}
+
+/* Similarity Meter */
+.moderation-dashboard .dashboard-comparison-wrapper .hash-meter-container {
+    width: 100%;
+    max-width: 500px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: center; /* center contents horizontally */
+    margin: 0 auto;      /* center container itself */
+}
+
+.moderation-dashboard .dashboard-comparison-wrapper .hash-meter-bg {
+    width: 100%;
+    height: 12px;
+    background-color: #3a3f46;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.moderation-dashboard .dashboard-comparison-wrapper .hash-meter-fill {
+    height: 100%;
+    background-color: #27ae60;
+    border-radius: 6px 0 0 6px;
+    transition: width 0.3s ease-in-out; /* smooth fill animation */
+}
+
+/* Meter text */
+.moderation-dashboard .dashboard-comparison-wrapper .hash-meter-container span {
+    font-size: 0.9rem;
+    color: #e0e0e0;
+    text-align: center;
+}
+
+/* Compare images preview */
+.moderation-dashboard .dashboard-comparison-wrapper .compare-images {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.moderation-dashboard .dashboard-comparison-wrapper .compare-images img {
+    max-width: 480px;
+    max-height: 480px;
+    border-radius: 5px;
+    border: 1px solid #3a3f46;
+    object-fit: contain; /* preserve aspect ratio */
+}
+
+/* Dashboard Rehash Tool Wrapper */
+.moderation-dashboard .dashboard-rehash-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 15px;
+    background-color: #1b222b;
+    border-radius: 8px;
+    border: 1px solid #3a3f46;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+
+    flex: 1;           /* expand to fill parent */
+    min-width: 0;      /* prevent overflow in flex containers */
+    box-sizing: border-box;
+}
+
+/* Form groups in rehash tool */
+.moderation-dashboard .dashboard-rehash-wrapper .form-group {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 10px;
+}
+
+/* Select inputs in rehash tool */
+.moderation-dashboard .dashboard-rehash-wrapper select {
+    padding: 6px 8px;
+    border-radius: 4px;
+    border: 1px solid #3a3f46;
+    background-color: #161d23;
+    color: #e0e0e0;
+}
+
+/* Radio buttons */
+.moderation-dashboard .dashboard-rehash-wrapper input[type="radio"] {
+    margin-right: 6px;
+}
+
+/* Rehash button */
+.moderation-dashboard .dashboard-rehash-wrapper .rehash-button {
+    margin-top: 10px;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 5px;
+    background-color: #00a8ff;
+    color: #fff;
+    font-weight: bold;
+}
+
+/* Processed images list */
+.moderation-dashboard .dashboard-rehash-wrapper .rehash-results {
+    margin-top: 15px;
+    background-color: #1b222b;
+    border: 1px solid #3a3f46;
+    border-radius: 6px;
+    padding: 10px;
+}
+
+.moderation-dashboard .dashboard-rehash-wrapper .rehash-results h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #00a8ff;
+}
+
+.moderation-dashboard .dashboard-rehash-wrapper .rehash-results ul {
+    list-style: none;
+    padding-left: 10px;
+    margin: 0;
+}
+
+.moderation-dashboard .dashboard-rehash-wrapper .rehash-results ul li {
+    margin-bottom: 5px;
+    font-size: 0.95rem;
+    color: #e0e0e0;
+}
