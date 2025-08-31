@@ -62,7 +62,7 @@ header nav a:hover {
 
 /* Main content area */
 main {
-    max-width: 500px;       /* limit width */
+    max-width: 550px;       /* limit width */
     margin: 50px auto;      /* center horizontally with vertical spacing */
     padding: 30px;          /* internal spacing */
     background-color: #1b222b; /* slightly lighter dark background */

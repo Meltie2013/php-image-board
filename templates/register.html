@@ -6,14 +6,14 @@
         {if $error}
             <div class="alert alert-danger">
                 {foreach $error as $err}
-                    {ucfirst($err)}
+                    <b>Error:</b> {ucfirst($err)}
                 {/foreach}
             </div>
         {/if}
 
         {if $success}
             <div class="alert alert-success">
-                {$success}
+                <b>Success:</b> {$success}
             </div>
         {/if}
 

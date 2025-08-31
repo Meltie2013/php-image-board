@@ -255,7 +255,7 @@ class GalleryController
         {
             $alertColor   = 'alert-warning';
             $alertTag     = '<b>Heads Up!</b>';
-            $alertMessage = 'This image is marked <b>sensitive</b> and may not be suitable for users under ' . self::$config['profile']['years'] . '.';
+            $alertMessage = 'This image is marked <b>sensitive</b> and may not be suitable for users under ' . self::$config['profile']['years'] . ' years of age.';
 
             $template->assign('alert_color', $alertColor);
             $template->assign('alert_tag', $alertTag);

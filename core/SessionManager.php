@@ -31,10 +31,123 @@ class SessionManager
             session_start();
         }
 
+        // Verify or set fingerprint
+        $fingerprint = self::generateFingerprint();
+        if (!isset($_SESSION['fingerprint']))
+        {
+            $_SESSION['fingerprint'] = $fingerprint;
+        }
+        elseif ($_SESSION['fingerprint'] !== $fingerprint)
+        {
+            // Possible hijack attempt – log/jail and destroy session
+            self::logSuspiciousActivity($_SESSION['user_id'] ?? null, 'fingerprint_mismatch');
+            self::destroy();
+            header("Location: /login?security=invalid_session");
+            exit();
+        }
+
         self::checkTimeout();
 
         // Save session to database
         self::persistSession();
+
+        // Monitor fingerprint patterns for suspicious activity (detection only)
+        self::monitorFingerprintPatterns();
+    }
+
+    /**
+     * Generate a lenient fingerprint hash for the current request
+     */
+    private static function generateFingerprint(): string
+    {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $normalizedIp = self::normalizeIp($ip);
+
+        return hash('sha256', $ua . '|' . $normalizedIp);
+    }
+
+    /**
+     * Normalize IP for fingerprinting (lenient)
+     */
+    private static function normalizeIp(string $ip): string
+    {
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4))
+        {
+            $parts = explode('.', $ip);
+            return "{$parts[0]}.{$parts[1]}.{$parts[2]}.0";
+        }
+        elseif (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6))
+        {
+            $parts = explode(':', $ip);
+            return implode(':', array_slice($parts, 0, 4)) . '::';
+        }
+        return $ip;
+    }
+
+    /**
+     * Log suspicious activity for auditing / temporary jail
+     */
+    private static function logSuspiciousActivity(?int $userId, string $eventType, int $blockMinutes = 10): void
+    {
+        $blockedUntil = date('Y-m-d H:i:s', time() + ($blockMinutes * 60));
+        Database::query(
+            "INSERT INTO user_security_events (user_id, ip, event_type, blocked_until)
+             VALUES (:uid, :ip, :event, :blocked)",
+            [
+                'uid' => $userId,
+                'ip' => inet_pton($_SERVER['REMOTE_ADDR'] ?? ''),
+                'event' => $eventType,
+                'blocked' => $blockedUntil
+            ]
+        );
+    }
+
+    /**
+     * Monitor User-Agent fingerprint diversity for suspicious patterns
+     * Detection only – no blocking
+     */
+    private static function monitorFingerprintPatterns(): void
+    {
+        $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $fingerprint = $_SESSION['fingerprint'] ?? self::generateFingerprint();
+        $now = date('Y-m-d H:i:s');
+
+        // Count distinct fingerprints using this UA in the last 5 minutes
+        $row = Database::fetch(
+            "SELECT COUNT(DISTINCT fingerprint) AS total
+             FROM app_sessions
+             WHERE ua = :ua AND last_activity > DATE_SUB(:now, INTERVAL 5 MINUTE)",
+            [
+                'ua' => $ua,
+                'now' => $now
+            ]
+        );
+
+        $count = (int) ($row['total'] ?? 0);
+
+        // Threshold for suspicious activity (tune as needed)
+        $threshold = 10;
+
+        if ($count >= $threshold)
+        {
+            // Insert or update security_events table
+            Database::query(
+                "INSERT INTO security_events (ua, fingerprints, first_seen, last_seen, flagged_at, notes)
+                 VALUES (:ua, :fingerprints, :first_seen, :last_seen, :flagged_at, :notes)
+                 ON DUPLICATE KEY UPDATE fingerprints = :fingerprints_upd, last_seen = :last_seen_upd",
+                [
+                    'ua' => $ua,
+                    'fingerprints' => $count,
+                    'first_seen' => $now,
+                    'last_seen' => $now,
+                    'flagged_at' => $now,
+                    'notes' => 'High fingerprint diversity – Possible Bot or DDoS/DoS Pattern',
+                    'fingerprints_upd' => $count,
+                    'last_seen_upd' => $now
+                ]
+            );
+        }
     }
 
     /**
@@ -69,10 +182,14 @@ class SessionManager
         $sessionId = session_id();
         $ip = inet_pton($_SERVER['REMOTE_ADDR'] ?? '');
         $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $fingerprint = $_SESSION['fingerprint'] ?? self::generateFingerprint();
+        $firstIp = $_SESSION['first_ip'] ?? $ip;
         $lastActivity = date('Y-m-d H:i:s');
         $expiresAt = isset(self::$config['timeout_minutes'])
             ? date('Y-m-d H:i:s', time() + (self::$config['timeout_minutes'] * 60))
             : null;
+
+        $_SESSION['first_ip'] = $firstIp;
 
         // Serialize session data
         $data = serialize($_SESSION);
@@ -87,12 +204,15 @@ class SessionManager
         {
             Database::query(
                 "UPDATE app_sessions
-                 SET user_id = :uid, ip = :ip, ua = :ua, last_activity = :last, expires_at = :expires, data = :data
+                 SET user_id = :uid, ip = :ip, first_ip = :first_ip, ua = :ua, fingerprint = :fp,
+                     last_activity = :last, expires_at = :expires, data = :data
                  WHERE session_id = :sid",
                 [
                     'uid' => $userId,
                     'ip' => $ip,
+                    'first_ip' => $firstIp,
                     'ua' => $ua,
+                    'fp' => $fingerprint,
                     'last' => $lastActivity,
                     'expires' => $expiresAt,
                     'data' => $data,
@@ -103,13 +223,15 @@ class SessionManager
         else
         {
             Database::query(
-                "INSERT INTO app_sessions (session_id, user_id, ip, ua, last_activity, expires_at, data)
-                 VALUES (:sid, :uid, :ip, :ua, :last, :expires, :data)",
+                "INSERT INTO app_sessions (session_id, user_id, ip, first_ip, ua, fingerprint, last_activity, expires_at, data)
+                 VALUES (:sid, :uid, :ip, :first_ip, :ua, :fp, :last, :expires, :data)",
                 [
                     'sid' => $sessionId,
                     'uid' => $userId,
                     'ip' => $ip,
+                    'first_ip' => $firstIp,
                     'ua' => $ua,
+                    'fp' => $fingerprint,
                     'last' => $lastActivity,
                     'expires' => $expiresAt,
                     'data' => $data

@@ -150,7 +150,7 @@ class UploadController
                 // Maximum allowed image size for upload
                 $maxSizeMb = $config['gallery']['upload_max_image_size'];
                 $maxSizeBytes = $maxSizeMb * 1024 * 1024;
-                
+
                 if ($file['size'] > $maxSizeBytes)
                 {
                     $errors[] = "File exceeds maximum allowed size of {$maxSizeMb} MB.";

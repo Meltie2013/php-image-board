@@ -69,7 +69,7 @@ class AuthController
     public static function login(): void
     {
         $errors = [];
-
+    
         // Check if user is already logged in
         $userId = SessionManager::get('user_id');
         if ($userId)
@@ -78,7 +78,7 @@ class AuthController
             header('Location: /profile/overview');
             exit();
         }
-
+    
         // Handle login form submission
         if ($_SERVER['REQUEST_METHOD'] === 'POST')
         {
@@ -86,62 +86,149 @@ class AuthController
             $username  = Security::sanitizeString($_POST['username'] ?? '');
             $password  = $_POST['password'] ?? '';
             $csrfToken = $_POST['csrf_token'] ?? '';
-
+    
             // Verify CSRF token to prevent cross-site request forgery
             if (!Security::verifyCsrfToken($csrfToken))
             {
-                $errors[] = "Invalid CSRF token.";
+                $errors[] = "Invalid request.";
             }
-
+    
             // Ensure username/email and password fields are not empty
             if (empty($username) || empty($password))
             {
-                $errors[] = "Please fill in all fields.";
+                $errors[] = "All fields required.";
             }
-
-            // Attempt login only if no validation errors
+    
+            // Fetch user by username with role details
+            $user = Database::fetch(
+                "SELECT u.id, u.username, u.password_hash, u.failed_logins, u.last_failed_login, u.status, r.name AS role_name
+                 FROM app_users u
+                 INNER JOIN app_roles r ON u.role_id = r.id
+                 WHERE u.username = :username LIMIT 1",
+                ['username' => $username]
+            );
+    
+            $userIdToCheck = $user['id'] ?? null;
+    
+            // If user exists, enforce status and lockout checks before password validation
+            if ($userIdToCheck)
+            {
+                // Block suspended accounts immediately
+                if ($user['status'] === 'suspended')
+                {
+                    $errors[] = "Account suspended.";
+                }
+    
+                // Check if the user is currently jailed (temporary block)
+                $blocked = Database::fetch(
+                    "SELECT blocked_until FROM user_security_events
+                     WHERE user_id = :uid
+                     ORDER BY blocked_until DESC LIMIT 1",
+                    ['uid' => $userIdToCheck]
+                );
+    
+                if ($blocked && strtotime($blocked['blocked_until']) > time())
+                {
+                    $errors[] = "Try again later.";
+                }
+    
+                // Check for permanent suspension (6+ failed attempts)
+                if ((int)$user['failed_logins'] >= 6 && empty($errors))
+                {
+                    Database::query(
+                        "UPDATE app_users
+                         SET status = 'suspended'
+                         WHERE id = :id",
+                        ['id' => $userIdToCheck]
+                    );
+    
+                    $errors[] = "Account locked.";
+                }
+            }
+    
+            // If no errors so far, attempt password validation
             if (empty($errors))
             {
-                // Fetch user by username with role details
-                $user = Database::fetch(
-                    "SELECT u.id, u.username, u.password_hash, r.name AS role_name FROM app_users u
-                        INNER JOIN app_roles r ON u.role_id = r.id WHERE u.username = :username LIMIT 1",
-                    ['username' => $username]
-                );
-
-                // Validate password against stored hash
                 if ($user && Security::verifyPassword($password, $user['password_hash']))
                 {
+                    // Successful login: reset failed login counter
+                    Database::query(
+                        "UPDATE app_users
+                         SET failed_logins = 0, last_failed_login = NULL, last_login = NOW()
+                         WHERE id = :id",
+                        ['id' => $userIdToCheck]
+                    );
+    
                     // Store important user details in session
                     SessionManager::set('user_id', $user['id']);
-                    SessionManager::set('user_role', $user['role_name']); // role name instead of ID
+                    SessionManager::set('user_role', $user['role_name']);
                     SessionManager::set('username', $user['username']);
-
-                    // Update last login timestamp
-                    Database::query("UPDATE app_users SET last_login = NOW() WHERE id = :id", ['id' => $user['id']]);
-
+    
                     // Redirect user to profile overview
                     header('Location: /profile/overview');
                     exit();
                 }
                 else
                 {
-                    // Invalid login attempt
-                    $errors[] = "Invalid username or password.";
+                    // Failed login: calculate attempt count
+                    $failedLogins = (int)$user['failed_logins'];
+                    $lastFailed = strtotime($user['last_failed_login'] ?? '0');
+                    $now = time();
+                    $resetWindow = 600; // 10 minutes
+                    $threshold = 3;     // attempts before temporary jail
+    
+                    if (($now - $lastFailed) > $resetWindow)
+                    {
+                        $failedLogins = 1; // reset counter
+                    }
+                    else
+                    {
+                        $failedLogins++;
+                    }
+    
+                    // Update user's failed login info
+                    Database::query(
+                        "UPDATE app_users
+                         SET failed_logins = :fails, last_failed_login = NOW()
+                         WHERE id = :id",
+                        ['fails' => $failedLogins, 'id' => $userIdToCheck]
+                    );
+    
+                    // Jail user if threshold reached
+                    if ($failedLogins >= $threshold)
+                    {
+                        $blockedUntil = date('Y-m-d H:i:s', $now + $resetWindow); // 10 min jail
+                        Database::query(
+                            "INSERT INTO user_security_events (user_id, ip, event_type, blocked_until)
+                             VALUES (:uid, :ip, :event, :blocked)",
+                            [
+                                'uid' => $userIdToCheck,
+                                'ip' => inet_pton($_SERVER['REMOTE_ADDR'] ?? ''),
+                                'event' => 'failed_login_threshold',
+                                'blocked' => $blockedUntil
+                            ]
+                        );
+    
+                        $errors[] = "Too many attempts. Wait 10 min.";
+                    }
+                    else
+                    {
+                        $errors[] = "Invalid username and/or password.";
+                    }
                 }
             }
         }
-
+    
         // Initialize template engine for rendering login page
         $template = self::initTemplate();
-
+    
         // Pass CSRF token and error messages to template
         $template->assign('csrf_token', Security::generateCsrfToken());
         $template->assign('error', $errors);
-
+    
         // Render login page
         $template->render('login.html');
-    }
+    }    
 
     /**
      * Handle user registration requests.
@@ -158,98 +245,103 @@ class AuthController
     {
         $errors = [];
         $success = '';
-
-        // Prevent already logged-in users from accessing registration
+    
+        // Prevent already logged-in users from registering again
         $userId = SessionManager::get('user_id');
-        if ($userId)
-        {
+        if ($userId) {
             header('Location: /profile/overview');
             exit();
         }
-
+    
         // Handle registration form submission
-        if ($_SERVER['REQUEST_METHOD'] === 'POST')
-        {
-            // Sanitize and retrieve submitted form fields
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            // Sanitize inputs
             $username    = Security::sanitizeString($_POST['username'] ?? '');
             $email       = Security::sanitizeEmail($_POST['email'] ?? '');
             $cemail      = Security::sanitizeEmail($_POST['confirm_email'] ?? '');
             $password    = $_POST['password'] ?? '';
             $confirmPass = $_POST['confirm_password'] ?? '';
             $csrfToken   = $_POST['csrf_token'] ?? '';
-
-            // Verify CSRF token
+    
+            // --- Security checks ---
             if (!Security::verifyCsrfToken($csrfToken))
             {
-                $errors[] = "Invalid CSRF token.";
+                $errors[] = "Invalid request. Please refresh the page and try again.";
             }
-
-            // Validate input fields
-            if (empty($username) || empty($email) || empty($cemail) || empty($password) || empty($confirmPass))
-            {
+    
+            // --- Field validation ---
+            if (empty($username) || empty($email) || empty($cemail) || empty($password) || empty($confirmPass)) {
                 $errors[] = "All fields are required.";
             }
-            elseif (!preg_match('/^[a-zA-Z0-9_]{3,15}$/', $username))
+    
+            if (!preg_match('/^[a-zA-Z0-9_]{3,15}$/', $username))
             {
-                $errors[] = "Username must be 3-15 characters, letters, numbers, or underscore only.";
+                $errors[] = "Username must be 3–15 characters long, letters, numbers, or underscores only.";
             }
-            elseif ($password !== $confirmPass)
+    
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL))
+            {
+                $errors[] = "Invalid email format.";
+            }
+    
+            if ($email !== $cemail)
+            {
+                $errors[] = "Email addresses do not match.";
+            }
+    
+            if ($password !== $confirmPass)
             {
                 $errors[] = "Passwords do not match.";
             }
-            else if ($email !== $cemail)
+    
+            if (strlen($password) < 8)
             {
-                $errors[] = "Email address does not match";
+                $errors[] = "Password must be at least 8 characters long.";
             }
-
-            // Check if username or email already exists
+    
+            // --- Check for duplicates ---
             if (empty($errors))
             {
                 $exists = Database::fetch(
                     "SELECT id FROM app_users WHERE username = :username OR email = :email LIMIT 1",
                     ['username' => $username, 'email' => $email]
                 );
-
+    
                 if ($exists)
                 {
-                    $errors[] = "Username or email already exists.";
+                    $errors[] = "That username or email is already in use.";
                 }
             }
-
-            // Insert new user into database if no validation errors
+    
+            // --- Register user ---
             if (empty($errors))
             {
-                // Hash password securely
                 $hashedPassword = Security::hashPassword($password);
-
-                // Insert new user with default role (member)
+    
                 Database::insert(
-                    "INSERT INTO app_users (username, email, password_hash, role_id, created_at)
-                     VALUES (:username, :email, :password_hash, :role_id, NOW())",
+                    "INSERT INTO app_users (username, email, password_hash, role_id, status, created_at)
+                     VALUES (:username, :email, :password_hash, :role_id, :status, NOW())",
                     [
-                        'username' => $username,
-                        'email' => $email,
+                        'username'      => $username,
+                        'email'         => $email,
                         'password_hash' => $hashedPassword,
-                        'role_id' => 3, // default group (member)
+                        'role_id'       => 3, // default role = member
+                        'status'        => 'pending'
                     ]
                 );
-
-                // Success message for user feedback
-                $success = "Registration successful! You can now log in.";
+    
+                $success = "Registration successful! Account pending approval.";
             }
         }
-
-        // Initialize template engine for rendering registration page
+    
+        // Render template
         $template = self::initTemplate();
-
-        // Pass CSRF token, errors, and success message to template
         $template->assign('csrf_token', Security::generateCsrfToken());
         $template->assign('error', $errors);
         $template->assign('success', $success);
-
-        // Render registration page
         $template->render('register.html');
     }
+    
 
     /**
      * Log out the current user.

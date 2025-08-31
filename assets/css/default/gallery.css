@@ -199,7 +199,7 @@
 /* Lists inside details box */
 .gallery-container-view .gallery-details-view ul {
     list-style: none; /* remove default bullets */
-    padding: 0; 
+    padding: 0;
     margin: 0;
 }
 
@@ -233,7 +233,7 @@
 .gallery-container-view .gallery-image-wrapper img {
     max-width: 100%; /* scale down for container */
     max-height: 850px; /* max image height */
-    width: auto; 
+    width: auto;
     height: auto;
     border-radius: 8px; /* rounded corners */
     box-shadow: 0 2px 8px rgba(0,0,0,0.5); /* subtle shadow */
@@ -285,7 +285,7 @@
 .gallery-container-view .hash-tooltip-btn {
     position: relative; /* needed for tooltip positioning */
     font-size: 0.85rem;
-    padding: 6px 6px; 
+    padding: 6px 6px;
     cursor: pointer; /* pointer cursor */
     color: #ffff; /* white text */
 }
@@ -293,7 +293,7 @@
 /* Tooltip hidden by default */
 .gallery-container-view .hash-tooltip-btn::after {
     content: attr(data-hash); /* show hash from data attribute */
-    position: absolute; 
+    position: absolute;
     left: 50%;
     bottom: 125%; /* position above button */
     transform: translateX(-50%); /* center horizontally */
@@ -316,7 +316,7 @@
     left: 50%;
     bottom: 115%;
     transform: translateX(-50%);
-    border-width: 5px; 
+    border-width: 5px;
     border-style: solid;
     border-color: #262f3a transparent transparent transparent; /* arrow pointing down */
     display: none; /* hidden by default */

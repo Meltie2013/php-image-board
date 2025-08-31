@@ -111,34 +111,34 @@ class ModerationController
     public static function comparison(): void
     {
         $template = self::initTemplate();
-    
+
         // Require login and role check
         RoleHelper::requireLogin();
         RoleHelper::requireRole(['administrator', 'moderator'], $template);
-    
+
         $comparisonResult  = null;      // Stores calculated hash distances
         $selectedImage1    = null;      // First selected image
         $selectedImage2    = null;      // Second selected image
         $similarityPercent = 0;         // Overall similarity percentage
-    
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST')
         {
             $hash1 = $_POST['image1_hash'] ?? '';
             $hash2 = $_POST['image2_hash'] ?? '';
-    
+
             if ($hash1 && $hash2)
             {
                 // Fetch image hash data for both selected images
                 $selectedImage1 = Database::fetch("SELECT * FROM app_image_hashes WHERE image_hash = :hash LIMIT 1", ['hash' => $hash1]);
                 $selectedImage2 = Database::fetch("SELECT * FROM app_image_hashes WHERE image_hash = :hash LIMIT 1", ['hash' => $hash2]);
-    
+
                 if ($selectedImage1 && $selectedImage2)
                 {
                     // Calculate aHash distance
                     $ahashDistance = HashingHelper::hammingDistance($selectedImage1['ahash'], $selectedImage2['ahash']);
                     // Calculate dHash distance
                     $dhashDistance = HashingHelper::hammingDistance($selectedImage1['dhash'], $selectedImage2['dhash']);
-    
+
                     // Calculate average pHash distance over all 16 blocks
                     $phashDistanceTotal = 0;
                     for ($i = 0; $i <= 15; $i++)
@@ -148,7 +148,7 @@ class ModerationController
                         $phashDistanceTotal += HashingHelper::hammingDistance($block1, $block2);
                     }
                     $phashDistanceAvg = round($phashDistanceTotal / 16);
-    
+
                     $comparisonResult = [
                         'ahash_distance' => $ahashDistance,
                         'phash_distance' => $phashDistanceAvg,
@@ -157,11 +157,11 @@ class ModerationController
                 }
             }
         }
-    
+
         // Fetch all approved image hashes for dropdown selection
         $imageHashes = Database::fetchAll("SELECT image_hash FROM app_images WHERE status IN ('approved') ORDER BY id DESC");
         $flatImageHashes = array_column($imageHashes, 'image_hash');
-    
+
         // Calculate similarity percentage if comparison was performed
         if ($comparisonResult)
         {
@@ -169,22 +169,22 @@ class ModerationController
             $avgDistance = ($comparisonResult['ahash_distance'] + $comparisonResult['phash_distance'] + $comparisonResult['dhash_distance']) / 2;
             $similarityPercent = max(0, 100 - round(($avgDistance / $maxDistance) * 100));
         }
-    
+
         // Assign results and selections to template
         $template->assign('ahash_distance', $comparisonResult['ahash_distance'] ?? null);
         $template->assign('phash_distance', $comparisonResult['phash_distance'] ?? null);
         $template->assign('dhash_distance', $comparisonResult['dhash_distance'] ?? null);
         $template->assign('similarity_percent', $similarityPercent);
-    
+
         $template->assign('image_hashes', $flatImageHashes);
         $template->assign('selected_image1_hash', $selectedImage1['image_hash'] ?? '');
         $template->assign('selected_image1_original_path', !empty($selectedImage1['image_hash']) ? '/image/original/' . $selectedImage1['image_hash'] : '');
         $template->assign('selected_image2_hash', $selectedImage2['image_hash'] ?? '');
         $template->assign('selected_image2_original_path', !empty($selectedImage2['image_hash']) ? '/image/original/' . $selectedImage2['image_hash'] : '');
-    
+
         $template->render('panel/moderation_comparison.html');
     }
-    
+
     /**
      * Image rehash tool.
      *

@@ -4,9 +4,9 @@
         <h1>Login</h1>
 
         {if $error}
-            <div class="error">
+            <div class="alert alert-danger">
             {foreach $error as $err}
-                <p>{ucfirst($err)}</p>
+                <b>Error:</b> {ucfirst($err)}
             {/foreach}
             </div>
         {/if}
