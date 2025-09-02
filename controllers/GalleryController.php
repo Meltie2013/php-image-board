@@ -378,6 +378,7 @@ class GalleryController
         $userId = SessionManager::get('user_id');
         $currentUser = null;
 
+        // Fetch current user data for age-sensitive checks
         if ($userId)
         {
             $currentUser = Database::fetch(
@@ -386,6 +387,7 @@ class GalleryController
             );
         }
 
+        // Fetch image metadata from the database
         $sql = "
             SELECT
                 original_path,
@@ -411,6 +413,7 @@ class GalleryController
             return;
         }
 
+        // Age-restricted access check
         if ((int)$image['age_sensitive'] === 1 && !self::checkAgeSensitiveAccess($currentUser,
             (new DateTime())->modify("-" . (int)(self::$config['profile']['years'] ?? 0) . " years")->format('Y-m-d')))
         {
@@ -421,6 +424,20 @@ class GalleryController
             return;
         }
 
+        // Check cache AFTER passing age restriction
+        $cachedPath = ImageCacheEngine::getCachedImage($hash);
+        if ($cachedPath)
+        {
+            // Cached image exists – serve immediately
+            $mimeType = mime_content_type($cachedPath) ?: 'application/octet-stream';
+            header('Content-Type: ' . $mimeType);
+            header('Content-Length: ' . filesize($cachedPath));
+            header('Cache-Control: public, max-age=604800'); // Browser caching
+            readfile($cachedPath);
+            exit;
+        }
+
+        // Resolve original file path
         $baseDir = realpath(__DIR__ . '/../uploads/');
         $fullPath = realpath($baseDir . '/' . ltrim(str_replace("uploads/", "", $image['original_path']), '/'));
 
@@ -433,10 +450,13 @@ class GalleryController
             return;
         }
 
+        // Store image in cache and serve
+        $cachedPath = ImageCacheEngine::storeImage($hash, $fullPath);
+
         header('Content-Type: ' . $image['mime_type']);
-        header('Content-Length: ' . filesize($fullPath));
-        header('Cache-Control: public, max-age=604800'); // Allow caching (7 days)
-        readfile($fullPath);
+        header('Content-Length: ' . filesize($cachedPath));
+        header('Cache-Control: public, max-age=604800'); // Allow browser caching (7 days)
+        readfile($cachedPath);
         exit;
     }
 }

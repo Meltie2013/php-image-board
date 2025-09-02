@@ -12,6 +12,9 @@
 # ignore cache templates if in development environment
 /cache/templates/*
 
+# ignore cache images if in development environment
+/cache/images/*
+
 # ingore uploaded avatar in folder
 /uploads/avatars/*
 
