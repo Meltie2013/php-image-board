@@ -413,8 +413,11 @@ class GalleryController
             return;
         }
 
+        // Determine if per-user cache should be applied
+        $usePerUserCache = (int)$image['age_sensitive'] === 1;
+
         // Age-restricted access check
-        if ((int)$image['age_sensitive'] === 1 && !self::checkAgeSensitiveAccess($currentUser,
+        if ($usePerUserCache && !self::checkAgeSensitiveAccess($currentUser,
             (new DateTime())->modify("-" . (int)(self::$config['profile']['years'] ?? 0) . " years")->format('Y-m-d')))
         {
             http_response_code(403);
@@ -425,14 +428,14 @@ class GalleryController
         }
 
         // Check cache AFTER passing age restriction
-        $cachedPath = ImageCacheEngine::getCachedImage($hash);
+        $cachedPath = ImageCacheEngine::getCachedImage($hash, $usePerUserCache ? $userId : null);
         if ($cachedPath)
         {
             // Cached image exists – serve immediately
-            $mimeType = mime_content_type($cachedPath) ?: 'application/octet-stream';
+            $mimeType = mime_content_type($cachedPath) ?: $image['mime_type'] ?: 'application/octet-stream';
             header('Content-Type: ' . $mimeType);
             header('Content-Length: ' . filesize($cachedPath));
-            header('Cache-Control: public, max-age=604800'); // Browser caching
+            header('Cache-Control: public, max-age=604800'); // Browser caching (7 days)
             readfile($cachedPath);
             exit;
         }
@@ -451,7 +454,7 @@ class GalleryController
         }
 
         // Store image in cache and serve
-        $cachedPath = ImageCacheEngine::storeImage($hash, $fullPath);
+        $cachedPath = ImageCacheEngine::storeImage($hash, $fullPath, $usePerUserCache ? $userId : null);
 
         header('Content-Type: ' . $image['mime_type']);
         header('Content-Length: ' . filesize($cachedPath));

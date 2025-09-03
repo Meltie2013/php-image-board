@@ -21,19 +21,27 @@ class ImageCacheEngine
 
     /**
      * Generates the cache file path for an image hash.
+     * Optionally includes user ID for restricted per-user caching.
      */
-    private static function getCachePath(string $hash): string
+    private static function getCachePath(string $hash, ?int $userId = null): string
     {
-        return self::$cacheDir . $hash . '.cache';
+        $key = $hash;
+        if ($userId !== null)
+        {
+            $key .= '_u' . $userId;
+        }
+
+        return self::$cacheDir . $key . '.cache';
     }
 
     /**
      * Checks if cached file exists and is still valid.
+     * Supports both global and per-user cache.
      */
-    public static function getCachedImage(string $hash): ?string
+    public static function getCachedImage(string $hash, ?int $userId = null): ?string
     {
         self::ensureCacheDir();
-        $cachePath = self::getCachePath($hash);
+        $cachePath = self::getCachePath($hash, $userId);
 
         if (file_exists($cachePath))
         {
@@ -54,11 +62,12 @@ class ImageCacheEngine
 
     /**
      * Stores a new cached copy of the image.
+     * Supports both global and per-user cache.
      */
-    public static function storeImage(string $hash, string $fullPath): string
+    public static function storeImage(string $hash, string $fullPath, ?int $userId = null): string
     {
         self::ensureCacheDir();
-        $cachePath = self::getCachePath($hash);
+        $cachePath = self::getCachePath($hash, $userId);
 
         // Copy original file into cache
         copy($fullPath, $cachePath);
