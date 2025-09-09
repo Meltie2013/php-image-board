@@ -290,31 +290,54 @@ class UploadController
     * Generates a unique, URL-safe alphanumeric hash
     * consisting of 5 groups of 5 characters separated by dashes.
     *
-    * The function checks the "app_images" table to ensure the hash
-    * does not already exist. If a collision is found, it regenerates
-    * until a unique hash is produced.
-    *
-    * Example: abcde-fghij-klmno-pqrst-uvwxy
+    * Uses batch checking to reduce database queries for collisions.
     *
     * @return string A unique image hash
     */
     private static function generateImageHashFormatted(): string
     {
+        $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        $length = strlen($chars);
+
         do {
-            $parts = [];
-            for ($i = 0; $i < 5; $i++)
+            $hashes = [];
+            $candidateCount = 5; // generate a small batch of candidates
+            for ($i = 0; $i < $candidateCount; $i++)
             {
-                $bytes = random_bytes(3); // 3 bytes = 6 hex chars
-                $parts[] = substr(bin2hex($bytes), 0, 5); // take first 5 chars
+                $parts = [];
+                for ($g = 0; $g < 5; $g++)
+                {
+                    $segment = '';
+                    for ($j = 0; $j < 5; $j++)
+                    {
+                        $segment .= $chars[random_int(0, $length - 1)];
+                    }
+
+                    $parts[] = $segment;
+                }
+
+                $hashes[] = implode('-', $parts);
             }
 
-            $hash = implode('-', $parts);
+            // Check all candidates in a single query
+            $placeholders = implode(',', array_fill(0, count($hashes), '?'));
+            $sql = "SELECT image_hash FROM app_images WHERE image_hash IN ($placeholders)";
+            $existing = Database::fetchAll($sql, $hashes);
 
-            // Check if hash exists in the database
-            $sql = "SELECT COUNT(*) AS cnt FROM app_images WHERE image_hash = :image_hash";
-            $result = Database::fetch($sql, [':image_hash' => $hash]);
+            $existingHashes = array_column($existing, 'image_hash');
 
-        } while (!empty($result['cnt'])); // regenerate if exists
+            // Pick the first non-colliding hash
+            $hash = null;
+            foreach ($hashes as $h)
+            {
+                if (!in_array($h, $existingHashes, true))
+                {
+                    $hash = $h;
+                    break;
+                }
+            }
+
+        } while ($hash === null); // regenerate if all candidates collided
 
         return $hash;
     }

@@ -22,8 +22,8 @@ class Router
         // Convert placeholders {param} into regex capture groups
         $pattern = preg_replace('#\{([a-zA-Z0-9_]+)\}#', '([^/]+)', $path);
 
-        // Anchor the regex to match full path, case-insensitive
-        $pattern = '#^' . $this->normalize($pattern) . '$#i';
+        // Anchor the regex to match full path, case-sensitive
+        $pattern = '#^' . $this->normalize($pattern) . '$#';
 
         $this->routes[$pattern] = $callback;
     }
