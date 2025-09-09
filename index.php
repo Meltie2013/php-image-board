@@ -152,6 +152,34 @@ $router->add(
     }
 );
 
+// Image Upvote route (POST only)
+$router->add(
+    '/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/upvote',
+    function ($hash) {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
+        {
+            http_response_code(405);
+            echo "Method Not Allowed";
+            exit;
+        }
+        GalleryController::upvote($hash);
+    }
+);
+
+// Favorite image route (POST only)
+$router->add(
+    '/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/favorite',
+    function ($hash) {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
+        {
+            http_response_code(405);
+            echo "Method Not Allowed";
+            exit;
+        }
+        GalleryController::favorite($hash);
+    }
+);
+
 // -------------------------
 // Dispatch request
 // -------------------------

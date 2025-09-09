@@ -13,23 +13,64 @@
                     <button title="Edit Image">
                         <i class="fa-solid fa-pen-to-square"></i>
                     </button>
+
                     <form method="POST" action="/moderation/delete/image/{$img_hash}"
                           onsubmit="return confirm('Are you sure you want to delete this image?');">
                         <button type="submit" title="Delete Image">
                             <i class="fa-solid fa-trash"></i>
                         </button>
                     </form>
-                    <button title="Add Favorite">
+
+                    {if $img_has_favorited}
+                    <button title="Already Favorite">
                         <i class="fa-solid fa-star"></i>
+                        {$img_favorites}
                     </button>
-                    <button title="Up Vote">
+                    {else}
+                    <form method="POST" action="/image/{$img_hash}/favorite">
+                        <button type="submit" title="Add Favorite">
+                            <i class="fa-solid fa-star"></i>
+                            {$img_favorites}
+                        </button>
+                    </form>
+                    {/if}
+
+                    {if $img_has_voted}
+                    <button title="Already Upvoted">
                         <i class="fa-solid fa-thumbs-up"></i>
+                        {$img_votes}
                     </button>
+                    {else}
+                    <form method="POST" action="/image/{$img_hash}/upvote">
+                        <button type="submit" title="Up Vote">
+                            <i class="fa-solid fa-thumbs-up"></i>
+                            {$img_votes}
+                        </button>
+                    </form>
+                    {/if}
+
+                    <button title="Report Image">
+                        <i class="fa-solid fa-flag"></i>
+                    </button>
+                </div>
+                {else}
+                <div class="gallery-toolbar">
+                    <button title="Login to Favorite">
+                        <i class="fa-solid fa-star"></i>
+                        {$img_favorites}
+                    </button>
+
+                    <button title="Login to Upvote">
+                        <i class="fa-solid fa-thumbs-up"></i>
+                        {$img_votes}
+                    </button>
+
                     <button title="Report Image">
                         <i class="fa-solid fa-flag"></i>
                     </button>
                 </div>
                 {/if}
+
                 <div class="gallery-details-view">
                     <section>
                         <h3>Details</h3>

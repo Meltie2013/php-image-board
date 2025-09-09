@@ -3,7 +3,11 @@
     <div class="error-container">
         <h2>{$title}</h2>
         <p>{$message}</p>
+        {if isset($link) && $link}
+        <a href="{$link}">Back to Image</a>
+        {else}
         <a href="/">Go Back Home</a>
+        {/if}
     </div>
 
 {include file="global/footer.html"}

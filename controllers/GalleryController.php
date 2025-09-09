@@ -208,6 +208,7 @@ class GalleryController
 
         $sql = "
             SELECT
+                i.id,
                 i.user_id,
                 i.image_hash,
                 i.status,
@@ -222,6 +223,8 @@ class GalleryController
                 i.md5,
                 i.sha1,
                 i.reject_reason,
+                i.votes,
+                i.favorites,
                 u.date_of_birth,
                 u.age_verified_at
             FROM app_images i
@@ -275,6 +278,28 @@ class GalleryController
 
         $username = self::getUsernameById((int)$img['user_id']);
 
+        $hasVoted = false;
+        if ($userId)
+        {
+            $sql = "SELECT 1 FROM app_image_votes WHERE user_id = :user_id AND image_id = :image_id LIMIT 1";
+            $voted = Database::fetch($sql, [
+                ':user_id' => $userId,
+                ':image_id' => $img['id']
+            ]);
+            $hasVoted = (bool)$voted;
+        }
+
+        $hasFavorited = false;
+        if ($userId)
+        {
+            $sql = "SELECT 1 FROM app_image_favorites WHERE user_id = :user_id AND image_id = :image_id LIMIT 1";
+            $favorited = Database::fetch($sql, [
+                ':user_id' => $userId,
+                ':image_id' => $img['id']
+            ]);
+            $hasFavorited = (bool)$favorited;
+        }
+
         $template->assign('img_hash', $img['image_hash']);
         $template->assign('img_username', ucfirst($username));
         $template->assign('img_description', $img['description']);
@@ -288,8 +313,122 @@ class GalleryController
         $template->assign('img_approved_status', ucfirst($img['status']));
         $template->assign('img_created_at', DateHelper::format($img['created_at']));
         $template->assign('img_age_sensitive', $img['age_sensitive']);
+        $template->assign('img_votes', NumericalHelper::formatCount($img['votes']));
+        $template->assign('img_has_voted', $hasVoted);
+        $template->assign('img_favorites', NumericalHelper::formatCount($img['favorites']));
+        $template->assign('img_has_favorited', $hasFavorited);
 
         $template->render('gallery/gallery_view.html');
+    }
+
+    /**
+     * Handle marking an image as favorite by logged-in user.
+     *
+     * @param string $hash Unique hash of the image.
+     */
+    public static function favorite(string $hash): void
+    {
+        $template = self::initTemplate();
+        $userId = SessionManager::get('user_id');
+
+        // Require login
+        RoleHelper::requireLogin();
+
+        // Find the image by hash
+        $sql = "SELECT id, favorites FROM app_images WHERE image_hash = :hash LIMIT 1";
+        $image = Database::fetch($sql, [':hash' => $hash]);
+
+        if (!$image)
+        {
+            $template->assign('title', "Favorite Failed");
+            $template->assign('message', "The image you attempted to favorite does not exist.");
+            $template->assign('link', null);
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $imageId = (int)$image['id'];
+
+        // Check if user already favorited
+        $sql = "SELECT 1 FROM app_image_favorites WHERE user_id = :user_id AND image_id = :image_id LIMIT 1";
+        $existing = Database::fetch($sql, [':user_id' => $userId, ':image_id' => $imageId]);
+
+        if ($existing)
+        {
+            $template->assign('title', "Favorite Failed");
+            $template->assign('message', "You have already marked this image as a favorite.");
+            $template->assign('link', "/image/{$hash}");
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        // Insert favorite
+        $sql = "INSERT INTO app_image_favorites (user_id, image_id) VALUES (:user_id, :image_id)";
+        Database::execute($sql, [':user_id' => $userId, ':image_id' => $imageId]);
+
+        // Increment favorite count
+        $sql = "UPDATE app_images SET favorites = favorites + 1 WHERE id = :id";
+        Database::execute($sql, [':id' => $imageId]);
+
+        $template->assign('title', 'Successful Favorite!');
+        $template->assign('message', "You have successfully marked this image as a favorite.");
+        $template->assign('link', "/image/{$hash}");
+        $template->render('errors/error_page.html');
+    }
+
+    /**
+     * Handle up-vote for an image by logged-in user.
+     *
+     * @param string $hash Unique hash of the image.
+     */
+    public static function upvote(string $hash): void
+    {
+        $template = self::initTemplate();
+        $userId = SessionManager::get('user_id');
+
+        // Require login
+        RoleHelper::requireLogin();
+
+        // Find the image by hash
+        $sql = "SELECT id, votes FROM app_images WHERE image_hash = :hash LIMIT 1";
+        $image = Database::fetch($sql, [':hash' => $hash]);
+
+        if (!$image)
+        {
+            $template->assign('title', "Upvote Failed");
+            $template->assign('message', "The image you attempted to upvote does not exist.");
+            $template->assign('link', null);
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $imageId = (int)$image['id'];
+
+        // Check if user already voted
+        $sql = "SELECT 1 FROM app_image_votes WHERE user_id = :user_id AND image_id = :image_id LIMIT 1";
+        $existing = Database::fetch($sql, [':user_id' => $userId, ':image_id' => $imageId]);
+
+        if ($existing)
+        {
+            $template->assign('title', "Upvote Failed");
+            $template->assign('message', "You have already upvoted this image.");
+            $template->assign('link', "/image/{$hash}");
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        // Insert vote
+        $sql = "INSERT INTO app_image_votes (user_id, image_id) VALUES (:user_id, :image_id)";
+        Database::execute($sql, [':user_id' => $userId, ':image_id' => $imageId]);
+
+        // Increment vote count
+        $sql = "UPDATE app_images SET votes = votes + 1 WHERE id = :id";
+        Database::execute($sql, [':id' => $imageId]);
+
+        $template->assign('title', 'Successful Upvote!');
+        $template->assign('message', "You have successfully upvoted this image.");
+        $template->assign('link', "/image/{$hash}");
+        $template->render('errors/error_page.html');
     }
 
     /**
