@@ -1,12 +1,12 @@
 <?php
 
+use \Imagick;
+use \ImagickException;
+
 /**
 * A helper class for resizing images using Imagick while preserving
 * quality, handling upscaling, transparency, and sharpening.
 */
-use Imagick;
-use ImagickException;
-
 class ImageHelper
 {
     /**
