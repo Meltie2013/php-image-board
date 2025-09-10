@@ -346,6 +346,9 @@ class UploadController
     * Creates a resized copy of the given image while preserving
     * aspect ratio and handling transparency for PNG/WebP formats.
     *
+    * Upscales images ≤600x600 by 2x but never exceeds 1280x1280.
+    * Maintains maximum image quality and optionally sharpens upscaled images.
+    *
     * @param string $src Path to source image
     * @param string $dest Destination relative path for resized image
     * @param int $maxWidth Maximum width constraint
@@ -358,51 +361,7 @@ class UploadController
         $srcPath = $src;
         $destPath = self::$uploadDir . str_replace("uploads/", "", $dest);
 
-        $image = imagecreatefromstring(file_get_contents($srcPath));
-        $width = imagesx($image);
-        $height = imagesy($image);
-
-        $scale = min($maxWidth / $width, $maxHeight / $height);
-        if ($scale > 1)
-        {
-            $scale = 1;
-        }
-
-        $newWidth = (int)($width * $scale);
-        $newHeight = (int)($height * $scale);
-
-        $tmp = imagecreatetruecolor($newWidth, $newHeight);
-
-        $mimeType = mime_content_type($srcPath);
-        if (in_array($mimeType, ['image/png', 'image/webp']))
-        {
-            imagealphablending($tmp, false);
-            imagesavealpha($tmp, true);
-            $transparent = imagecolorallocatealpha($tmp, 0, 0, 0, 127);
-            imagefilledrectangle($tmp, 0, 0, $newWidth, $newHeight, $transparent);
-        }
-
-        imagecopyresampled($tmp, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
-
-        switch ($mimeType)
-        {
-            case 'image/jpeg':
-                imagejpeg($tmp, $destPath, 90);
-                break;
-
-            case 'image/png':
-                imagepng($tmp, $destPath);
-                break;
-
-            case 'image/webp':
-                imagewebp($tmp, $destPath, 90);
-                break;
-
-            default:
-                imagejpeg($tmp, $destPath, 90);
-        }
-
-        imagedestroy($image);
-        imagedestroy($tmp);
+        // Use the new ImageHelper class to handle resizing
+        ImageHelper::resize($srcPath, $destPath, $maxWidth, $maxHeight);
     }
 }
