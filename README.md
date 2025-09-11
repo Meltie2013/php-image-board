@@ -4,6 +4,12 @@ The PHP Image Board is an active project with several completed systems. This se
 
 ---
 
+## 📋 System Requirements
+
+For detailed hardware, software, and storage recommendations to run the PHP Image Board efficiently, see the [requirements.md](docs/requirements.md) file.
+
+---
+
 ### ✅ Completed Systems
 - **User Registration & Login**
 - **Change Account E-mail**
