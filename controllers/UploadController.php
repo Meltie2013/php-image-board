@@ -287,46 +287,120 @@ class UploadController
     }
 
     /**
-    * Generates a unique, URL-safe alphanumeric hash
-    * consisting of 5 groups of 5 characters separated by dashes.
-    *
-    * Uses batch checking to reduce database queries for collisions.
-    *
-    * @return string A unique image hash
-    */
-    private static function generateImageHashFormatted(): string
+     * Generates a unique, URL-safe alphanumeric hash
+     * consisting of 5 groups of 5 characters separated by dashes.
+     *
+     * Supports configuration for hash type:
+     *  - all_digits
+     *  - all_letters_lower
+     *  - all_letters_upper
+     *  - mixed_lower (letters+digits, lowercase letters)
+     *  - mixed_upper (letters+digits, uppercase letters)
+     *
+     * Uses batch checking to reduce database queries for collisions.
+     *
+     * @param string|null $hashType Optional hash type, defaults to 'mixed_lower'
+     * @return string A unique image hash
+     */
+    private static function generateImageHashFormatted(?string $hashType = null): string
     {
-        $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        $length = strlen($chars);
+        // Fetch configuration
+        $config = self::getConfig();
+        $hashType = $hashType ?? ($config['upload']['hash_type'] ?? 'mixed_lower');
 
-        do {
+        $lettersLower = 'abcdefghijklmnopqrstuvwxyz';
+        $lettersUpper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $digits       = '0123456789';
+
+        static $toggle = false; // flips each call to maintain balance
+
+        do
+        {
             $hashes = [];
-            $candidateCount = 5; // generate a small batch of candidates
+            $candidateCount = 5; // batch of candidates
+
             for ($i = 0; $i < $candidateCount; $i++)
             {
                 $parts = [];
+
+                // Generate 5 groups of 5 characters
                 for ($g = 0; $g < 5; $g++)
                 {
-                    $segment = '';
-                    for ($j = 0; $j < 5; $j++)
+                    $chars = [];
+
+                    switch ($hashType)
                     {
-                        $segment .= $chars[random_int(0, $length - 1)];
+                        case 'all_digits':
+                            for ($c = 0; $c < 5; $c++)
+                            {
+                                $chars[] = $digits[random_int(0, strlen($digits) - 1)];
+                            }
+                            break;
+
+                        case 'all_letters_lower':
+                            for ($c = 0; $c < 5; $c++)
+                            {
+                                $chars[] = $lettersLower[random_int(0, strlen($lettersLower) - 1)];
+                            }
+                            break;
+
+                        case 'all_letters_upper':
+                            for ($c = 0; $c < 5; $c++)
+                            {
+                                $chars[] = $lettersUpper[random_int(0, strlen($lettersUpper) - 1)];
+                            }
+                            break;
+
+                        case 'mixed_lower':
+                        case 'mixed_upper':
+                        default:
+                            // Mixed types with 50/50 letter-digit balance per group
+                            $letters = $hashType === 'mixed_lower' ? $lettersLower : $lettersUpper;
+
+                            if (($g + (int)$toggle) % 2 === 0)
+                            {
+                                // 3 letters, 2 digits
+                                for ($l = 0; $l < 3; $l++)
+                                {
+                                    $chars[] = $letters[random_int(0, strlen($letters) - 1)];
+                                }
+
+                                for ($d = 0; $d < 2; $d++)
+                                {
+                                    $chars[] = $digits[random_int(0, strlen($digits) - 1)];
+                                }
+                            }
+                            else
+                            {
+                                // 2 letters, 3 digits
+                                for ($l = 0; $l < 2; $l++)
+                                {
+                                    $chars[] = $letters[random_int(0, strlen($letters) - 1)];
+                                }
+
+                                for ($d = 0; $d < 3; $d++)
+                                {
+                                    $chars[] = $digits[random_int(0, strlen($digits) - 1)];
+                                }
+                            }
+
+                            shuffle($chars);
+                            break;
                     }
 
-                    $parts[] = $segment;
+                    $parts[] = implode('', $chars);
                 }
 
                 $hashes[] = implode('-', $parts);
             }
 
-            // Check all candidates in a single query
+            // Batch check for collisions
             $placeholders = implode(',', array_fill(0, count($hashes), '?'));
             $sql = "SELECT image_hash FROM app_images WHERE image_hash IN ($placeholders)";
             $existing = Database::fetchAll($sql, $hashes);
-
             $existingHashes = array_column($existing, 'image_hash');
 
-            // Pick the first non-colliding hash
+            // Pick first non-colliding hash
             $hash = null;
             foreach ($hashes as $h)
             {
@@ -337,11 +411,14 @@ class UploadController
                 }
             }
 
-        } while ($hash === null); // regenerate if all candidates collided
+        } while ($hash === null); // regenerate if all collided
+
+        // Flip toggle for next call → ensures overall balance
+        $toggle = !$toggle;
 
         return $hash;
     }
-
+  
     /**
     * Creates a resized copy of the given image while preserving
     * aspect ratio and handling transparency for PNG/WebP formats.

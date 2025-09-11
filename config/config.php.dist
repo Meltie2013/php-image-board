@@ -1,52 +1,88 @@
 <?php
 
+/**
+ * Global configuration file for PHP Image Board.
+ *
+ * This file defines all runtime options such as database credentials,
+ * session behavior, security policies, debugging flags, template handling,
+ * upload rules, and gallery display settings.
+ *
+ * Each section is grouped by functionality to allow administrators
+ * to easily modify or extend behavior without touching application logic.
+ */
+
 return [
 
-    // General
-    'timezone' => 'America/Chicago', // Default timezone
+    // --------------------------
+    // General Application Config
+    // --------------------------
 
-    // Database
+    'timezone' => 'America/Chicago', 
+    // Default timezone for PHP functions like date() and logs.
+    // Ensure this matches your server or community preference.
+
+    // --------------------------
+    // Database Configuration
+    // --------------------------
+
     'db' => [
-        'host'    => '', // MySQL host
-        'dbname'  => '', // Database name
-        'user'    => '', // Database user
-        'pass'    => '', // Database password
-        'charset' => 'utf8mb4', // Charset for connection
+        'host'    => '',          // Database server hostname or IP (e.g., "localhost")
+        'dbname'  => '',          // The database schema used by the application
+        'user'    => '',          // Database username with proper privileges
+        'pass'    => '',          // Database password
+        'charset' => 'utf8mb4',   // Character set for full Unicode (emoji-safe)
     ],
 
-    // Site
+
+    // --------------------------
+    // Site Metadata
+    // --------------------------
+
     'site' => [
-        'name'    => 'PHP Image Board', // Site name (todo: move to database)
-        'version' => 'v0.0.1',      // Build version (todo: move to database)
+        'name'    => 'PHP Image Board', // Site title (todo: make configurable in admin panel)
+        'version' => 'v0.0.1',          // Current software version (todo: move to database)
     ],
 
-    // Session
+    // --------------------------
+    // Session Management
+    // --------------------------
+
     'session' => [
-        'name'            => 'cms_session', // Custom session name
-        'timeout_minutes' => 15,            // Inactivity timeout (auto logout)
+        'name'            => 'cms_session', // Custom session name (prevents conflicts with other apps)
+        'timeout_minutes' => 15,            // Auto-logout after inactivity (minutes)
     ],
 
-    // Security
+    // --------------------------
+    // Security Policies
+    // --------------------------
+
     'security' => [
-        'csrf_token_name'  => '_csrf',                // CSRF token name
-        'password_algo'    => PASSWORD_ARGON2ID,      // Password hashing algorithm
+        'csrf_token_name'  => '_csrf',           // Key used to store CSRF tokens
+        'password_algo'    => PASSWORD_ARGON2ID, // Strong password hashing algorithm
         'password_options' => [
-            'memory_cost' => 1 << 17, // 128MB
-            'time_cost'   => 4,       // Number of iterations
-            'threads'     => 2,       // Parallelism
+            'memory_cost' => 1 << 17, // 128MB memory usage per hash (brute-force protection)
+            'time_cost'   => 4,       // Iterations (higher = more secure, slower)
+            'threads'     => 2,       // CPU parallelism factor
         ],
     ],
 
-    // Debugging
+    // --------------------------
+    // Debugging & Development
+    // --------------------------
+
     'debugging' => [
-        'allow_approve_uploads' => false, // Allow approving uploads
-        'allow_error_outputs'   => false, // Allow errors to be printed client side (default: false)
+        'allow_approve_uploads' => false, // Allow admin bypass approval flow for uploads
+        'allow_error_outputs'   => false, // If true, errors are shown client-side (unsafe in production!)
     ],
 
-    // Template
+    // --------------------------
+    // Template Engine
+    // --------------------------
+
     'template' => [
-        'disable_cache'     => false, // Disable template cache
+        'disable_cache'     => false, // Disable template caching (useful in development)
         'allowed_functions' => [
+            // Whitelisted PHP functions callable inside templates
             'strtoupper',
             'strtolower',
             'ucfirst',
@@ -54,18 +90,41 @@ return [
         ],
     ],
 
-    // Image Board
+    // --------------------------
+    // Upload Handling
+    // --------------------------
+
+    'upload' => [
+        'hash_type' => 'mixed_lower', 
+        /**
+         * Determines how image hashes are generated:
+         *   - "numeric"       => digits only
+         *   - "alpha_lower"   => lowercase letters only
+         *   - "alpha_upper"   => uppercase letters only
+         *   - "mixed_lower"   => lowercase letters + digits
+         *   - "mixed_upper"   => uppercase letters + digits
+         */
+    ],
+
+
+    // --------------------------
+    // Gallery Settings
+    // --------------------------
+
     'gallery' => [
-        'upload_max_storage'    => '10gb', // maximum size of host storage (default: 10gb)
-        'images_displayed'      => 32,     // total images displayed per page (default 32 - 8 x 4)
-        'pagination_range'      => 3,      // number of pages to show before and after current page
-        'upload_max_image_size' => 2,      // Default is 2 MB (keep this reasonable, depending on your storage total size)
+        'upload_max_storage'    => '10gb', // Max total storage size for uploads
+        'images_displayed'      => 32,     // Number of images per gallery page
+        'pagination_range'      => 3,      // How many pages to show before/after current
+        'upload_max_image_size' => 2,      // Max upload size per image (in MB)
     ],
 
-    // Profile
+
+    // --------------------------
+    // User Profile Settings
+    // --------------------------
+
     'profile' => [
-        'years' => 13,        // User must be this age to view sensitive content
-        'avatar_size' => 250, // Avatar height/width (todo: move to database)
+        'years'       => 13,  // Minimum age requirement for sensitive content
+        'avatar_size' => 250, // Avatar resolution (height/width in px)
     ],
-
 ];
