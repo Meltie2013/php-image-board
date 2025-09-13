@@ -56,24 +56,24 @@ class DateHelper
         $datetime = new DateTime($date, $utc);
         $datetime->setTimezone(self::$appTimezone);
 
-        // Reference points in app timezone
-        $today = new DateTime('today', self::$appTimezone);
-        $yesterday = (clone $today)->modify('-1 day');
+        // Use start-of-day for both the current day and the target date to avoid partial-day issues
+        $todayStart = new DateTime('today', self::$appTimezone);
+        $dateStart = (clone $datetime)->setTime(0, 0, 0);
 
-        // Check if date is today
-        if ($datetime >= $today)
+        // Calculate absolute difference in whole days between today and the date
+        $diffDays = (int)$todayStart->diff($dateStart)->format('%a');
+
+        // Same calendar day
+        if ($diffDays === 0)
         {
             return 'Today';
         }
 
-        // Check if date is yesterday
-        if ($datetime >= $yesterday && $datetime < $today)
+        // Exactly 1 day difference
+        if ($diffDays === 1)
         {
             return 'Yesterday';
         }
-
-        // Calculate absolute difference in days from today
-        $diffDays = (int)$datetime->diff($today)->days;
 
         // 2–6 days ago
         if ($diffDays >= 2 && $diffDays <= 6)
@@ -81,19 +81,16 @@ class DateHelper
             return $diffDays . ' days ago';
         }
 
-        // 7–13 days → 1 week ago
-        if ($diffDays >= 7 && $diffDays <= 13)
+        // Weeks calculation (floor of days / 7)
+        $weeks = (int)floor($diffDays / 7);
+
+        // 1–2 weeks ago (keep cutoff at 2 weeks)
+        if ($weeks >= 1 && $weeks <= 2)
         {
-            return '1 week ago';
+            return $weeks === 1 ? '1 week ago' : '2 weeks ago';
         }
 
-        // 14–20 days → 2 weeks ago
-        if ($diffDays >= 14 && $diffDays <= 20)
-        {
-            return '2 weeks ago';
-        }
-
-        // Older than 20 days → fallback to default formatting
+        // Older than 2 weeks → fall back to normal formatting
         return $datetime->format($format) ?? '';
     }
 
