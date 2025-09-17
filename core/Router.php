@@ -2,7 +2,7 @@
 
 class Router
 {
-    // Array of routes (regex => callback)
+    // Array of routes (regex => [callback, methods])
     private array $routes = [];
 
     // Not Found callback
@@ -16,8 +16,9 @@ class Router
      *
      * @param string $path URL path (supports {param} placeholders)
      * @param callable $callback Function to execute
+     * @param array $methods Allowed HTTP methods (default: GET)
      */
-    public function add(string $path, callable $callback): void
+    public function add(string $path, callable $callback, array $methods = ['GET']): void
     {
         // Convert placeholders {param} into regex capture groups
         $pattern = preg_replace('#\{([a-zA-Z0-9_]+)\}#', '([^/]+)', $path);
@@ -25,7 +26,7 @@ class Router
         // Anchor the regex to match full path, case-sensitive
         $pattern = '#^' . $this->normalize($pattern) . '$#';
 
-        $this->routes[$pattern] = $callback;
+        $this->routes[$pattern] = [$callback, $methods];
     }
 
     /**
@@ -55,6 +56,7 @@ class Router
     {
         $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
         $requestUri = $this->normalize($requestUri);
+        $requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
         // Treat "/index.php" the same as "/"
         if ($requestUri === '/index.php')
@@ -62,10 +64,19 @@ class Router
             $requestUri = '/';
         }
 
-        foreach ($this->routes as $pattern => $callback)
+        foreach ($this->routes as $pattern => [$callback, $methods])
         {
             if (preg_match($pattern, $requestUri, $matches))
             {
+                // Method check
+                if (!in_array($requestMethod, $methods, true))
+                {
+                    http_response_code(405);
+                    header('Allow: ' . implode(', ', $methods));
+                    echo "This request cannot be processed: invalid HTTP method.";
+                    return;
+                }
+
                 array_shift($matches); // remove full match
                 call_user_func_array($callback, $matches);
                 return; // stop after matching route

@@ -103,81 +103,54 @@ $router->setNotFound(function ()
 // -------------------------
 
 // Gallery upload routes
-$router->add('/upload-image', [UploadController::class, 'upload']);
-$router->add('/upload-image/submit', [UploadController::class, 'upload']);
+$router->add('/upload-image', [UploadController::class, 'upload'], ['GET', 'POST']);
 
 // Gallery main routes
-$router->add('/page/(\d+)', [GalleryController::class, 'index']);
+$router->add('/page/(\d+)', [GalleryController::class, 'index'], ['GET']);
 
 // Gallery image routes
-$router->add(
-    '/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
-    [GalleryController::class, 'view']
+$router->add('/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
+    [GalleryController::class, 'view'], ['GET']
 );
 
 // Gallery image direct serving (display original)
-$router->add(
-    '/image/original/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
-    function ($hash) { GalleryController::serveImage($hash); }
+$router->add('/image/original/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
+    function ($hash) { GalleryController::serveImage($hash); }, ['GET']
 );
 
 // Session routes
-$router->add('/user/login', [AuthController::class, 'login']);
-$router->add('/user/register', [AuthController::class, 'register']);
-$router->add('/user/logout', [AuthController::class, 'logout']);
+$router->add('/user/login', [AuthController::class, 'login'], ['GET', 'POST']);
+$router->add('/user/register', [AuthController::class, 'register'], ['GET', 'POST']);
+$router->add('/user/logout', [AuthController::class, 'logout'], ['POST']);
 
 // Profile routes
-$router->add('/profile/overview', [ProfileController::class, 'index']);
-$router->add('/profile/avatar', [ProfileController::class, 'avatar']);
-$router->add('/profile/email', [ProfileController::class, 'email']);
-$router->add('/profile/dob', [ProfileController::class, 'dob']);
-$router->add('/profile/change-password', [ProfileController::class, 'change_password']);
+$router->add('/profile/overview', [ProfileController::class, 'index'], ['GET']);
+$router->add('/profile/avatar', [ProfileController::class, 'avatar'], ['GET', 'POST']);
+$router->add('/profile/email', [ProfileController::class, 'email'], ['GET', 'POST']);
+$router->add('/profile/dob', [ProfileController::class, 'dob'], ['GET', 'POST']);
+$router->add('/profile/change-password', [ProfileController::class, 'change_password'], ['GET', 'POST']);
 
 // Moderation routes
-$router->add('/moderation', [ModerationController::class, 'dashboard']);
-$router->add('/moderation/image-comparison', [ModerationController::class, 'comparison']);
-$router->add('/moderation/image-rehash', [ModerationController::class, 'rehash']);
+$router->add('/moderation', [ModerationController::class, 'dashboard'], ['GET']);
+$router->add('/moderation/image-comparison', [ModerationController::class, 'comparison'], ['GET', 'POST']);
+$router->add('/moderation/image-rehash', [ModerationController::class, 'rehash'], ['GET', 'POST']);
 
 // Delete image route (POST only)
 $router->add(
     '/moderation/delete/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
-    function ($hash) {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
-        {
-            http_response_code(405);
-            echo "Method Not Allowed";
-            exit;
-        }
-        GalleryController::delete($hash);
-    }
+    function ($hash) { GalleryController::delete($hash); }, ['POST']
 );
 
 // Image Upvote route (POST only)
 $router->add(
     '/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/upvote',
-    function ($hash) {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
-        {
-            http_response_code(405);
-            echo "Method Not Allowed";
-            exit;
-        }
-        GalleryController::upvote($hash);
-    }
+    function ($hash) { GalleryController::upvote($hash); }, ['POST']
 );
 
 // Favorite image route (POST only)
 $router->add(
     '/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/favorite',
-    function ($hash) {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
-        {
-            http_response_code(405);
-            echo "Method Not Allowed";
-            exit;
-        }
-        GalleryController::favorite($hash);
-    }
+    function ($hash) { GalleryController::favorite($hash); }, ['POST']
 );
 
 // -------------------------
