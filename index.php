@@ -121,7 +121,7 @@ $router->add('/image/original/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9
 // Session routes
 $router->add('/user/login', [AuthController::class, 'login'], ['GET', 'POST']);
 $router->add('/user/register', [AuthController::class, 'register'], ['GET', 'POST']);
-$router->add('/user/logout', [AuthController::class, 'logout'], ['POST']);
+$router->add('/user/logout', [AuthController::class, 'logout'], ['GET']);
 
 // Profile routes
 $router->add('/profile/overview', [ProfileController::class, 'index'], ['GET']);
