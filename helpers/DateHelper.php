@@ -44,7 +44,7 @@ class DateHelper
      *
      * @return string
      */
-    public static function format(?string $date, string $format = "F jS, Y \\a\\t g:i A"): string
+    public static function format(?string $date, string $format = "F jS, Y \\a\\t g:i a"): string
     {
         if ($date === null)
         {

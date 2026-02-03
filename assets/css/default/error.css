@@ -1,75 +1,73 @@
 /*
- * 404 Error Page Styles
+ * Premium Theme (Error Pages)
  *
- * This CSS defines the styling for a custom 404 error page, including:
- * - Main container for the error content (.error-container)
- * - Large 404 heading (.error-container h1)
- * - Subtitle and description (.error-container h2, p)
- * - "Back to Home" button (.error-container a)
- * - Responsive adjustments for smaller screens
- *
- * The design uses a dark background, bright accent color for the 404 text,
- * rounded corners, and subtle shadows for visual depth.
+ * Styles the error container used by templates/errors/error_page.html
  */
 
-/* 404 Container */
 .error-container {
-    margin: 50px auto; /* Center container with 50px top/bottom spacing */
-    width: 800px; /* Fixed width for larger screens */
-    max-width: 90%; /* Ensure container is not wider than 90% of viewport */
-    background-color: #1b222b; /* Dark background for contrast */
-    border-radius: 12px; /* Rounded corners */
-    box-shadow: 0 6px 18px rgba(0,0,0,0.5); /* Shadow for depth */
-    text-align: center; /* Center-align all text inside container */
-    padding: 50px 30px; /* Inner spacing: top/bottom 50px, left/right 30px */
+    width: min(820px, 92vw);
+    margin: 50px auto 0;
+    padding: 40px 34px;
+
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-strong), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+
+    text-align: center;
+    position: relative;
 }
 
-/* Big 404 text */
-.error-container h1 {
-    font-size: 6rem; /* Very large font for "404" */
-    color: #00a8ff; /* Bright blue accent color */
-    margin-bottom: 20px; /* Space below the heading */
+.error-container::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border-top: 3px solid rgba(114, 119, 255, 0.9);
+    pointer-events: none;
 }
 
-/* Subtitle */
 .error-container h2 {
-    font-size: 1.8rem; /* Slightly larger than body text */
-    margin-bottom: 15px; /* Space below subtitle */
-    color: #f0f0f0; /* Light gray/white color for readability */
+    margin: 0 0 12px;
+    font-size: 28px;
+    letter-spacing: 0.04em;
 }
 
-/* Description */
 .error-container p {
-    font-size: 1rem; /* Standard body text size */
-    margin-bottom: 30px; /* Space before button or other elements */
-    color: #b0b6be; /* Medium gray for secondary text */
+    margin: 0 0 22px;
+    color: var(--color-text-muted);
+    font-size: 15px;
 }
 
-/* Back to Home button */
 .error-container a {
-    display: inline-block; /* Allows padding and block-like behavior */
-    padding: 12px 24px; /* Button padding */
-    background-color: #00a8ff; /* Bright blue button background */
-    color: #ffffff; /* White text on button */
-    font-size: 1rem; /* Standard font size */
-    border-radius: 6px; /* Rounded corners for button */
-    text-decoration: none; /* Remove underline from link */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-strong));
+    color: #ffffff;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.45);
+    transition: transform 0.12s ease, box-shadow 0.15s ease, filter 0.15s ease;
 }
 
-/* Hover state for Back to Home button */
 .error-container a:hover {
-    background-color: #007bb5; /* Darker blue for hover effect */
+    transform: translateY(-1px);
+    box-shadow: 0 12px 22px rgba(0, 0, 0, 0.55);
+    filter: brightness(1.04);
 }
 
-/* Responsive adjustments for smaller screens */
 @media (max-width: 600px) {
     .error-container {
-        padding: 30px 20px; /* Reduce padding for small screens */
+        margin: 28px 14px 0;
+        padding: 30px 22px;
     }
-    .error-container h1 {
-        font-size: 4rem; /* Smaller heading on mobile */
-    }
+
     .error-container h2 {
-        font-size: 1.4rem; /* Smaller subtitle on mobile */
+        font-size: 22px;
     }
 }

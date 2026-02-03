@@ -1,218 +1,435 @@
 /*
- * Global Styles and Layout
+ * Premium Theme (Global)
  *
- * This CSS file handles the general styling of the site, including:
- * - Resetting defaults and box-sizing
- * - Body styling with dark theme and light text
- * - Top navigation bar and logo
- * - Main content area and upload image form
- * - Headings, forms, and input fields
- * - Buttons, links, and interactive elements
- * - Error and success messages
- * - Footer
- * - Responsive adjustments for smaller screens
+ * This stylesheet provides the premium theme baseline (colors, typography,
+ * layout, header/footer, forms, buttons). It is designed to work with the
+ * existing php-gallery templates without requiring structural changes.
  */
 
-/* Reset some defaults */
-* {
-    box-sizing: border-box; /* include padding/border in element size */
-    margin: 0;               /* remove default margin */
-    padding: 0;              /* remove default padding */
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* global font */
+/* =========================================================
+   ROOT THEME VARIABLES
+========================================================= */
+:root {
+    --color-bg: radial-gradient(circle at top, #3a3d40 0, #151719 45%, #0c0d0f 100%);
+    --color-surface: rgba(34, 36, 38, 0.92);
+    --color-surface-soft: #2b2d31;
+    --color-border-subtle: #3d3f48;
+    --color-border-strong: #4f5260;
+
+    --color-text-main: #f2f2f2;
+    --color-text-muted: #a7a9b4;
+    --color-text-soft: #9a9dac;
+
+    --color-primary: #6f74ff;
+    --color-primary-soft: #8c91ff;
+    --color-primary-strong: #9a63ff;
+
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+
+    --shadow-soft: 0 10px 20px rgba(0, 0, 0, 0.55);
+    --shadow-strong: 0 20px 40px rgba(0, 0, 0, 0.6);
+
+    --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, Helvetica, sans-serif;
+
+    --transition-fast: 0.15s ease;
+    --transition-med: 0.25s ease;
 }
 
-/* Body styling */
+/* =========================================================
+   RESET / BASIC STRUCTURE
+========================================================= */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
 body {
-    background-color: #161d23; /* dark background to match nav */
-    color: #e0e0e0;            /* light text for contrast */
-    line-height: 1.6;          /* readable line spacing */
-    min-height: 100vh;         /* ensure body covers full viewport height */
+    margin: 0;
+    padding: 0;
 }
 
-/* Top navigation bar */
+html {
+    min-height: 100%;
+}
+
+body {
+    min-height: 100vh;
+    font-family: var(--font-main);
+    color: var(--color-text-main);
+
+    background-image: var(--color-bg);
+    background-color: #0c0d0f;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    background-size: cover;
+
+    display: flex;
+    flex-direction: column;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* =========================================================
+   TYPOGRAPHY & LINKS
+========================================================= */
+h1, h2, h3, h4, h5, h6 {
+    margin: 0 0 0.5em;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+p {
+    margin: 0 0 1em;
+    color: var(--color-text-main);
+}
+
+a {
+    color: var(--color-primary-soft);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+a:hover {
+    color: #b0b4ff;
+}
+
+.text-muted {
+    color: var(--color-text-muted);
+}
+
+.hr {
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    margin: 10px 0;
+    opacity: 0.9;
+}
+
+/* =========================================================
+   HEADER / NAVIGATION
+   (matches existing templates: <header><div class="logo"> + <nav><a>...)
+========================================================= */
 header {
-    background-color: #0f141a; /* darker than main body for contrast */
-    padding: 10px 30px;        /* spacing inside header */
-    display: flex;             /* flex for horizontal layout */
-    justify-content: space-between; /* space between logo and nav links */
-    align-items: center;       /* vertical alignment */
-    color: #ffffff;            /* white text */
-    box-shadow: 0 6px 18px rgba(0,0,0,0.25); /* subtle shadow for depth */
+    background: rgba(10, 11, 14, 0.9);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+
+    position: sticky;
+    top: 0;
+    z-index: 50;
+
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
 }
 
-/* Logo styling */
 header .logo {
-    font-size: 1.5rem; /* larger font for logo */
-    font-weight: bold;  /* bold text */
-    letter-spacing: 1px; /* slight spacing between letters */
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
 }
 
-/* Navigation links */
+header nav {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
 header nav a {
-    color: #b0b6be;       /* light gray links */
-    text-decoration: none; /* remove underline */
-    margin-left: 20px;     /* spacing between links */
-    font-weight: 500;      /* medium weight text */
-    transition: color 0.3s ease; /* smooth color change on hover */
+    font-size: 14px;
+    color: var(--color-text-muted);
+    padding: 6px 10px;
+    border-radius: 999px;
+    transition:
+        background var(--transition-fast),
+        color var(--transition-fast),
+        transform 0.08s ease;
 }
 
 header nav a:hover {
-    color: #00a8ff; /* blue accent on hover */
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--color-text-main);
+    transform: translateY(-1px);
 }
 
-/* Main content area */
-main {
-    max-width: 550px;       /* limit width */
-    margin: 50px auto;      /* center horizontally with vertical spacing */
-    padding: 30px;          /* internal spacing */
-    background-color: #1b222b; /* slightly lighter dark background */
-    border-radius: 10px;    /* rounded corners */
-    box-shadow: 0 6px 18px rgba(0,0,0,0.5); /* subtle shadow */
-    color: #e0e0e0;         /* text color */
+/* =========================================================
+   DEFAULT MAIN CONTENT (AUTH PAGES)
+   Templates like login/register use <main> without a class.
+   We style only those mains so gallery pages remain full-width.
+========================================================= */
+main:not([class]) {
+    width: 100%;
+    max-width: 460px;
+    margin: clamp(28px, 7vh, 70px) auto 0;
+    padding: 32px 28px 26px;
+
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-strong), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+
+    position: relative;
 }
 
-/* Upload image container */
+main:not([class])::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border-top: 3px solid rgba(114, 119, 255, 0.9);
+    pointer-events: none;
+}
+
+main:not([class]) > h1 {
+    text-align: center;
+    font-size: 26px;
+    margin: 0 0 22px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+main:not([class]) > p {
+    text-align: center;
+    color: var(--color-text-muted);
+}
+
+/* Tighten auth form spacing without affecting the rest of the app */
+main:not([class]) form {
+    gap: 8px;
+}
+
+main:not([class]) form button {
+    width: 100%;
+    margin-top: 6px;
+}
+
+main:not([class]) > p {
+    margin-top: 10px;
+}
+
+/* =========================================================
+   CARD-LIKE CONTENT CONTAINERS USED BY TEMPLATES
+========================================================= */
 .upload-image {
-    max-width: 600px;       /* wider for upload forms */
-    margin: 50px auto;      /* center horizontally */
-    padding: 30px;          /* internal spacing */
-    background-color: #1b222b; /* dark background */
-    border-radius: 10px;    /* rounded corners */
-    box-shadow: 0 6px 18px rgba(0,0,0,0.5); /* subtle shadow */
+    width: 100%;
+    max-width: 620px;
+    margin: 40px auto 0;
+    padding: 30px 28px;
+
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-strong), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+
+    position: relative;
 }
 
-/* Headings */
-h1 {
-    text-align: center;     /* center heading text */
-    margin-bottom: 25px;    /* spacing below heading */
-    color: #f0f0f0;         /* light text */
+.upload-image::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border-top: 3px solid rgba(114, 119, 255, 0.9);
+    pointer-events: none;
 }
 
-/* Forms */
+.upload-image > h1 {
+    text-align: center;
+    font-size: 26px;
+    margin: 0 0 18px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.upload-image > p {
+    margin-top: 20px !important;
+    padding-left: 10px !important;
+}
+
+/* =========================================================
+   FORMS & CONTROLS
+========================================================= */
 form {
-    display: flex;           /* flex column layout */
+    display: flex;
     flex-direction: column;
-    margin-bottom: 10px;     /* spacing below form */
+    gap: 12px;
 }
 
-/* Form labels */
-form label {
-    margin-bottom: 5px;     /* spacing below label */
-    font-weight: 600;       /* semi-bold */
-    color: #e0e0e0;         /* light text */
-}
-
-/* Form input fields */
-form input[type="checkbox"],
-form input[type="file"],
-form input[type="date"],
-form input[type="text"],
-form input[type="email"],
-form input[type="password"] {
-    padding: 10px 15px;     /* inner spacing */
-    margin-bottom: 20px;    /* spacing below input */
-    border: 1px solid #3a3f46; /* darker border for dark theme */
-    border-radius: 6px;     /* rounded corners */
-    background-color: #262f3a; /* dark input background */
-    color: #e0e0e0;         /* light text */
-    transition: border 0.3s ease, box-shadow 0.3s ease; /* smooth focus effects */
-}
-
-/* Input focus state */
-form input[type="checkbox"],
-form input[type="file"]:focus,
-form input[type="date"]:focus,
-form input[type="text"]:focus,
-form input[type="email"]:focus,
-form input[type="password"]:focus,
-form textarea:focus {
-    border-color: #00a8ff; /* blue border on focus */
-    box-shadow: 0 0 5px rgba(0,168,255,0.3); /* subtle glow */
-    outline: none; /* remove default outline */
-}
-
-/* Textarea styling */
-form textarea {
-    padding: 10px 15px;
-    margin-bottom: 20px;
-    border: 1px solid #3a3f46;
-    border-radius: 6px;
-    background-color: #262f3a;
-    color: #e0e0e0;
-    transition: border 0.3s ease, box-shadow 0.3s ease;
-    resize: vertical; /* allow vertical resizing */
-    min-height: 100px; /* minimum height */
-    font-family: inherit; /* match form font */
+label {
+    display: inline-block;
+    margin-bottom: 4px;
     font-size: 14px;
+    color: #cfd1dc;
 }
 
-/* Buttons */
-button {
-    padding: 12px;           /* inner spacing */
-    background-color: #00a8ff; /* blue background */
-    color: #ffffff;          /* white text */
-    font-size: 1rem;         /* standard font */
-    border: none;            /* remove border */
-    border-radius: 6px;      /* rounded corners */
-    cursor: pointer;         /* pointer cursor */
-    transition: background-color 0.3s ease, transform 0.2s ease; /* hover effects */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="file"],
+input[type="date"],
+textarea,
+select {
+    width: 100%;
+    padding: 10px 11px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border-subtle);
+    background: #27292f;
+    color: var(--color-text-main);
+    font-size: 14px;
+    outline: none;
+    transition:
+        background var(--transition-fast),
+        border-color var(--transition-fast),
+        box-shadow var(--transition-fast),
+        transform 0.1s ease;
 }
 
-button:hover {
-    background-color: #007bb5; /* darker blue on hover */
-    transform: translateY(-2px); /* slight lift effect */
+input::placeholder,
+textarea::placeholder {
+    color: #7f828c;
 }
 
-/* Paragraph links */
-p a {
-    color: #00a8ff;         /* blue link */
-    text-decoration: none;
-    font-weight: 500;
+input:focus,
+textarea:focus,
+select:focus {
+    background: #2f3137;
+    border-color: var(--color-primary-soft);
+    box-shadow: 0 0 0 1px rgba(123, 128, 255, 0.5);
+    transform: translateY(-1px);
 }
 
-p a:hover {
-    text-decoration: underline; /* underline on hover */
+textarea {
+    resize: vertical;
+    min-height: 110px;
 }
 
-/* Error messages */
-.error {
-    background-color: #c0392b; /* red background */
+/* Checkbox / radio keep compact */
+input[type="checkbox"],
+input[type="radio"] {
+    width: auto;
+}
+
+.form-helper {
+    font-size: 12px;
+    color: var(--color-text-soft);
+    margin-top: 2px;
+}
+
+.form-error {
+    font-size: 12px;
+    color: #ff6b81;
+    margin-top: 2px;
+}
+
+/* =========================================================
+   BUTTONS
+========================================================= */
+button,
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+
+    padding: 10px 18px;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-strong));
     color: #ffffff;
-    padding: 10px 15px;
-    border-radius: 6px;
-    margin-bottom: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+
+    transition:
+        transform 0.12s ease,
+        box-shadow 0.15s ease,
+        filter 0.15s ease;
 }
 
-/* Success messages */
-.success {
-    background-color: #27ae60; /* green background */
-    color: #ffffff;
-    padding: 10px 15px;
-    border-radius: 6px;
-    margin-bottom: 20px;
+button:hover,
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.6);
+    filter: brightness(1.04);
 }
 
-/* Footer */
+button:active,
+.btn:active {
+    transform: translateY(0);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6);
+    filter: brightness(0.97);
+}
+
+button:disabled,
+.btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+    box-shadow: none;
+    transform: none;
+}
+
+.btn-secondary {
+    background: #3a3d46;
+    border: 1px solid var(--color-border-strong);
+    letter-spacing: 0.02em;
+}
+
+/* =========================================================
+   FOOTER
+========================================================= */
 footer {
-    text-align: center; /* center text */
-    color: #999;        /* light gray */
-    font-size: 0.9rem;  /* slightly smaller font */
-    margin-bottom: 20px;
+    margin-top: auto;
+    padding: 16px 20px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--color-text-soft);
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    background: rgba(10, 11, 14, 0.85);
 }
 
-/* Responsive adjustments */
-@media (max-width: 600px) {
-    main {
-        margin: 30px 15px; /* reduce margins on small screens */
-        padding: 20px;     /* reduce padding */
-    }
+footer p {
+    margin: 0;
+    color: var(--color-text-soft);
+    line-height: 1.6;
+}
 
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+@media (max-width: 640px) {
     header {
-        flex-direction: column; /* stack logo and nav vertically */
-        align-items: flex-start; /* left align items */
+        flex-direction: column;
+        align-items: flex-start;
     }
 
-    header nav a {
-        margin: 10px 0 0 0; /* vertical spacing between links */
+    header nav {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    main:not([class]),
+    .upload-image {
+        margin: 22px 14px 0;
+        padding: 26px 20px 22px;
     }
 }

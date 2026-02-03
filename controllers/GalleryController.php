@@ -14,26 +14,6 @@ class GalleryController
     private static array $config;
 
     /**
-     * Retrieve a username by user ID.
-     *
-     * @param int|null $userId ID of the user, or null if not available.
-     * @return string Username if found, otherwise empty string.
-     */
-    private static function getUsernameById(?int $userId): string
-    {
-        if ($userId === null)
-        {
-            return '';
-        }
-
-        // Query to fetch username by user ID
-        $sql = "SELECT username FROM app_users WHERE id = :id LIMIT 1";
-        $result = Database::fetch($sql, [':id' => $userId]);
-
-        return $result['username'] ?? '';
-    }
-
-    /**
      * Load and cache config once per request.
      *
      * @return array
@@ -66,6 +46,26 @@ class GalleryController
     }
 
     /**
+     * Retrieve a username by user ID.
+     *
+     * @param int|null $userId ID of the user, or null if not available.
+     * @return string Username if found, otherwise empty string.
+     */
+    private static function getUsernameById(?int $userId): string
+    {
+        if ($userId === null)
+        {
+            return '';
+        }
+
+        // Query to fetch username by user ID
+        $sql = "SELECT username FROM app_users WHERE id = :id LIMIT 1";
+        $result = Database::fetch($sql, [':id' => $userId]);
+
+        return $result['username'] ?? '';
+    }
+
+    /**
      * Check if a user has access to age-sensitive content.
      *
      * @param array|null $user Array containing user's date_of_birth and age_verified_at
@@ -83,7 +83,7 @@ class GalleryController
      * @param int|null $page Current page number, defaults to 1.
      * @return void
      */
-    public static function index($page = null): void
+    public static function index($page = 1): void
     {
         $config = self::getConfig();
         $imagesPerPage = $config['gallery']['images_displayed'];
@@ -230,7 +230,7 @@ class GalleryController
             FROM app_images i
             LEFT JOIN app_users u ON i.user_id = u.id
             WHERE i.image_hash = :hash
-              AND (i.status = 'approved' AND NOT i.status = 'deleted')
+              AND (i.status = 'approved')
             LIMIT 1
         ";
 
@@ -538,7 +538,7 @@ class GalleryController
             FROM app_images i
             LEFT JOIN app_users u ON i.user_id = u.id
             WHERE i.image_hash = :hash
-              AND (i.status = 'approved' OR i.status = 'deleted')
+              AND (i.status = 'approved' OR i.status = 'rejected')
             LIMIT 1
         ";
         $image = Database::fetch($sql, ['hash' => $hash]);

@@ -135,6 +135,13 @@ $router->add('/moderation', [ModerationController::class, 'dashboard'], ['GET'])
 $router->add('/moderation/image-comparison', [ModerationController::class, 'comparison'], ['GET', 'POST']);
 $router->add('/moderation/image-rehash', [ModerationController::class, 'rehash'], ['GET', 'POST']);
 
+// Pending images moderation page with optional page number
+$router->add('/moderation/image-pending', [ModerationController::class, 'pending'], ['GET']);
+$router->add('/moderation/image-pending/page/(\d+)', [ModerationController::class, 'pending'], ['GET']);
+$router->add('/moderation/image-pending/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
+    function ($hash) { ModerationController::servePendingImage($hash); }, ['GET']
+);
+
 // Delete image route (POST only)
 $router->add(
     '/moderation/delete/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',

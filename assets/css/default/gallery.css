@@ -1,329 +1,383 @@
 /*
- * Gallery Page Styles
+ * Premium Theme (Gallery)
  *
- * This CSS handles both the gallery index and individual gallery view pages:
- * - .gallery-container: main grid layout for thumbnails
- * - .gallery-item: individual gallery items and images
- * - .gallery-title: titles below images
- * - .gallery-pagination: page navigation
- * - .gallery-actions-wrapper & .gallery-actions: action buttons for galleries
- * - .gallery-container-view: full view layout with left details and right image
- * - .gallery-details-view: details box with metadata, links, and sections
- * - .gallery-image-wrapper: large gallery image
- * - .gallery-toolbar: buttons above the details box
- * - .hash-tooltip-btn: tooltip displaying image hash on hover
- *
- * Dark theme with blue accents, rounded corners, shadows, and responsive layouts.
+ * Styles for gallery index, image view, actions, pagination.
+ * Targets existing class names in templates/gallery/*
  */
 
-/* Gallery Index Template */
+/* =========================================================
+   GALLERY INDEX (grid)
+========================================================= */
 .gallery-container {
-    max-width: 1400px; /* limit container width */
-    margin: 30px auto; /* center container with vertical spacing */
-    padding: 30px; /* internal spacing */
-    border-radius: 10px; /* rounded corners */
-    background-color: #161d23; /* dark background */
+    width: min(1400px, 94vw);
+    margin: 26px auto 0;
+    padding: 22px;
+
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-strong), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+
+    position: relative;
 }
 
-/* Headings and links inside gallery */
-.gallery-container h5,
-.gallery-container a {
-    margin-top: 10px; /* spacing above element */
-    text-decoration: none; /* remove underline from links */
-    color: #e0e0e0; /* light text for contrast on dark background */
+.gallery-container::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border-top: 3px solid rgba(114, 119, 255, 0.9);
+    pointer-events: none;
 }
 
-/* Gallery grid layout */
-.gallery-container .gallery-grid {
-    display: grid; /* use CSS grid */
-    grid-template-columns: repeat(auto-fit, minmax(140px, max-content)); /* flexible columns */
-    gap: 15px; /* spacing between items */
-    justify-content: center; /* center grid horizontally */
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 16px;
 }
 
-/* Center last row if fewer items */
-.gallery-container .gallery-grid:after {
-    content: ""; /* pseudo-element to fill grid space */
-    grid-column: 1 / -1; /* span entire row */
-}
-
-/* Individual gallery item */
-.gallery-container .gallery-item {
-    display: flex; /* flexbox for centering image */
-    justify-content: center;
+.gallery-item {
+    display: flex;
     align-items: center;
-    overflow: hidden; /* hide overflow for image */
+    justify-content: center;
 }
 
-/* Gallery image */
-.gallery-container .gallery-item img {
-    display: block; /* remove inline spacing */
-    max-width: 150px; /* limit image width */
-    max-height: 150px; /* limit image height */
-    border-radius: 8px; /* rounded corners */
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5); /* subtle shadow */
+.gallery-item a {
+    display: block;
+    width: 100%;
 }
 
-/* Gallery title */
-.gallery-container .gallery-title {
-    margin-top: 5px; /* spacing above title */
-    font-size: 0.9rem; /* slightly smaller font */
-    color: #e0e0e0; /* light text */
-    text-align: center; /* center title */
+.gallery-item img {
+    width: 100%;
+    height: 170px;
+    object-fit: cover;
+
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.55);
+
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
 
-/* Pagination */
-.gallery-container .gallery-pagination {
-    display: flex; /* flex container for pages */
-    justify-content: center; /* center horizontally */
-    gap: 8px; /* space between page links */
-    margin-top: 25px; /* spacing above pagination */
-    flex-wrap: wrap; /* wrap to next line if needed */
+.gallery-item img:hover {
+    transform: translateY(-2px) scale(1.01);
+    box-shadow: 0 18px 30px rgba(0, 0, 0, 0.65);
+    border-color: rgba(140, 145, 255, 0.35);
 }
 
-.gallery-container .gallery-pagination a {
-    padding: 8px 12px; /* padding inside page link */
-    border-radius: 4px; /* rounded corners */
-    text-decoration: none; /* remove underline */
-    color: #e0e0e0; /* light text */
-}
-
-/* Active page */
-.gallery-container .gallery-pagination a.current {
-    background-color: #00a8ff; /* highlight current page */
-    color: #fff; /* white text */
-}
-
-/* Non-active page links */
-.gallery-container .gallery-pagination a:not(.current) {
-    background-color: #3a3f46; /* dark background for inactive pages */
-    color: #e0e0e0;
-}
-
-/* Hover effect for pagination */
-.gallery-container .gallery-pagination a:hover {
-    background-color: #0097e6; /* lighter blue on hover */
-    color: #fff; /* white text on hover */
-}
-
-/* Wrapper for gallery action buttons */
+/* =========================================================
+   GALLERY ACTION BUTTONS (top right)
+========================================================= */
 .gallery-actions-wrapper {
-    max-width: 1400px;     /* same as gallery container */
-    margin: 20px auto 0;   /* centered with spacing from gallery */
-    padding: 0px;           /* no extra padding */
+    width: min(1400px, 94vw);
+    margin: 18px auto 0;
+    display: flex;
+    justify-content: flex-end;
 }
 
-/* Buttons aligned to the right */
 .gallery-actions {
-    display: flex; /* flex layout for buttons */
-    justify-content: flex-end; /* align to right */
-    gap: 15px; /* spacing between buttons */
+    display: inline-flex;
+    gap: 10px;
+    padding: 10px;
+
+    background: rgba(10, 11, 14, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 999px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 
-/* Individual action buttons */
-.gallery-actions .gallery-btn {
-    display: inline-flex; /* flex for centering icon */
+.gallery-btn {
+    width: 42px;
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-strong));
+    color: #ffffff;
+
+    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.55);
+    transition: transform 0.12s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.gallery-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 14px 22px rgba(0, 0, 0, 0.65);
+    filter: brightness(1.05);
+}
+
+.gallery-btn.danger {
+    background: linear-gradient(135deg, rgba(231, 76, 60, 0.95), rgba(183, 28, 28, 0.95));
+}
+
+/* =========================================================
+   PAGINATION
+========================================================= */
+.gallery-pagination {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 18px;
+}
+
+.gallery-pagination a {
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(34, 36, 38, 0.92);
+    color: #e3e4f0;
+    transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.gallery-pagination a.current {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-strong));
+    border-color: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+}
+
+.gallery-pagination a:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+}
+
+/* =========================================================
+   IMAGE VIEW PAGE
+========================================================= */
+.gallery-container-view {
+    width: min(1400px, 94vw);
+    margin: 26px auto 0;
+    padding: 0; /* child cards handle padding */
+}
+
+.gallery-item-view {
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    gap: 18px;
+    align-items: start;
+}
+
+.gallery-left-side {
+    display: grid;
+    gap: 12px;
+}
+
+.gallery-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+
+    /* Center the toolbar buttons within the bar */
     justify-content: center;
     align-items: center;
-    width: 42px;   /* fixed square size for icons */
-    height: 42px;
-    font-size: 18px; /* icon size */
-    border-radius: 6px; /* rounded corners */
-    background-color: #00a8ff; /* default blue */
-    color: #fff; /* white icon */
+
+    padding: 10px 12px;
+    border-radius: var(--radius-lg);
+    background: rgba(10, 11, 14, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 
-/* Danger button variant */
-.gallery-actions .gallery-btn.danger {
-    background-color: #e84118; /* red for delete/danger */
+.gallery-toolbar button {
+    /* Allow buttons with counts (⭐ 12) to size naturally */
+    min-width: 40px;
+    height: 40px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: rgba(34, 36, 38, 0.95);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.01em;
 }
 
-/* Danger button hover */
-.gallery-actions .gallery-btn.danger:hover {
-    background-color: #c23616; /* darker red on hover */
+.gallery-toolbar button i {
+    font-size: 14px;
 }
 
-/* Gallery Image View Template */
-.gallery-container-view {
-    max-width: 1400px; /* container width */
-    margin: 50px auto; /* centered with top spacing */
-    padding: 20px; /* internal spacing */
+.gallery-toolbar form {
+    display: inline-flex;
+    gap: 0;
 }
 
-/* Left side column */
-.gallery-container-view .gallery-left-side {
-    display: flex;
-    flex-direction: column;
-    flex: 0 0 450px; /* fixed width for details box */
+.gallery-toolbar button:hover {
+    filter: brightness(1.06);
 }
 
-/* Gallery item layout */
-.gallery-container-view .gallery-item-view {
-    display: flex;
-    gap: 30px; /* spacing between left and right */
-    align-items: flex-start; /* align top edges */
+.gallery-details-view {
+    position: relative;
+    padding: 18px 16px;
+
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-strong), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 
-/* Left Side Details Box */
-.gallery-container-view .gallery-details-view {
-    flex: 0 0 450px; /* fixed width */
-    background: #1f272f; /* dark background */
-    color: #e0e0e0; /* light text */
-    padding: 20px; /* internal spacing */
-    border-radius: 8px; /* rounded corners */
-    border: 1px solid #3a3f46; /* subtle border */
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5); /* shadow */
+.gallery-details-view::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border-top: 3px solid rgba(114, 119, 255, 0.9);
+    pointer-events: none;
 }
 
-/* Heading inside details */
-.gallery-container-view .gallery-details-view h3 {
-    margin-bottom: 15px; /* spacing below heading */
-    font-size: 1.4rem; /* slightly larger font */
-    border-bottom: 1px solid #3a3f46; /* underline border */
-    padding-bottom: 8px; /* space under text */
+.gallery-details-view section + section {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-/* Links and subheadings inside details */
-.gallery-container-view .gallery-details-view h5,
-.gallery-container-view .gallery-details-view a {
-    text-decoration: none; /* remove underline */
-    color: #00a8ff; /* blue links */
-    margin-bottom: 10px; /* spacing below element */
+.gallery-details-view h3 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #cfd1dc;
 }
 
-/* Hover for links */
-.gallery-container-view .gallery-details-view a:hover {
-    text-decoration: underline; /* underline on hover */
-}
-
-/* Lists inside details box */
-.gallery-container-view .gallery-details-view ul {
-    list-style: none; /* remove default bullets */
+.gallery-details-view ul {
+    list-style: none;
+    margin: 0;
     padding: 0;
+    display: grid;
+    gap: 7px;
+}
+
+.gallery-details-view li {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: rgba(10, 11, 14, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--color-text-main);
+    font-size: 14px;
+    line-height: 1.35;
+}
+
+.gallery-details-view strong {
+    flex: 0 0 130px;
+    color: #cfd1dc;
+    font-weight: 600;
+}
+
+.gallery-details-view p {
+    color: var(--color-text-main);
     margin: 0;
 }
 
-/* List items */
-.gallery-container-view .gallery-details-view li {
-    margin-bottom: 8px; /* spacing between items */
-    font-size: 0.95rem; /* slightly smaller text */
-    line-height: 1.4; /* spacing between lines */
+.gallery-details-view h5 {
+    margin: 14px 0 0;
 }
 
-/* Labels for list items */
-.gallery-container-view .gallery-details-view strong {
-    display: inline-block; /* align labels */
-    width: 140px; /* fixed width for label alignment */
+.gallery-details-view h5 a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(34, 36, 38, 0.92);
+    color: #e3e4f0;
 }
 
-/* Sections inside details box */
-.gallery-container-view .gallery-details-view section {
-    margin-bottom: 20px; /* spacing between sections */
+.gallery-details-view h5 a:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
 }
 
-/* Right Side Image */
-.gallery-container-view .gallery-image-wrapper {
-    flex: 2; /* flexible space for image */
-    display: flex;
-    justify-content: center; /* center horizontally */
-    align-items: center; /* center vertically */
+.gallery-image-wrapper {
+    margin-bottom: 20px;
+    position: relative;
+    padding: 16px;
+
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-strong), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 
-/* Main gallery image */
-.gallery-container-view .gallery-image-wrapper img {
-    max-width: 100%; /* scale down for container */
-    max-height: 850px; /* max image height */
-    width: auto;
-    height: auto;
-    border-radius: 8px; /* rounded corners */
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5); /* subtle shadow */
-}
-
-/* Toolbar above details box */
-.gallery-container-view .gallery-toolbar {
-    display: flex;
-    justify-content: center; /* center buttons horizontally */
-    gap: 12px; /* spacing between buttons */
-    margin-bottom: 20px; /* space below toolbar */
-    padding: 10px; /* internal spacing */
-    background: #1f272f; /* dark background */
-    border: 1px solid #3a3f46; /* subtle border */
-    border-radius: 6px; /* rounded corners */
-    box-shadow: 0 2px 6px rgba(0,0,0,0.4); /* shadow */
-}
-
-/* Toolbar buttons */
-.gallery-container-view .gallery-toolbar button {
-    background: #2f3b47; /* button background */
-    color: #e0e0e0; /* light text */
-    border: 1px solid #3a3f46; /* border matching theme */
-    border-radius: 5px; /* rounded corners */
-    padding: 8px 14px; /* internal spacing */
-    font-size: 0.9rem; /* font size */
-    cursor: pointer; /* pointer on hover */
-}
-
-/* Forms inside toolbar */
-.gallery-container-view .gallery-toolbar form {
-    display: inline-block; /* inline like buttons */
-    margin: 0; /* remove default spacing */
-    padding: 0;
-}
-
-/* Buttons inside forms */
-.gallery-container-view .gallery-toolbar form button {
-    display: inline-block; /* ensure fills form */
-    vertical-align: middle; /* align with other buttons */
-}
-
-/* Gallery image view element */
-.gallery-container-view .gallery-image-view {
-    border-radius: 8px; /* rounded corners */
-}
-
-/* Tooltip button for image hash */
-.gallery-container-view .hash-tooltip-btn {
-    position: relative; /* needed for tooltip positioning */
-    font-size: 0.85rem;
-    padding: 6px 6px;
-    cursor: pointer; /* pointer cursor */
-    color: #ffff; /* white text */
-}
-
-/* Tooltip hidden by default */
-.gallery-container-view .hash-tooltip-btn::after {
-    content: attr(data-hash); /* show hash from data attribute */
-    position: absolute;
-    left: 50%;
-    bottom: 125%; /* position above button */
-    transform: translateX(-50%); /* center horizontally */
-    background: #262f3a; /* tooltip background */
-    color: #e0e0e0; /* tooltip text color */
-    font-family: monospace; /* monospace for hashes */
-    font-size: 0.85rem;
-    padding: 6px 8px;
-    border-radius: 4px;
-    white-space: nowrap; /* prevent wrapping */
-    display: none; /* hidden by default */
-    z-index: 100; /* on top of other elements */
-    box-shadow: 0 2px 6px rgba(0,0,0,0.5); /* subtle shadow */
-}
-
-/* Tooltip arrow */
-.gallery-container-view .hash-tooltip-btn::before {
+.gallery-image-wrapper::before {
     content: "";
     position: absolute;
-    left: 50%;
-    bottom: 115%;
-    transform: translateX(-50%);
-    border-width: 5px;
-    border-style: solid;
-    border-color: #262f3a transparent transparent transparent; /* arrow pointing down */
-    display: none; /* hidden by default */
+    inset: 0;
+    border-radius: inherit;
+    border-top: 3px solid rgba(114, 119, 255, 0.9);
+    pointer-events: none;
 }
 
-/* Show tooltip when active */
-.gallery-container-view .hash-tooltip-btn.active::after,
-.gallery-container-view .hash-tooltip-btn.active::before {
-    display: block; /* show tooltip */
+.gallery-image-view {
+    display: block;
+    width: 100%;
+    max-height: calc(100vh - 220px);
+    object-fit: contain;
+}
+
+/* =========================================================
+   HASH TOOLTIP BUTTONS (click to reveal)
+========================================================= */
+.hash-tooltip-btn {
+    position: relative;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(34, 36, 38, 0.92);
+    color: #e3e4f0;
+    cursor: pointer;
+}
+
+.hash-tooltip-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+}
+
+.hash-tooltip-btn.active::after {
+    content: attr(data-hash);
+    position: absolute;
+    left: 0;
+    top: calc(100% + 8px);
+    z-index: 10;
+
+    max-width: 360px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+
+    background: rgba(10, 11, 14, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.7);
+
+    color: #ffffff;
+    font-size: 12px;
+    white-space: normal;
+    word-break: break-all;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+@media (max-width: 980px) {
+    .gallery-item-view {
+        grid-template-columns: 1fr;
+    }
+
+    .gallery-image-view {
+        max-height: 70vh;
+    }
 }

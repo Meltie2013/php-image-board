@@ -1,164 +1,175 @@
-/* Profile page main container */
+/*
+ * Premium Theme (Profile)
+ *
+ * Targets existing profile templates and class names.
+ */
+
 .profile-container {
-    display: flex;               /* Sidebar and main content side by side */
-    max-width: 1000px;           /* Limit total width */
-    margin: 50px auto;           /* Center horizontally, with vertical spacing */
-    padding: 0 15px;             /* Horizontal padding inside container */
+    display: flex;
+    gap: 24px;
+    width: min(1100px, 94vw);
+    margin: 34px auto 0;
+    padding: 0 0 28px;
 }
 
-/* Sidebar menu for profile navigation */
 .profile-menu {
-    width: 250px;                /* Fixed sidebar width */
-    background-color: #262f3a;   /* Dark sidebar background */
-    padding: 20px;               /* Inner spacing */
-    border-radius: 10px;         /* Rounded corners */
-    box-shadow: 0 6px 18px rgba(0,0,0,0.5); /* Strong shadow for dark theme */
-    margin-right: 20px;           /* Space between sidebar and content */
+    position: relative;
+    width: 280px;
+    padding: 20px 18px 22px;
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-strong), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 
-/* Sidebar heading */
+.profile-menu::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border-top: 3px solid rgba(114, 119, 255, 0.9);
+    pointer-events: none;
+}
+
 .profile-menu h2 {
-    margin-bottom: 15px;         /* Space below heading */
-    color: #e0e0e0;             /* Light text */
-    font-size: 1.2rem;           /* Slightly larger heading */
+    margin: 0 0 14px;
+    font-size: 14px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #ffffff;
 }
 
-/* Sidebar list */
 .profile-menu ul {
-    list-style: none;            /* Remove bullets */
-    padding: 0;                  /* Remove default padding */
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
-/* List items in sidebar */
 .profile-menu ul li {
-    margin-bottom: 10px;         /* Space between items */
+    margin: 0;
 }
 
-/* Sidebar links */
 .profile-menu ul li a {
-    color: #b0b6be;             /* Light gray text */
-    text-decoration: none;       /* Remove underline */
-    font-weight: 500;            /* Medium weight */
-    transition: color 0.3s ease; /* Smooth hover transition */
-}
-
-/* Highlight active or hovered link */
-.profile-menu ul li a:hover,
-.profile-menu ul li a.active {
-    color: #00a8ff;             /* Bright blue accent */
-}
-
-/* Main profile content area */
-.profile-content {
-    flex: 1;                     /* Take remaining space beside sidebar */
-    background-color: #262f3a;   /* Dark background for content */
-    padding: 30px;               /* Inner spacing */
-    border-radius: 10px;         /* Rounded corners */
-    box-shadow: 0 6px 18px rgba(0,0,0,0.5); /* Shadow for depth */
-}
-
-/* Main heading inside content */
-.profile-content h1 {
-    margin-bottom: 20px;
-    color: #e0e0e0;             /* Light text */
-}
-
-/* Smaller informational text */
-.profile-content small {
-    display: block;              /* Make block for spacing */
-    margin-bottom: 10px;
-    font-size: 0.85rem;
-    color: #ff6b6b;             /* Slightly dark red for dark theme */
-    text-align: left;
-}
-
-/* Profile avatar image */
-.profile-avatar {
-    border-radius: 50%;           /* Circular avatar */
     display: block;
-    margin-bottom: 15px;
-    width: 150px;
-    height: 150px;
-    border: 2px solid #00a8ff;   /* Accent border */
-    object-fit: cover;           /* Maintain aspect ratio */
+    padding: 8px 10px;
+    border-radius: 999px;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    transition: background var(--transition-fast), color var(--transition-fast), transform 0.08s ease;
 }
 
-/* Larger avatar for upload area */
+.profile-menu ul li a:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: #ffffff;
+    transform: translateX(1px);
+}
+
+.profile-content {
+    flex: 1;
+    position: relative;
+    padding: 24px 22px;
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-strong), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.profile-content::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border-top: 3px solid rgba(114, 119, 255, 0.9);
+    pointer-events: none;
+}
+
+.profile-content h1 {
+    margin: 0 0 14px;
+    font-size: 22px;
+}
+
+.profile-content small {
+    display: block;
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: rgba(255, 107, 129, 0.95);
+}
+
+/* Info grid on overview */
+.profile-info {
+    display: flex;
+    gap: 26px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+}
+
+.profile-info-column {
+    flex: 1;
+    min-width: 280px;
+}
+
+.profile-info-column:first-child {
+    flex: 0 0 320px;
+    max-width: 360px;
+}
+
+.profile-avatar,
 .profile-avatar-upload {
-    border-radius: 50%;
-    margin: 0 auto 15px auto;    /* Centered with bottom margin */
+    border-radius: 999px;
+    display: block;
+    object-fit: cover;
+    border: 2px solid rgba(114, 119, 255, 0.9);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+}
+
+.profile-avatar {
+    width: 140px;
+    height: 140px;
+    margin: 8px 0 12px;
+}
+
+.profile-avatar-upload {
     width: 200px;
     height: 200px;
-    display: block;
-    border: 2px solid #00a8ff;
+    margin: 0 auto 14px;
 }
 
-/* Responsive adjustments for mobile */
-@media (max-width: 768px) {
+.profile-info-column h3 {
+    margin-top: 14px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #cfd1dc;
+}
+
+.profile-info-column p {
+    margin: 0 0 10px;
+    color: var(--color-text-main);
+}
+
+/* Make profile forms a bit more compact */
+.profile-content form {
+    margin: 0px auto;
+    gap: 10px;
+    max-width: 560px;
+}
+
+@media (max-width: 900px) {
     .profile-container {
-        flex-direction: column;  /* Stack sidebar above content */
+        flex-direction: column;
+        margin: 22px auto 0;
+        padding: 0 14px 20px;
     }
 
     .profile-menu {
-        width: 100%;             /* Full width on small screens */
-        margin-bottom: 20px;     /* Space below sidebar */
+        width: 100%;
     }
-
-    .profile-content {
-        padding: 20px;           /* Reduce padding for smaller screens */
-    }
-}
-
-/* Two-column layout inside profile info */
-.profile-info {
-    display: flex;               /* Columns side by side */
-    gap: 40px;                   /* Space between columns */
-    flex-wrap: wrap;             /* Wrap if too narrow */
-    margin-top: 20px;            /* Space above section */
-}
-
-/* Left column (avatar) */
-.profile-info-column:first-child {
-    flex: 0 0 40%;               /* Fixed percentage width */
-    max-width: 300px;            /* Maximum width */
-    display: flex;
-    flex-direction: column;
-    align-items: center;         /* Center content */
-    text-align: center;
-}
-
-/* Avatar image inside info column */
-.profile-avatar {
-    border-radius: 50%;
-    width: 120px;
-    height: 120px;
-    object-fit: cover;           /* Keep aspect ratio */
-    margin-bottom: 15px;
-    border: 2px solid #00a8ff;
-}
-
-/* Role/status text under avatar */
-.profile-info-column:first-child p {
-    margin: 5px 0;
-    font-weight: 500;
-    color: #e0e0e0;
-}
-
-/* Right column (user details) */
-.profile-info-column:last-child {
-    flex: 1;                     /* Take remaining space */
-    min-width: 300px;            /* Prevent shrinking too much */
-}
-
-/* Headings in right column */
-.profile-info-column h3 {
-    margin-top: 15px;
-    font-size: 1rem;
-    color: #e0e0e0;
-}
-
-/* Paragraph text in right column */
-.profile-info-column p {
-    margin-bottom: 10px;
-    color: #d0d4da;              /* Slightly lighter than main text */
 }

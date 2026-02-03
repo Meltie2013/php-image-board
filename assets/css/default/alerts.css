@@ -1,89 +1,110 @@
 /*
- * Alert Component Styles
+ * Premium Theme (Alerts)
  *
- * This CSS defines styles for alert messages, including:
- * - Base alert container styling (.alert)
- * - Text and link styling inside alerts
- * - Different alert types: success, danger, warning, info
- * - Close button styling for dismissible alerts
- * - Optional fade-out effect for JavaScript-driven dismissal
- *
- * Alerts are designed with padding, rounded corners, colored backgrounds,
- * and smooth transitions for opacity and movement.
+ * Replaces the original light alert palette with the premium dark/glass
+ * alerts. Templates already use .alert + .alert-success/.alert-danger/... 
  */
 
-/* Base alert style */
 .alert {
-    position: relative; /* Allows positioning of child elements like the close button */
-    padding: 1rem 1.5rem; /* Space inside the alert: top/bottom 1rem, left/right 1.5rem */
-    margin-bottom: 1rem; /* Space below each alert */
-    border: 1px solid transparent; /* Default border; becomes colored depending on alert type */
-    border-radius: 0.25rem; /* Slightly rounded corners */
-    font-family: Arial, sans-serif; /* Font for alert text */
-    font-size: 1rem; /* Base font size */
-    line-height: 1.5; /* Space between lines */
-    transition: opacity 0.3s ease, transform 0.3s ease; /* Smooth fade and slide animations */
+    position: relative;
+    padding: 0.8rem 1.2rem;
+    margin-bottom: 1rem;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(27, 31, 38, 0.92);
+    box-shadow:
+        0 10px 22px rgba(0, 0, 0, 0.6),
+        0 0 0 1px rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--color-text-main);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
 }
 
-/* Style for links inside alerts */
+.alert::before {
+    content: "";
+    width: 3px;
+    border-radius: 999px;
+    align-self: stretch;
+    background: rgba(255, 255, 255, 0.08);
+}
+
 .alert a {
-    color: #0c5460; /* Default link color matching alert-info text */
-    text-decoration: none; /* Remove underline from links */
-    font-weight: 500; /* Slightly bold for better visibility */
-    transition: color 0.3s ease; /* Smooth color change on hover */
+    color: var(--color-primary-soft);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
 }
 
-/* Hover state for links inside alerts */
 .alert a:hover {
-    color: #00a8ff; /* Changes link color on hover for better user feedback */
+    color: #b0b4ff;
 }
 
-/* Alert types with different background, border, and text colors */
-
-/* Success alert */
-.alert-success {
-    color: #155724; /* Dark green text */
-    background-color: #d4edda; /* Light green background */
-    border-color: #c3e6cb; /* Slightly darker green border */
-}
-
-/* Danger alert */
-.alert-danger {
-    color: #721c24; /* Dark red text */
-    background-color: #f8d7da; /* Light red/pink background */
-    border-color: #f5c6cb; /* Slightly darker red border */
-}
-
-/* Warning alert */
-.alert-warning {
-    color: #856404; /* Dark yellow/brown text */
-    background-color: #fff3cd; /* Light yellow background */
-    border-color: #ffeeba; /* Slightly darker yellow border */
-}
-
-/* Info alert */
-.alert-info {
-    color: #0c5460; /* Dark teal text */
-    background-color: #d1ecf1; /* Light teal background */
-    border-color: #bee5eb; /* Slightly darker teal border */
-}
-
-/* Close button inside alerts */
 .alert .close-btn {
-    position: absolute; /* Positioned relative to .alert container */
-    top: 0.25rem; /* Slightly below the top edge */
-    right: 0.5rem; /* Slightly away from the right edge */
-    color: inherit; /* Matches the alert text color */
-    background: none; /* No background */
-    border: none; /* No border */
-    font-size: 1.25rem; /* Slightly larger font for the "X" */
-    cursor: pointer; /* Pointer cursor on hover */
-    line-height: 1; /* Align the "X" correctly */
-    padding: 0; /* Remove extra spacing */
+    position: absolute;
+    top: 0.3rem;
+    right: 0.6rem;
+    color: inherit;
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    opacity: 0.85;
+    transition: opacity 0.2s ease;
 }
 
-/* Optional fade out effect (for JS-driven dismissal) */
+.alert .close-btn:hover {
+    opacity: 1;
+}
+
+.alert-success {
+    border-color: rgba(76, 175, 80, 0.5);
+    background: linear-gradient(135deg, rgba(46, 139, 87, 0.55), rgba(15, 76, 50, 0.9));
+    color: #e4ffe9;
+}
+
+.alert-success::before {
+    background: rgba(76, 175, 80, 0.9);
+}
+
+.alert-danger {
+    border-color: rgba(244, 67, 54, 0.55);
+    background: linear-gradient(135deg, rgba(183, 28, 28, 0.65), rgba(121, 18, 18, 0.95));
+    color: #ffe6e6;
+}
+
+.alert-danger::before {
+    background: rgba(244, 67, 54, 0.95);
+}
+
+.alert-warning {
+    border-color: rgba(255, 193, 7, 0.6);
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.5), rgba(133, 94, 0, 0.95));
+    color: #fff4d2;
+}
+
+.alert-warning::before {
+    background: rgba(255, 193, 7, 0.95);
+}
+
+.alert-info {
+    border-color: rgba(0, 168, 255, 0.65);
+    background: linear-gradient(135deg, rgba(0, 168, 255, 0.55), rgba(5, 60, 94, 0.98));
+    color: #e0f7ff;
+}
+
+.alert-info::before {
+    background: rgba(0, 168, 255, 0.95);
+}
+
 .alert.fade-out {
-    opacity: 0; /* Makes the alert invisible */
-    transform: translateY(-10px); /* Slightly moves the alert upwards */
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
 }

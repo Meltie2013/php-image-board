@@ -44,6 +44,26 @@ class ModerationController
     }
 
     /**
+     * Retrieve a username by user ID.
+     *
+     * @param int|null $userId ID of the user, or null if not available.
+     * @return string Username if found, otherwise empty string.
+     */
+    private static function getUsernameById(?int $userId): string
+    {
+        if ($userId === null)
+        {
+            return '';
+        }
+
+        // Query to fetch username by user ID
+        $sql = "SELECT username FROM app_users WHERE id = :id LIMIT 1";
+        $result = Database::fetch($sql, [':id' => $userId]);
+
+        return $result['username'] ?? '';
+    }
+
+    /**
      * Moderation panel dashboard.
      *
      * Shows total images (excluding deleted/rejected), approved, pending,
@@ -85,11 +105,11 @@ class ModerationController
         $storage_usage_percent = ($percentNumeric / 100) * 360 . 'deg';
 
         // Assign flat template variables
-        $template->assign('total_users', number_format($total_users));
-        $template->assign('total_images', number_format($total_images));
-        $template->assign('approved_count', number_format($approved_count));
-        $template->assign('pending_count', number_format($pending_count));
-        $template->assign('removed_count', number_format($removed_count));
+        $template->assign('total_users', NumericalHelper::formatCount($total_users));
+        $template->assign('total_images', NumericalHelper::formatCount($total_images));
+        $template->assign('approved_count', NumericalHelper::formatCount($approved_count));
+        $template->assign('pending_count', NumericalHelper::formatCount($pending_count));
+        $template->assign('removed_count', NumericalHelper::formatCount($removed_count));
 
         $template->assign('storage_used', $storage_used);
         $template->assign('storage_remaining', $storage_remaining);
@@ -98,6 +118,91 @@ class ModerationController
         $template->assign('storage_usage_percent', $storage_usage_percent);
 
         $template->render('panel/moderation_dashboard.html');
+    }
+
+    /**
+     * Display pending images for moderation with pagination.
+     *
+     * @param int|null $page Current page number (optional, defaults to 1)
+     */
+    public static function pending($page = null): void
+    {
+        $template = self::initTemplate();
+
+        // Require login and role check
+        RoleHelper::requireLogin();
+        RoleHelper::requireRole(['administrator', 'moderator'], $template);
+
+        $page = (int)($page ?? 1);
+        $perPage = 15; // number of images per page
+        $offset = ($page - 1) * $perPage;
+
+        // Fetch total pending images count
+        $totalCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'pending'");
+        $totalCount = (int)($totalCountResult['cnt'] ?? 0);
+
+        // Fetch paginated pending images
+        $rows = Database::fetchAll("
+            SELECT 
+                image_hash,
+                user_id,
+                age_sensitive,
+                mime_type,
+                created_at
+            FROM app_images
+            WHERE status = 'pending'
+            ORDER BY created_at DESC
+            LIMIT :offset, :perpage
+        ", [
+            'offset' => $offset,
+            'perpage' => $perPage
+        ]);
+
+        // Flatten each row for template engine
+        $flattenedRows = [];
+        foreach ($rows as $row)
+        {
+            $flattenedRows[] = [
+                $row['image_hash'],
+                self::getUsernameById($row['user_id']),
+                DateHelper::format($row['created_at']),
+            ];
+        }
+
+        // Assign template variables
+        $template->assign('pending_rows', $flattenedRows);
+        $template->assign('pending_count', count($flattenedRows));
+
+        // Pagination calculation
+        $totalPages = (int)ceil($totalCount / $perPage);
+
+        $paginationPages = [];
+        for ($i = 1; $i <= $totalPages; $i++)
+        {
+            $paginationPages[] = [
+                "/moderation/image-pending/page/{$i}",
+                $i,
+                $i === $page // current
+            ];
+        }
+
+        $paginationPrev = $page > 1 ? "/moderation/image-pending/page/" . ($page - 1) : null;
+        $paginationNext = $page < $totalPages ? "/moderation/image-pending/page/" . ($page + 1) : null;
+
+        $template->assign('pagination_pages', $paginationPages);
+        $template->assign('pagination_prev', $paginationPrev);
+        $template->assign('pagination_next', $paginationNext);
+
+        $template->render('panel/moderation_pending.html');
+    }
+
+    public static function approveImage(string $hash): void
+    {
+        $template = self::initTemplate();
+
+        // Require login and role check
+        RoleHelper::requireLogin();
+        RoleHelper::requireRole(['administrator', 'moderator'], $template);
     }
 
     /**
@@ -200,7 +305,7 @@ class ModerationController
 
         // Require login and role check
         RoleHelper::requireLogin();
-        RoleHelper::requireRole(['administrator', 'moderator'], $template);
+        RoleHelper::requireRole(['administrator'], $template);
 
         $message = '';
         $processedImages = [];
@@ -323,5 +428,59 @@ class ModerationController
 
         // Render moderation panel template with rehash tool
         $template->render('panel/moderation_rehash.html');
+    }
+
+    /**
+     * Serve an image file directly from the uploads directory.
+     *
+     * @param string $hash Unique hash identifier for the image.
+     * @return void
+     */
+    public static function servePendingImage(string $hash): void
+    {
+        $template = self::initTemplate();
+
+        // Require login and role check
+        RoleHelper::requireLogin();
+        RoleHelper::requireRole(['administrator', 'moderator'], $template);
+
+        $sql = "
+            SELECT
+                original_path,
+                mime_type,
+                age_sensitive
+            FROM app_images
+            WHERE image_hash = :hash
+              AND (status = 'pending')
+            LIMIT 1
+        ";
+        $image = Database::fetch($sql, ['hash' => $hash]);
+
+        if (!$image)
+        {
+            http_response_code(404);
+            $template->assign('title', 'Image Not Found');
+            $template->assign('message', 'The requested image could not be found.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $baseDir = realpath(__DIR__ . '/../uploads/');
+        $fullPath = realpath($baseDir . '/' . ltrim(str_replace("uploads/", "", $image['original_path']), '/'));
+
+        if (!$fullPath || strpos($fullPath, $baseDir) !== 0 || !file_exists($fullPath))
+        {
+            http_response_code(404);
+            $template->assign('title', 'Image Not Found');
+            $template->assign('message', 'The requested image could not be found.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        header('Content-Type: ' . $image['mime_type']);
+        header('Content-Length: ' . filesize($fullPath));
+        header('Cache-Control: public, max-age=604800'); // Allow caching (7 days)
+        readfile($fullPath);
+        exit;
     }
 }
