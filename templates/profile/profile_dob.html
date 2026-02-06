@@ -25,6 +25,7 @@
             </div>
 
             <form method="post">
+            <input type="hidden" name="csrf_token" value="{$csrf_token}">
                 <label for="date_of_birth">Date of Birth:</label>
                 <input type="date" name="date_of_birth" value="{$date_of_birth}">
                 <button type="submit" name="update_dob">Update Date of Birth</button>

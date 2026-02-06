@@ -23,8 +23,7 @@ class StorageHelper
             // Normalize max storage from shorthand notation (e.g., "100GB") into bytes
             if (isset(self::$config['gallery']['upload_max_storage']))
             {
-                self::$config['gallery']['upload_max_storage'] =
-                    self::parseSize(self::$config['gallery']['upload_max_storage']);
+                self::$config['gallery']['upload_max_storage'] = self::parseSize(self::$config['gallery']['upload_max_storage']);
             }
         }
 
@@ -88,6 +87,7 @@ class StorageHelper
     {
         $config = self::getConfig();
         $maxStorage = $config['gallery']['upload_max_storage'];
+
         return $maxStorage - self::getUsedStorage();
     }
 
@@ -110,10 +110,10 @@ class StorageHelper
     {
         if ($bytes < 0)
         {
-            return '0 B';
+            return '0 b';
         }
 
-        $sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+        $sizes = ['b', 'kb', 'mb', 'gb', 'tb', 'pb'];
         $factor = floor((strlen((string) $bytes) - 1) / 3);
 
         return sprintf("%.{$decimals}f %s", $bytes / pow(1024, $factor), $sizes[$factor]);

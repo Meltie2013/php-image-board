@@ -22,6 +22,7 @@
         </div>
 
         <form method="post" action="/upload-image" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{$csrf_token}">
             <label for="image">Select Image</label>
             <input type="file" id="image" name="image" accept="image/jpeg, image/png, image/gif, image/webp" required>
 

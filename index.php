@@ -6,6 +6,14 @@
 $config = require __DIR__ . '/config/config.php';
 
 // -------------------------
+// Security headers
+// -------------------------
+header('X-Frame-Options: DENY');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: same-origin');
+header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+
+// -------------------------
 // Error reporting (based on config)
 // -------------------------
 if (!empty($config['debugging']['allow_error_outputs']) || $config['debugging']['allow_error_outputs'] === true)
@@ -78,7 +86,8 @@ DateHelper::init($config['timezone']);
 $router = new Router();
 
 // Default route
-$router->setDefault(function () {
+$router->setDefault(function ()
+{
     GalleryController::index();
 });
 
@@ -134,6 +143,16 @@ $router->add('/profile/change-password', [ProfileController::class, 'change_pass
 $router->add('/moderation', [ModerationController::class, 'dashboard'], ['GET']);
 $router->add('/moderation/image-comparison', [ModerationController::class, 'comparison'], ['GET', 'POST']);
 $router->add('/moderation/image-rehash', [ModerationController::class, 'rehash'], ['GET', 'POST']);
+
+$router->add(
+    '/moderation/image-pending/approve/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
+    function ($hash) { ModerationController::approveImage($hash); }, ['POST']
+);
+
+$router->add(
+    '/moderation/image-pending/reject/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
+    function ($hash) { ModerationController::rejectImage($hash); }, ['POST']
+);
 
 // Pending images moderation page with optional page number
 $router->add('/moderation/image-pending', [ModerationController::class, 'pending'], ['GET']);

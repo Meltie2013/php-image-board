@@ -82,6 +82,7 @@ class SessionManager
             $parts = explode(':', $ip);
             return implode(':', array_slice($parts, 0, 4)) . '::';
         }
+
         return $ip;
     }
 

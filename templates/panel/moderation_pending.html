@@ -1,64 +1,87 @@
 {include file="global/header.html"}
 
-    <div class="gallery-container moderation-dashboard">
-        <h2>Moderation Dashboard - Pending Images</h2>
+    <main class="gallery-container-view">
+        <div class="gallery-item-view moderation-layout">
+            <div class="gallery-left-side">
+                <div class="gallery-details-view moderation-menu">
+{include file="panel/moderation_menu.html"}
+                </div>
+            </div>
 
-        <div class="dashboard-content-wrapper">
-            {include file="panel/moderation_menu.html"}
+            <div class="gallery-image-wrapper moderation-dashboard">
+                <h2>Moderation Dashboard - Pending Images</h2>
 
-            <div class="dashboard-comparison-wrapper pending-images-wrapper">
+                <div class="dashboard-content-wrapper">
+                    <div class="dashboard-comparison-wrapper pending-images-wrapper">
 
-            {if $pending_count > 0}
-                <table class="pending-images-table">
-                    <thead>
-                        <tr>
-                            <th>Image Hash</th>
-                            <th>Image Uploader</th>
-                            <th>Upload Date</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {foreach $pending_rows as list($image_hash, $username, $created_at)}
-                        <tr>
-                            <td>{$image_hash}</td>
-                            <td>{ucfirst($username)}</td>
-                            <td>{$created_at}</td>
-                            <td>
-                                <button class="btn-view" title="View Image" onclick="window.location.href='/moderation/image-pending/image/{$image_hash}'">
-                                    <i class="fa-solid fa-eye"></i>
-                                </button>
-                                <button class="btn-edit" title="Edit Image"><i class="fa-solid fa-pen"></i></button>
-                                <button class="btn-approve" title="Approve Image"><i class="fa-solid fa-check"></i></button>
-                                <button class="btn-reject" title="Reject Image"><i class="fa-solid fa-xmark"></i></button>
-                            </td>
-                        </tr>
-                        {/foreach}
-                    </tbody>
-                </table>
+                    {if $pending_count > 0}
+                        <table class="pending-images-table">
+                            <thead>
+                                <tr>
+                                    <th>Image Hash</th>
+                                    <th>Image Uploader</th>
+                                    <th>Upload Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {foreach $pending_rows as list($image_hash, $username, $created_at)}
+                                <tr>
+                                    <td>{$image_hash}</td>
+                                    <td>{ucfirst($username)}</td>
+                                    <td>{$created_at}</td>
+                                    <td>
+                                        <span class="hover-preview">
+                                            <button class="btn-view" title="View Image">
+                                                <i class="fa-solid fa-eye"></i>
+                                            </button>
 
-                {if $pagination_prev || $pagination_next}
-                    <div class="pending-pagination">
-                        {if $pagination_prev}
-                        <a href="{$pagination_prev}">Prev</a>
+                                            <span class="hover-preview-box">
+                                                <img src="/moderation/image-pending/image/{$image_hash}" alt="Preview">
+                                            </span>
+                                        </span>                                
+
+                                        <button class="btn-edit" title="Edit Image"><i class="fa-solid fa-pen"></i></button>
+
+                                        <form method="POST" action="/moderation/image-pending/approve/{$image_hash}" style="display:inline;">
+                                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                            <button type="submit" class="btn-approve" title="Approve Image"><i class="fa-solid fa-check"></i></button>
+                                        </form>
+
+                                        <form method="POST" action="/moderation/image-pending/reject/{$image_hash}" style="display:inline;" onsubmit="return confirm('Reject this image?');">
+                                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                            <button type="submit" class="btn-reject" title="Reject Image"><i class="fa-solid fa-xmark"></i></button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {/foreach}
+                            </tbody>
+                        </table>
+
+                        {if $pagination_prev || $pagination_next}
+                            <div class="pending-pagination">
+                                {if $pagination_prev}
+                                <a href="{$pagination_prev}">Prev</a>
+                                {/if}
+
+                                {foreach $pagination_pages as list($page_url, $page_number, $current)}
+                                <a href="{$page_url}" class="{if $current}current{/if}">{$page_number}</a>
+                                {/foreach}
+
+                                {if $pagination_next}
+                                <a href="{$pagination_next}">Next</a>
+                                {/if}
+                            </div>
                         {/if}
 
-                        {foreach $pagination_pages as list($page_url, $page_number, $current)}
-                        <a href="{$page_url}" class="{if $current}current{/if}">{$page_number}</a>
-                        {/foreach}
+                    {else}
+                        <p class="no-pending-images">No pending images found.</p>
+                    {/if}
 
-                        {if $pagination_next}
-                        <a href="{$pagination_next}">Next</a>
-                        {/if}
                     </div>
-                {/if}
-
-            {else}
-                <p class="no-pending-images">No pending images found.</p>
-            {/if}
-
+                </div>
             </div>
         </div>
-    </div>
+    </main>
 
 {include file="global/footer.html"}

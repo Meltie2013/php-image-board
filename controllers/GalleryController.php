@@ -42,6 +42,7 @@ class GalleryController
             $template->clearCache();
         }
 
+        $template->assign('csrf_token', Security::generateCsrfToken());
         return $template;
     }
 
@@ -121,8 +122,7 @@ class GalleryController
         // Filter images based on age-sensitive access
         $filteredImages = array_filter($images, function ($img) use ($currentUser, $minBirthDate)
         {
-            return (int)$img['age_sensitive'] === 0
-                || self::checkAgeSensitiveAccess($currentUser, $minBirthDate);
+            return (int)$img['age_sensitive'] === 0 || self::checkAgeSensitiveAccess($currentUser, $minBirthDate);
         });
 
         $totalImages = count($filteredImages);
@@ -225,6 +225,7 @@ class GalleryController
                 i.reject_reason,
                 i.votes,
                 i.favorites,
+                i.views,
                 u.date_of_birth,
                 u.age_verified_at
             FROM app_images i
@@ -258,7 +259,7 @@ class GalleryController
         {
             $alertColor   = 'alert-warning';
             $alertTag     = '<b>Heads Up!</b>';
-            $alertMessage = 'This image is marked <b>sensitive</b> and may not be suitable for users under ' . self::$config['profile']['years'] . ' years of age.';
+            $alertMessage = 'This image is marked <b>sensitive</b> and may not be suitable for users under <b>' . self::$config['profile']['years'] . '</b> years of age.';
 
             $template->assign('alert_color', $alertColor);
             $template->assign('alert_tag', $alertTag);
@@ -316,6 +317,7 @@ class GalleryController
         $template->assign('img_votes', NumericalHelper::formatCount($img['votes']));
         $template->assign('img_has_voted', $hasVoted);
         $template->assign('img_favorites', NumericalHelper::formatCount($img['favorites']));
+        $template->assign('img_views', NumericalHelper::formatCount($img['views']));
         $template->assign('img_has_favorited', $hasFavorited);
 
         $template->render('gallery/gallery_view.html');
@@ -333,6 +335,18 @@ class GalleryController
 
         // Require login
         RoleHelper::requireLogin();
+
+        $csrfToken = $_POST['csrf_token'] ?? '';
+
+        // Verify CSRF token to prevent cross-site request forgery
+        if (!Security::verifyCsrfToken($csrfToken))
+        {
+            http_response_code(403);
+            $template->assign('title', 'Access Denied');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
 
         // Find the image by hash
         $sql = "SELECT id, favorites FROM app_images WHERE image_hash = :hash LIMIT 1";
@@ -388,6 +402,18 @@ class GalleryController
 
         // Require login
         RoleHelper::requireLogin();
+
+        $csrfToken = $_POST['csrf_token'] ?? '';
+
+        // Verify CSRF token to prevent cross-site request forgery
+        if (!Security::verifyCsrfToken($csrfToken))
+        {
+            http_response_code(403);
+            $template->assign('title', 'Access Denied');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
 
         // Find the image by hash
         $sql = "SELECT id, votes FROM app_images WHERE image_hash = :hash LIMIT 1";
@@ -445,6 +471,18 @@ class GalleryController
 
         // Require login
         RoleHelper::requireLogin();
+
+        $csrfToken = $_POST['csrf_token'] ?? '';
+
+        // Verify CSRF token to prevent cross-site request forgery
+        if (!Security::verifyCsrfToken($csrfToken))
+        {
+            http_response_code(403);
+            $template->assign('title', 'Access Denied');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
 
         // Fetch user's role from the database
         $sql = "

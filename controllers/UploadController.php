@@ -42,6 +42,8 @@ class UploadController
             $template->clearCache();
         }
 
+
+        $template->assign('csrf_token', Security::generateCsrfToken());
         return $template;
     }
 
@@ -137,9 +139,17 @@ class UploadController
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image']))
         {
             $file = $_FILES['image'];
-            $description = $_POST['description'] ?? '';
+            $description = Security::sanitizeString($_POST['description'] ?? '');
 
             $userId = SessionManager::get('user_id');
+
+            $csrfToken = $_POST['csrf_token'] ?? '';
+
+            // Verify CSRF token to prevent cross-site request forgery
+            if (!Security::verifyCsrfToken($csrfToken))
+            {
+                $errors[] = "Invalid request.";
+            }
 
             if ($file['error'] !== UPLOAD_ERR_OK)
             {
@@ -163,10 +173,21 @@ class UploadController
 
                 $finfo = finfo_open(FILEINFO_MIME_TYPE);
                 $mimeType = finfo_file($finfo, $file['tmp_name']);
-                finfo_close($finfo);
+
+                if ($finfo)
+                {
+                    finfo_close($finfo);
+                }
 
                 $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-                if (!in_array($file['type'], $allowedTypes))
+                $mimeToExt = [
+                    'image/jpeg' => 'jpg',
+                    'image/png'  => 'png',
+                    'image/gif'  => 'gif',
+                    'image/webp' => 'webp'
+                ];
+
+                if (!in_array($mimeType, $allowedTypes, true))
                 {
                     $errors[] = "Invalid file type.";
                 }
@@ -175,6 +196,14 @@ class UploadController
                 if (in_array($ext, self::$blockedExtensions))
                 {
                     $errors[] = "File extension .$ext is not allowed.";
+                }
+                
+                $safeExt = $mimeToExt[$mimeType] ?? $ext;
+                
+                // Ensure the final extension is one of the allowed types
+                if (!in_array($safeExt, array_values($mimeToExt), true))
+                {
+                    $errors[] = "File extension .$safeExt is not allowed.";
                 }
 
                 if (!@getimagesize($file['tmp_name']))
@@ -190,7 +219,7 @@ class UploadController
 
             if (empty($errors))
             {
-                $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
+                $ext = $safeExt;
                 $basename = 'img_' . bin2hex(random_bytes(16));
                 $originalPath = "uploads/images/original/" . $basename . "_1280." . $ext;
 

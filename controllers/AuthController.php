@@ -159,6 +159,9 @@ class AuthController
                         ['id' => $userIdToCheck]
                     );
 
+                    // Regenerate session ID to prevent session fixation
+                    SessionManager::regenerate();
+
                     // Store important user details in session
                     SessionManager::set('user_id', $user['id']);
                     SessionManager::set('user_role', $user['role_name']);
@@ -248,13 +251,15 @@ class AuthController
 
         // Prevent already logged-in users from registering again
         $userId = SessionManager::get('user_id');
-        if ($userId) {
+        if ($userId)
+        {
             header('Location: /profile/overview');
             exit();
         }
 
         // Handle registration form submission
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST')
+        {
             // Sanitize inputs
             $username    = Security::sanitizeString($_POST['username'] ?? '');
             $email       = Security::sanitizeEmail($_POST['email'] ?? '');
@@ -341,7 +346,6 @@ class AuthController
         $template->assign('success', $success);
         $template->render('register.html');
     }
-
 
     /**
      * Log out the current user.

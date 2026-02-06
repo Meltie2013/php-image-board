@@ -29,6 +29,7 @@
             </div>
 
             <form method="post" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{$csrf_token}">
                 <input type="file" name="avatar" accept="image/png, image/jpeg, image/gif" required>
                 <button type="submit" name="update_avatar">Update Avatar</button>
             </form>

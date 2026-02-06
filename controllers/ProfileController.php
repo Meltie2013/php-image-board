@@ -38,6 +38,8 @@ class ProfileController
             $template->clearCache();
         }
 
+
+        $template->assign('csrf_token', Security::generateCsrfToken());
         return $template;
     }
 
@@ -161,6 +163,14 @@ class ProfileController
         // Handle form submission
         if ($_SERVER['REQUEST_METHOD'] === 'POST')
         {
+            $csrfToken = $_POST['csrf_token'] ?? '';
+
+            // Verify CSRF token to prevent cross-site request forgery
+            if (!Security::verifyCsrfToken($csrfToken))
+            {
+                $errors[] = "Invalid request.";
+            }
+
             switch ($type)
             {
                 case 'email':
@@ -210,6 +220,19 @@ class ProfileController
                         {
                             $ext = strtolower(pathinfo($avatar['name'], PATHINFO_EXTENSION));
                             $allowed = ['jpg','jpeg','png','gif'];
+
+                            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                            $mimeType = $finfo ? finfo_file($finfo, $avatar['tmp_name']) : '';
+                            if ($finfo)
+                            {
+                                finfo_close($finfo);
+                            }
+
+                            $allowedMimes = ['image/jpeg', 'image/png', 'image/gif'];
+                            if (!in_array($mimeType, $allowedMimes, true))
+                            {
+                                $errors[] = "Invalid file type. Only JPG, PNG, GIF allowed.";
+                            }
 
                             if (!in_array($ext, $allowed, true))
                             {
@@ -321,7 +344,8 @@ class ProfileController
                                     }
 
                                     // Remove old avatar if it exists
-                                    if (empty($errors) && !empty($user['avatar_path']))
+                                    if (empty($errors) && !empty($user['avatar_path'])
+                                        && strpos($user['avatar_path'], '/uploads/avatars/') === 0)
                                     {
                                         $oldAvatar = __DIR__ . '/../' . ltrim($user['avatar_path'], '/');
                                         if (file_exists($oldAvatar))
@@ -388,6 +412,9 @@ class ProfileController
                         );
 
                         $success = "Password updated successfully.";
+
+                        // Regenerate session after password change
+                        SessionManager::regenerate();
                     }
                     break;
             }

@@ -25,6 +25,7 @@
             </div>
 
             <form method="post">
+            <input type="hidden" name="csrf_token" value="{$csrf_token}">
                 <label for="email">Email Address:</label>
                 <input type="email" name="email" value="{$email}" required>
                 <button type="submit" name="update_email">Update Email</button>
