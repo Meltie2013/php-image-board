@@ -223,17 +223,27 @@ class GalleryController
                 i.md5,
                 i.sha1,
                 i.reject_reason,
-                i.votes,
-                i.favorites,
+                COALESCE(v.votes, 0) AS votes,
+                COALESCE(f.favorites, 0) AS favorites,
                 i.views,
                 u.date_of_birth,
                 u.age_verified_at
             FROM app_images i
             LEFT JOIN app_users u ON i.user_id = u.id
+            LEFT JOIN (
+                SELECT image_id, COUNT(*) AS favorites
+                FROM app_image_favorites
+                GROUP BY image_id
+            ) f ON i.id = f.image_id
+            LEFT JOIN (
+                SELECT image_id, COUNT(*) AS votes
+                FROM app_image_votes
+                GROUP BY image_id
+            ) v ON i.id = v.image_id
             WHERE i.image_hash = :hash
-              AND (i.status = 'approved')
+            AND i.status = 'approved'
             LIMIT 1
-        ";
+        ";    
 
         $img = Database::fetch($sql, ['hash' => $hash]);
 
@@ -349,7 +359,7 @@ class GalleryController
         }
 
         // Find the image by hash
-        $sql = "SELECT id, favorites FROM app_images WHERE image_hash = :hash LIMIT 1";
+        $sql = "SELECT id FROM app_images WHERE image_hash = :hash LIMIT 1";
         $image = Database::fetch($sql, [':hash' => $hash]);
 
         if (!$image)
@@ -379,10 +389,6 @@ class GalleryController
         // Insert favorite
         $sql = "INSERT INTO app_image_favorites (user_id, image_id) VALUES (:user_id, :image_id)";
         Database::execute($sql, [':user_id' => $userId, ':image_id' => $imageId]);
-
-        // Increment favorite count
-        $sql = "UPDATE app_images SET favorites = favorites + 1 WHERE id = :id";
-        Database::execute($sql, [':id' => $imageId]);
 
         $template->assign('title', 'Successful Favorite!');
         $template->assign('message', "You have successfully marked this image as a favorite.");
@@ -416,7 +422,7 @@ class GalleryController
         }
 
         // Find the image by hash
-        $sql = "SELECT id, votes FROM app_images WHERE image_hash = :hash LIMIT 1";
+        $sql = "SELECT id FROM app_images WHERE image_hash = :hash LIMIT 1";
         $image = Database::fetch($sql, [':hash' => $hash]);
 
         if (!$image)
@@ -446,10 +452,6 @@ class GalleryController
         // Insert vote
         $sql = "INSERT INTO app_image_votes (user_id, image_id) VALUES (:user_id, :image_id)";
         Database::execute($sql, [':user_id' => $userId, ':image_id' => $imageId]);
-
-        // Increment vote count
-        $sql = "UPDATE app_images SET votes = votes + 1 WHERE id = :id";
-        Database::execute($sql, [':id' => $imageId]);
 
         $template->assign('title', 'Successful Upvote!');
         $template->assign('message', "You have successfully upvoted this image.");
@@ -517,9 +519,7 @@ class GalleryController
         }
 
         // Find the image
-        $sql = "SELECT image_hash, description, status
-                  FROM app_images
-                 WHERE image_hash = :hash LIMIT 1";
+        $sql = "SELECT image_hash, description, status FROM app_images WHERE image_hash = :hash LIMIT 1";
         $image = Database::fetch($sql, [':hash' => $hash]);
 
         if (!$image)
@@ -532,9 +532,7 @@ class GalleryController
         }
 
         // Soft delete: update status instead of deleting row
-        $sql = "UPDATE app_images
-                   SET status = 'deleted'
-                 WHERE image_hash = :hash";
+        $sql = "UPDATE app_images SET status = 'deleted' WHERE image_hash = :hash";
         Database::execute($sql, [':hash' => $hash]);
 
         // Render confirmation template
