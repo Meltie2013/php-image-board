@@ -6,6 +6,10 @@
         <section class="profile-content">
             <h1>Change Avatar</h1>
 
+            <div class="alert alert-warning">
+                Avatar size {$avatar_size}x{$avatar_size} pixels recommended. Uploaded images are resized automatically.
+            </div>
+
             {if $error}
             <div class="alert alert-danger">
                 {foreach $error as $err}
@@ -24,12 +28,8 @@
             <img src="{$avatar_path}" alt="Avatar" class="profile-avatar-upload">
             {/if}
 
-            <div class="alert alert-warning">
-                Avatar size {$avatar_size}x{$avatar_size} pixels recommended. Uploaded images are resized automatically.
-            </div>
-
             <form method="post" enctype="multipart/form-data">
-            <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                <input type="hidden" name="csrf_token" value="{$csrf_token}">
                 <input type="file" name="avatar" accept="image/png, image/jpeg, image/gif" required>
                 <button type="submit" name="update_avatar">Update Avatar</button>
             </form>

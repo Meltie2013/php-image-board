@@ -292,6 +292,100 @@ class ModerationController
     }
 
     /**
+     * Approve a pending image from the moderation panel.
+     *
+     * This action is POST-only and requires a valid CSRF token.
+     * Only images in "pending" status may be approved.
+     *
+     * @param string $hash The image hash identifier from the route.
+     * @return void
+     */
+    public static function approveImageSensitive(string $hash): void
+    {
+        $template = self::initTemplate();
+
+        // Require login and role check
+        RoleHelper::requireLogin();
+        RoleHelper::requireRole(['administrator', 'moderator'], $template);
+
+        // Approve requests must be POST-only (prevents accidental approvals from URL visits)
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            http_response_code(405);
+            $template->assign('title', 'Method Not Allowed');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $csrfToken = $_POST['csrf_token'] ?? '';
+
+        // Verify CSRF token to prevent cross-site request forgery
+        if (!Security::verifyCsrfToken($csrfToken))
+        {
+            http_response_code(403);
+            $template->assign('title', 'Access Denied');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        // Ensure a valid hash is provided
+        // (The router passes the hash from the URL, but we still validate it here.)
+        $hash = trim($hash);
+        if ($hash === '')
+        {
+            http_response_code(404);
+            $template->assign('title', '404 Not Found');
+            $template->assign('message', 'Oops! We couldn’t find that image.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        // Find the target image and confirm moderation state
+        // (We only allow approving images that are currently pending.)
+        $sql = "SELECT image_hash, status
+                FROM app_images
+                WHERE image_hash = :hash LIMIT 1";
+        $image = Database::fetch($sql, [':hash' => $hash]);
+
+        if (!$image)
+        {
+            http_response_code(404);
+            $template->assign('title', 'Image Not Found');
+            $template->assign('message', 'The requested image could not be found.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        // Only pending images can be approved
+        // (If it has already been moderated, just return back to the pending list.)
+        if (($image['status'] ?? '') !== 'pending')
+        {
+            header('Location: /moderation/image-pending');
+            exit;
+        }
+
+        // Approve image
+        // - Record the moderator user id for audit/history tracking
+        // - Store moderation timestamps for UI / reporting
+        $appUserId = SessionManager::get('user_id');
+        $sql = "UPDATE app_images
+                SET age_sensitive = 1,
+                    status = 'approved',
+                    approved_by = $appUserId,
+                    moderated_at = NOW(),
+                    updated_at = NOW()
+                WHERE image_hash = :hash
+                AND status = 'pending'";
+        Database::execute($sql, [':hash' => $hash]);
+
+        // Redirect back to the pending list after action completes
+        header('Location: /moderation/image-pending');
+        exit;
+    }
+
+    /**
      * Reject a pending image from the moderation panel.
      *
      * This action is POST-only and requires a valid CSRF token.

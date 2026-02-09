@@ -61,9 +61,8 @@
     gap: 6px;
 }
 
-\.moderation-sidebar ul li a {
+.moderation-sidebar ul li a {
     display: block;
-    padding: 7px 6px;
     border-radius: 10px;
     color: var(--color-text-muted);
     background: transparent;
@@ -101,6 +100,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 14px;
+    padding-left: 60px;
 }
 
 .moderation-dashboard .dashboard-card {
@@ -254,7 +254,7 @@
    PENDING TABLE
 ========================================================= */
 .pending-images-wrapper {
-    overflow-x: auto;
+    overflow-x: visible;
 }
 
 .pending-images-table {
@@ -307,6 +307,7 @@
 .pending-images-table .btn-view,
 .pending-images-table .btn-edit,
 .pending-images-table .btn-approve,
+.pending-images-table .btn-warning,
 .pending-images-table .btn-reject {
     width: 36px;
     height: 36px;
@@ -329,6 +330,11 @@
 .pending-images-table .btn-approve {
     background: rgba(46, 204, 113, 0.18);
     border-color: rgba(46, 204, 113, 0.45);
+}
+
+.pending-images-table .btn-warning {
+    background: rgba(241, 196, 15, 0.18);
+    border-color: rgba(241, 196, 15, 0.45);
 }
 
 .pending-images-table .btn-reject {
@@ -405,6 +411,10 @@
     }
 }
 
+
+/* =========================================================
+   PENDING IMAGE PREVIEW
+========================================================= */
 .hover-preview {
     position: relative;
     display: inline-block;

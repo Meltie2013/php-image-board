@@ -17,7 +17,7 @@
                             </button>
         
                             {if $img_has_favorited}
-                            <button title="Already Favorite">
+                            <button title="Already Favorited">
                                 <i class="fa-solid fa-star"></i>
                                 {$img_favorites}
                             </button>
@@ -104,8 +104,8 @@
                     </section>
 
                     <section>
-                        <h3>View Original Image</h3>
                         <h5><a href="/image/original/{$img_hash}">View Image</a></h5>
+                        <h5><a href="#" class="js-open-comments">Comments ({$img_comment_count})</a></h5>
                     </section>
 
                     <section>
@@ -126,22 +126,115 @@
         </div>
     </main>
 
-    <script>
-        document.querySelectorAll('.hash-tooltip-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                // Toggle tooltip visibility
-                btn.classList.toggle('active');
-            });
-        });
+    <div class="comments-modal-overlay js-comments-overlay" aria-hidden="true">
+        <div class="comments-modal" role="dialog" aria-modal="true" aria-label="Image Comments">
+            <div class="comments-modal-header">
+                <h3>Total Comments ({$img_comment_count})</h3>
+    
+                <button type="button" class="comments-modal-close js-close-comments" title="Close">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
 
-        // Optional: click outside to hide any open tooltips
-        document.addEventListener('click', (e) => {
-            document.querySelectorAll('.hash-tooltip-btn.active').forEach(btn => {
-                if (!btn.contains(e.target)) {
-                    btn.classList.remove('active');
-                }
+            {if $is_logged_in}
+            <form method="POST" action="/image/{$img_hash}/comment" class="comments-modal-form">
+                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                <textarea name="comment_body" rows="3" placeholder="Write a comment..." required></textarea>
+                <button type="submit">Post Comment</button>
+            </form>
+
+            <div class="comments-modal-body">
+                {if $img_comment_count > 0}
+                <h3>User Comments</h3>
+
+                <div class="gallery-comments-list">
+                    <small>Showing <u>{$displayed_comments}</u> comment(s) per page.</small>
+                    {foreach $comment_rows as list($comment_username, $comment_created_at, $comment_body)}
+                    <div class="gallery-comment">
+                        <div class="gallery-comment-meta">
+                            <b>{ucfirst($comment_username)}</b>
+                            <span>{$comment_created_at}</span>
+                        </div>
+
+                        <div class="gallery-comment-body">
+                            <small>{$comment_body}</small>
+                        </div>
+                    </div>
+                    {/foreach}
+                </div>
+
+                {if $comments_total_pages > 1}
+                <div class="comments-pagination">
+                    {if $comments_has_prev}
+                    <a class="comments-page-btn" href="/image/{$img_hash}?cpage={$comments_prev_page}&show_comments=1">Prev</a>
+                    {else}
+                    <span class="comments-page-btn is-disabled">Prev</span>
+                    {/if}
+
+                    <span class="comments-page-info">Page {$comments_page} of {$comments_total_pages}</span>
+
+                    {if $comments_has_next}
+                    <a class="comments-page-btn" href="/image/{$img_hash}?cpage={$comments_next_page}&show_comments=1">Next</a>
+                    {else}
+                    <span class="comments-page-btn is-disabled">Next</span>
+                    {/if}
+                </div>
+                {/if}
+
+                {else}
+                <div class="gallery-comments-list">
+                    <small>Be the first to comment on this image!</small>
+                </div>
+                {/if}
+            </div>
+            {else}
+            <div class="comments-modal-footer">
+                <small>Greatings guest! To view or post comments, please <a href="/user/register/">register</a> or <a href="/user/login">login</a>.</small>
+            </div>
+            {/if}
+
+        </div>
+    </div>
+    
+    <script>
+        (function () {
+            const openBtn = document.querySelector('.js-open-comments');
+            const overlay = document.querySelector('.js-comments-overlay');
+            const closeBtn = document.querySelector('.js-close-comments');
+        
+            if (!openBtn || !overlay || !closeBtn) return;
+        
+            function openModal(e) {
+                if (e) e.preventDefault();
+                overlay.classList.add('is-open');
+                overlay.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+            }
+        
+            function closeModal() {
+                overlay.classList.remove('is-open');
+                overlay.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+            }
+        
+            openBtn.addEventListener('click', openModal);
+            closeBtn.addEventListener('click', closeModal);
+
+            // Auto-open modal when pagination links are used
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('show_comments') === '1')
+            {
+                openModal();
+            }
+        
+            overlay.addEventListener('click', function (e) {
+                if (e.target === overlay) closeModal();
             });
-        });
-    </script>
+        
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') closeModal();
+            });
+        })();
+        </script>        
 
 {include file="global/footer.html"}

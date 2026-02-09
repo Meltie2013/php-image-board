@@ -163,7 +163,7 @@ class UploadController
 
                 if ($file['size'] > $maxSizeBytes)
                 {
-                    $errors[] = "File exceeds maximum allowed size of {$maxSizeMb} MB.";
+                    $errors[] = "File exceeds maximum allowed size of {$maxSizeMb} mb.";
                 }
 
                 if (!StorageHelper::canStoreFile($file['size']))
@@ -221,7 +221,7 @@ class UploadController
             {
                 $ext = $safeExt;
                 $basename = 'img_' . bin2hex(random_bytes(16));
-                $originalPath = "uploads/images/original/" . $basename . "_1280." . $ext;
+                $originalPath = "uploads/images/original/" . $basename . "." . $ext;
 
                 $tmpPath = self::$uploadDir . "tmp_" . $basename . "." . $ext;
                 move_uploaded_file($file['tmp_name'], $tmpPath);

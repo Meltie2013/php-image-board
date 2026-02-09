@@ -1,7 +1,11 @@
 -- phpMyAdmin SQL Dump
 -- version 5.1.1deb5ubuntu1
 -- https://www.phpmyadmin.net/
-
+--
+-- Host: 10.220.100.102:3306
+-- Generation Time: Feb 08, 2026 at 09:38 PM
+-- Server version: 10.6.22-MariaDB-0ubuntu0.22.04.1
+-- PHP Version: 8.1.2-1ubuntu2.23
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -14,18 +18,23 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
+-- Database: `php_cms_gallery_dev`
+--
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `app_images`
 --
 
 CREATE TABLE `app_images` (
   `id` bigint(20) UNSIGNED NOT NULL,
-  `image_hash` varchar(50) NOT NULL,
+  `image_hash` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `user_id` bigint(20) UNSIGNED NOT NULL,
   `description` text DEFAULT NULL,
   `status` enum('pending','approved','rejected','deleted') NOT NULL DEFAULT 'pending',
   `age_sensitive` tinyint(1) NOT NULL DEFAULT 0,
   `original_path` varchar(255) NOT NULL,
-  `has_variants` tinyint(1) NOT NULL DEFAULT 0,
   `mime_type` varchar(100) NOT NULL,
   `width` int(10) UNSIGNED DEFAULT NULL,
   `height` int(10) UNSIGNED DEFAULT NULL,
@@ -41,9 +50,38 @@ CREATE TABLE `app_images` (
   `moderated_at` datetime DEFAULT NULL,
   `reject_reason` text DEFAULT NULL,
   `views` bigint(20) UNSIGNED NOT NULL DEFAULT 0,
-  `favorites` bigint(20) UNSIGNED NOT NULL DEFAULT 0,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `app_image_comments`
+--
+
+CREATE TABLE `app_image_comments` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `image_id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` bigint(20) UNSIGNED NOT NULL,
+  `comment_body` text NOT NULL,
+  `is_deleted` tinyint(1) NOT NULL DEFAULT 0,
+  `deleted_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `app_image_favorites`
+--
+
+CREATE TABLE `app_image_favorites` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` bigint(20) UNSIGNED NOT NULL,
+  `image_id` bigint(20) UNSIGNED NOT NULL,
+  `favorited_at` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -53,7 +91,7 @@ CREATE TABLE `app_images` (
 --
 
 CREATE TABLE `app_image_hashes` (
-  `image_hash` varchar(50) NOT NULL,
+  `image_hash` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `ahash` char(64) NOT NULL,
   `dhash` char(64) NOT NULL,
   `phash` char(64) NOT NULL,
@@ -99,6 +137,19 @@ CREATE TABLE `app_image_upload_logs` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `app_image_votes`
+--
+
+CREATE TABLE `app_image_votes` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` bigint(20) UNSIGNED NOT NULL,
+  `image_id` bigint(20) UNSIGNED NOT NULL,
+  `upvoted_at` datetime NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `app_roles`
 --
 
@@ -127,7 +178,9 @@ CREATE TABLE `app_sessions` (
   `session_id` varchar(128) NOT NULL,
   `user_id` bigint(20) UNSIGNED DEFAULT NULL,
   `ip` varbinary(16) DEFAULT NULL,
+  `first_ip` varbinary(16) DEFAULT NULL,
   `ua` varchar(255) DEFAULT NULL,
+  `fingerprint` char(64) DEFAULT NULL,
   `last_activity` datetime NOT NULL,
   `expires_at` datetime DEFAULT NULL,
   `data` mediumblob DEFAULT NULL
@@ -157,6 +210,36 @@ CREATE TABLE `app_users` (
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `security_events`
+--
+
+CREATE TABLE `security_events` (
+  `id` bigint(20) NOT NULL,
+  `ua` text DEFAULT NULL,
+  `fingerprints` int(11) DEFAULT NULL,
+  `first_seen` datetime DEFAULT NULL,
+  `last_seen` datetime DEFAULT NULL,
+  `flagged_at` datetime DEFAULT NULL,
+  `notes` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_security_events`
+--
+
+CREATE TABLE `user_security_events` (
+  `id` bigint(20) NOT NULL,
+  `user_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `ip` varbinary(16) DEFAULT NULL,
+  `event_type` varchar(64) NOT NULL,
+  `blocked_until` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 --
 -- Indexes for dumped tables
 --
@@ -167,13 +250,31 @@ CREATE TABLE `app_users` (
 ALTER TABLE `app_images`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `image_hash` (`image_hash`),
-  ADD KEY `fk_images_user` (`user_id`);
+  ADD KEY `fk_images_user` (`user_id`),
+  ADD KEY `image_hash_idx` (`image_hash`);
+
+--
+-- Indexes for table `app_image_comments`
+--
+ALTER TABLE `app_image_comments`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_comments_image_id` (`image_id`),
+  ADD KEY `idx_comments_user_id` (`user_id`),
+  ADD KEY `idx_comments_created_at` (`created_at`);
+
+--
+-- Indexes for table `app_image_favorites`
+--
+ALTER TABLE `app_image_favorites`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_favorite` (`user_id`,`image_id`),
+  ADD KEY `fk_favorite_image` (`image_id`);
 
 --
 -- Indexes for table `app_image_hashes`
 --
 ALTER TABLE `app_image_hashes`
-  ADD PRIMARY KEY (`image_hash`);
+  ADD PRIMARY KEY (`image_hash`) USING BTREE;
 
 --
 -- Indexes for table `app_image_upload_logs`
@@ -184,6 +285,14 @@ ALTER TABLE `app_image_upload_logs`
   ADD KEY `idx_ip_address` (`ip_address`),
   ADD KEY `idx_status` (`status`),
   ADD KEY `idx_created_at` (`created_at`);
+
+--
+-- Indexes for table `app_image_votes`
+--
+ALTER TABLE `app_image_votes`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_vote` (`user_id`,`image_id`),
+  ADD KEY `fk_votes_image` (`image_id`);
 
 --
 -- Indexes for table `app_roles`
@@ -209,6 +318,18 @@ ALTER TABLE `app_users`
   ADD KEY `fk_users_role` (`role_id`);
 
 --
+-- Indexes for table `security_events`
+--
+ALTER TABLE `security_events`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `user_security_events`
+--
+ALTER TABLE `user_security_events`
+  ADD PRIMARY KEY (`id`);
+
+--
 -- AUTO_INCREMENT for dumped tables
 --
 
@@ -219,9 +340,27 @@ ALTER TABLE `app_images`
   MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT for table `app_image_comments`
+--
+ALTER TABLE `app_image_comments`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `app_image_favorites`
+--
+ALTER TABLE `app_image_favorites`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `app_image_upload_logs`
 --
 ALTER TABLE `app_image_upload_logs`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `app_image_votes`
+--
+ALTER TABLE `app_image_votes`
   MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
@@ -237,6 +376,18 @@ ALTER TABLE `app_users`
   MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT for table `security_events`
+--
+ALTER TABLE `security_events`
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `user_security_events`
+--
+ALTER TABLE `user_security_events`
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
 -- Constraints for dumped tables
 --
 
@@ -245,6 +396,20 @@ ALTER TABLE `app_users`
 --
 ALTER TABLE `app_images`
   ADD CONSTRAINT `fk_images_user` FOREIGN KEY (`user_id`) REFERENCES `app_users` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `app_image_comments`
+--
+ALTER TABLE `app_image_comments`
+  ADD CONSTRAINT `fk_comments_image_id` FOREIGN KEY (`image_id`) REFERENCES `app_images` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_comments_user_id` FOREIGN KEY (`user_id`) REFERENCES `app_users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Constraints for table `app_image_favorites`
+--
+ALTER TABLE `app_image_favorites`
+  ADD CONSTRAINT `fk_favorite_image` FOREIGN KEY (`image_id`) REFERENCES `app_images` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_favorite_user` FOREIGN KEY (`user_id`) REFERENCES `app_users` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `app_image_hashes`
@@ -257,6 +422,13 @@ ALTER TABLE `app_image_hashes`
 --
 ALTER TABLE `app_image_upload_logs`
   ADD CONSTRAINT `fk_account_user` FOREIGN KEY (`user_id`) REFERENCES `app_users` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `app_image_votes`
+--
+ALTER TABLE `app_image_votes`
+  ADD CONSTRAINT `fk_votes_image` FOREIGN KEY (`image_id`) REFERENCES `app_images` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_votes_user` FOREIGN KEY (`user_id`) REFERENCES `app_users` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `app_sessions`

@@ -109,7 +109,7 @@ class GalleryController
         $minBirthDate = (new DateTime())->modify("-{$requiredYears} years")->format('Y-m-d');
 
         // Fetch all approved images
-        $sql = "SELECT i.image_hash, i.age_sensitive, i.created_at, u.date_of_birth, u.age_verified_at
+        $sql = "SELECT i.image_hash, i.age_sensitive, i.created_at, i.views, u.date_of_birth, u.age_verified_at
                 FROM app_images i
                 LEFT JOIN app_users u ON i.user_id = u.id
                 WHERE i.status = 'approved'
@@ -137,6 +137,7 @@ class GalleryController
             $loopImages[] = [
                 "/image/original/" . $img['image_hash'],
                 "/image/" . $img['image_hash'],
+                (int)($img['views'] ?? 0),
             ];
         }
 
@@ -194,9 +195,18 @@ class GalleryController
      */
     public static function view(string $hash): void
     {
+        $config = self::getConfig();
         $template = self::initTemplate();
         $userId = SessionManager::get('user_id');
+
         $currentUser = null;
+        $commentsPerPage = $config['gallery']['comments_per_page'];
+        $commentsPage = (int)($_GET['cpage'] ?? 1);
+
+        if ($commentsPage < 1)
+        {
+            $commentsPage = 1;
+        }
 
         if ($userId)
         {
@@ -243,7 +253,7 @@ class GalleryController
             WHERE i.image_hash = :hash
             AND i.status = 'approved'
             LIMIT 1
-        ";    
+        ";
 
         $img = Database::fetch($sql, ['hash' => $hash]);
 
@@ -263,6 +273,24 @@ class GalleryController
             $template->assign('message', 'The server understood your request, but you are not authorized to view this image.');
             $template->render('errors/error_page.html');
             return;
+        }
+
+        // Track views per session (guest and logged-in users) to prevent inflating view count
+        $viewedImages = SessionManager::get('viewed_images', []);
+        if (!is_array($viewedImages))
+        {
+            $viewedImages = [];
+        }
+
+        if (!in_array($img['image_hash'], $viewedImages, true))
+        {
+            $sql = "UPDATE app_images SET views = views + 1 WHERE id = :id LIMIT 1";
+            Database::execute($sql, [':id' => (int)$img['id']]);
+
+            $viewedImages[] = $img['image_hash'];
+            SessionManager::set('viewed_images', $viewedImages);
+
+            $img['views'] = (int)($img['views'] ?? 0) + 1;
         }
 
         if ((int)$img['age_sensitive'] === 1)
@@ -310,6 +338,60 @@ class GalleryController
             ]);
             $hasFavorited = (bool)$favorited;
         }
+
+        // Fetch comments count (pagination)
+        $commentCountRow = Database::fetch(
+            "SELECT COUNT(*) AS count
+               FROM app_image_comments
+              WHERE image_id = :image_id
+                AND is_deleted = 0",
+            [':image_id' => $img['id']]
+        );
+
+        $commentCount = (int)($commentCountRow['count'] ?? 0);
+        $commentsTotalPages = (int)ceil($commentCount / $commentsPerPage);
+
+        if ($commentsTotalPages < 1)
+        {
+            $commentsTotalPages = 1;
+        }
+
+        if ($commentsPage > $commentsTotalPages)
+        {
+            $commentsPage = $commentsTotalPages;
+        }
+
+        $commentsOffset = ($commentsPage - 1) * $commentsPerPage;
+
+        $comments = Database::fetchAll(
+            "SELECT c.comment_body, c.created_at, u.username
+               FROM app_image_comments c
+               LEFT JOIN app_users u ON c.user_id = u.id
+              WHERE c.image_id = :image_id
+                AND c.is_deleted = 0
+              ORDER BY c.created_at DESC
+              LIMIT {$commentsPerPage} OFFSET {$commentsOffset}",
+            [':image_id' => $img['id']]
+        );
+
+        $commentRows = [];
+        foreach ($comments as $row)
+        {
+            $commentRows[] = [
+                $row['username'] ?? 'Unknown',
+                DateHelper::format($row['created_at']),
+                $row['comment_body']
+            ];
+        }
+
+        $template->assign('img_comment_count', $commentCount);
+        $template->assign('comment_rows', $commentRows);
+        $template->assign('comments_page', $commentsPage);
+        $template->assign('comments_total_pages', $commentsTotalPages);
+        $template->assign('comments_has_prev', $commentsPage > 1);
+        $template->assign('comments_has_next', $commentsPage < $commentsTotalPages);
+        $template->assign('comments_prev_page', $commentsPage - 1);
+        $template->assign('comments_next_page', $commentsPage + 1);
 
         $template->assign('img_hash', $img['image_hash']);
         $template->assign('img_username', ucfirst($username));
@@ -460,19 +542,26 @@ class GalleryController
     }
 
     /**
-     * Soft delete an image by hash (Administrator or Moderator only).
+     * Handle posting a comment on an image by logged-in user.
      *
-     * Marks the image as deleted instead of permanently removing it.
-     *
-     * @param string $hash
+     * @param string $hash Unique hash of the image.
      */
-    public static function delete(string $hash): void
+    public static function comment(string $hash): void
     {
         $template = self::initTemplate();
         $userId = SessionManager::get('user_id');
 
         // Require login
         RoleHelper::requireLogin();
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            http_response_code(405);
+            $template->assign('title', 'Method Not Allowed');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
 
         $csrfToken = $_POST['csrf_token'] ?? '';
 
@@ -486,40 +575,17 @@ class GalleryController
             return;
         }
 
-        // Fetch user's role from the database
-        $sql = "
-            SELECT r.name AS role_name
-            FROM app_users u
-            JOIN app_roles r ON u.role_id = r.id
-            WHERE u.id = :user_id
-            LIMIT 1
-        ";
-        $userRoleData = Database::fetch($sql, [':user_id' => $userId]);
-        $role = $userRoleData['role_name'] ?? null;
+        $commentBody = $_POST['comment_body'] ?? '';
+        $commentBody = Security::sanitizeString($commentBody);
 
-        // Only admins and moderators can delete
-        if (!$role || !in_array(strtolower($role), ['administrator','moderator'], true))
+        if ($commentBody === '')
         {
-            http_response_code(403);
-            $template->assign('title', 'Access Denied');
-            $template->assign('message', 'You do not have permission to delete images.');
-            $template->render('errors/error_page.html');
-            return;
+            header('Location: /image/' . $hash);
+            exit;
         }
 
-        // Ensure hash is provided
-        $hash = trim($hash);
-        if ($hash === '')
-        {
-            http_response_code(404);
-            $template->assign('title', '404 Not Found');
-            $template->assign('message', 'Oops! We couldn’t find that image.');
-            $template->render('errors/error_page.html');
-            return;
-        }
-
-        // Find the image
-        $sql = "SELECT image_hash, description, status FROM app_images WHERE image_hash = :hash LIMIT 1";
+        // Find the approved image by hash
+        $sql = "SELECT id FROM app_images WHERE image_hash = :hash AND status = 'approved' LIMIT 1";
         $image = Database::fetch($sql, [':hash' => $hash]);
 
         if (!$image)
@@ -531,14 +597,19 @@ class GalleryController
             return;
         }
 
-        // Soft delete: update status instead of deleting row
-        $sql = "UPDATE app_images SET status = 'deleted' WHERE image_hash = :hash";
-        Database::execute($sql, [':hash' => $hash]);
+        $imageId = (int)$image['id'];
 
-        // Render confirmation template
-        $template->assign('title', 'Image Deleted');
-        $template->assign('message', "This image has been deleted: {$image['image_hash']}");
-        $template->render('gallery/gallery_image_deleted.html');
+        // Insert comment
+        $sql = "INSERT INTO app_image_comments (image_id, user_id, comment_body)
+                VALUES (:image_id, :user_id, :comment_body)";
+        Database::execute($sql, [
+            ':image_id' => $imageId,
+            ':user_id' => (int)$userId,
+            ':comment_body' => $commentBody
+        ]);
+
+        header('Location: /image/' . $hash);
+        exit;
     }
 
     /**
@@ -574,7 +645,7 @@ class GalleryController
             FROM app_images i
             LEFT JOIN app_users u ON i.user_id = u.id
             WHERE i.image_hash = :hash
-              AND (i.status = 'approved' OR i.status = 'rejected')
+            AND (i.status = 'approved' OR i.status = 'rejected')
             LIMIT 1
         ";
         $image = Database::fetch($sql, ['hash' => $hash]);

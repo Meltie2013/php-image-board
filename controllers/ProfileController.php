@@ -55,19 +55,45 @@ class ProfileController
     {
         // Require login
         RoleHelper::requireLogin();
-
+    
         // Fetch current user data from database
         $userId = SessionManager::get('user_id');
         $user = Database::fetch(
-            "SELECT id, role_id, username, email, avatar_path, date_of_birth, status, last_login, created_at
-             FROM app_users
-             WHERE id = :id LIMIT 1",
+            "SELECT
+                u.id,
+                u.role_id,
+                u.username,
+                u.email,
+                u.avatar_path,
+                u.date_of_birth,
+                u.status,
+                u.last_login,
+                u.created_at,
+                COALESCE(f.favorite_count, 0) AS favorite_count,
+                COALESCE(v.vote_count, 0) AS vote_count
+             FROM app_users u
+             LEFT JOIN (
+                SELECT user_id, COUNT(*) AS favorite_count
+                  FROM app_image_favorites
+                 GROUP BY user_id
+             ) f ON u.id = f.user_id
+             LEFT JOIN (
+                SELECT user_id, COUNT(*) AS vote_count
+                  FROM app_image_votes
+                 GROUP BY user_id
+             ) v ON u.id = v.user_id
+             WHERE u.id = :id LIMIT 1",
             ['id' => $userId]
         );
-
+    
+        $uploadedImages = Database::fetch(
+            "SELECT COUNT(*) AS count FROM app_images WHERE user_id = :id AND status = 'approved'",
+            ['id' => $userId]
+        );
+    
         // Initialize template engine with caching support
         $template = self::initTemplate();
-
+    
         // Assign user data to template variables
         $template->assign('avatar_path', $user['avatar_path']);
         $template->assign('username', ucfirst($user['username']));
@@ -77,10 +103,13 @@ class ProfileController
         $template->assign('last_login', DateHelper::format($user['last_login']));
         $template->assign('date_of_birth', DateHelper::birthday_format($user['date_of_birth']) ?? 'Not set');
         $template->assign('registered_date', DateHelper::format($user['created_at']));
-
+        $template->assign('user_image_count', NumericalHelper::formatCount($uploadedImages['count']));
+        $template->assign('user_favorite_count', NumericalHelper::formatCount($user['favorite_count']));
+        $template->assign('user_vote_count', NumericalHelper::formatCount($user['vote_count']));
+    
         // Render profile overview template
         $template->render('profile/profile_overview.html');
-    }
+    }    
 
     /**
      * Avatar update page.

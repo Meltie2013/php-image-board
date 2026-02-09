@@ -27,6 +27,7 @@ class TemplateEngine
             'build_version' => $config['site']['version'],
             'age_requirement' => $config['profile']['years'],
             'site_user' => SessionManager::get('username', ''),
+            'displayed_comments' => $config['gallery']['comments_per_page'],
         ];
 
         // Disable cache if config set
@@ -97,7 +98,8 @@ class TemplateEngine
                     if (isset($m[0]) && $m[0] === '{/while}') return "\n<?php endwhile; ?>";
                     if (!empty($m[10])) return "\n<?php /* block: " . $m[10] . " */ ?>";
                     if (isset($m[0]) && $m[0] === '{/block}') return "\n<?php /* endblock */ ?>";
-                    if (!empty($m[11])) {
+                    if (!empty($m[11]))
+                    {
                         $includedTemplate = $this->templateDir . '/' . $m[11];
                         return file_exists($includedTemplate) ? "\n<?php include '" . addslashes($this->compile($m[11])) . "'; ?>" : '';
                     }

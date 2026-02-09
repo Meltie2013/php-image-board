@@ -14,27 +14,33 @@
                     {/if}
 
                     <h3>Status</h3>
-                    {$account_status}
+                    <div class="profile-value">{$account_status}</div>
 
                     <h3>Role</h3>
-                    {$account_role}
+                    <div class="profile-value">{$account_role}</div>
                 </div>
 
                 <div class="profile-info-column">
                     <h3>Email Address</h3>
-                    {$email}
+                    <div class="profile-value">{$email}</div>
 
                     <h3>Date of Birth</h3>
-                    {$date_of_birth}
+                    <div class="profile-value">{$date_of_birth}</div>
 
                     <h3>Registered Date</h3>
-                    {$registered_date}
+                    <div class="profile-value">{$registered_date}</div>
 
                     <h3>Last Login Date</h3>
-                    {$last_login}
+                    <div class="profile-value">{$last_login}</div>
 
                     <h3>Uploaded Images</h3>
-                    ---
+                    <div class="profile-value">{$user_image_count}</div>
+
+                    <h3>Image Favorites</h3>
+                    <div class="profile-value">{$user_favorite_count}</div>
+
+                    <h3>Image Upvotes</h3>
+                    <div class="profile-value">{$user_vote_count}</div>
                 </div>
             </div>
         </section>

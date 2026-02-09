@@ -1,4 +1,5 @@
 {include file="global/header.html"}
+
     {if $is_logged_in}
     <div class="gallery-actions-wrapper">
         <div class="gallery-actions">
@@ -14,9 +15,13 @@
     <main class="gallery-container">
         {if !empty($images)}
             <div class="gallery-grid">
-                {foreach $images as list($img_display_path, $img_url)}
+                {foreach $images as list($img_display_path, $img_url, $img_views)}
                 <div class="gallery-item">
                     <a href="{$img_url}">
+                        <span class="gallery-thumb-meta" title="Views">
+                            <i class="fa-solid fa-eye"></i>
+                            {$img_views}
+                        </span>
                         <img src="{$img_display_path}">
                     </a>
                 </div>

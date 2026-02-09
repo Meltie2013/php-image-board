@@ -56,18 +56,24 @@
 
 .profile-menu ul li a {
     display: block;
-    padding: 8px 10px;
-    border-radius: 999px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
     color: var(--color-text-muted);
     text-decoration: none;
-    transition: background var(--transition-fast), color var(--transition-fast), transform 0.08s ease;
+
+    background: rgba(10, 11, 14, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+
+    transition: background var(--transition-fast), color var(--transition-fast), transform 0.08s ease, filter var(--transition-fast);
 }
 
 .profile-menu ul li a:hover {
     background: rgba(255, 255, 255, 0.07);
     color: #ffffff;
     transform: translateX(1px);
+    filter: brightness(1.03);
 }
+
 
 .profile-content {
     flex: 1;
@@ -153,6 +159,18 @@
 .profile-info-column p {
     margin: 0 0 10px;
     color: var(--color-text-main);
+}
+
+/* Value blocks on overview (matches image view details rows) */
+.profile-value {
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: rgba(10, 11, 14, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--color-text-main);
+    line-height: 1.35;
+    margin: 0 0 10px;
+    overflow-wrap: anywhere;
 }
 
 /* Make profile forms a bit more compact */

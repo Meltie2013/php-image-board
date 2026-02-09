@@ -37,7 +37,9 @@
                                             </button>
 
                                             <span class="hover-preview-box">
-                                                <img src="/moderation/image-pending/image/{$image_hash}" alt="Preview">
+                                                <a href="/moderation/image-pending/image/{$image_hash}">
+                                                    <img src="/moderation/image-pending/image/{$image_hash}" alt="Preview">
+                                                </a>
                                             </span>
                                         </span>                                
 
@@ -46,6 +48,11 @@
                                         <form method="POST" action="/moderation/image-pending/approve/{$image_hash}" style="display:inline;">
                                             <input type="hidden" name="csrf_token" value="{$csrf_token}">
                                             <button type="submit" class="btn-approve" title="Approve Image"><i class="fa-solid fa-check"></i></button>
+                                        </form>
+
+                                        <form method="POST" action="/moderation/image-pending/approve/sensitive/{$image_hash}" style="display:inline;" onsubmit="return confirm('Mark this image as sensitive?');">
+                                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                            <button type="submit" class="btn-warning" title="Approve Sensitive Image"><i class="fa-solid fa-exclamation"></i></button>
                                         </form>
 
                                         <form method="POST" action="/moderation/image-pending/reject/{$image_hash}" style="display:inline;" onsubmit="return confirm('Reject this image?');">

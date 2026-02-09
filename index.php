@@ -150,6 +150,11 @@ $router->add(
 );
 
 $router->add(
+    '/moderation/image-pending/approve/sensitive/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
+    function ($hash) { ModerationController::approveImageSensitive($hash); }, ['POST']
+);
+
+$router->add(
     '/moderation/image-pending/reject/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
     function ($hash) { ModerationController::rejectImage($hash); }, ['POST']
 );
@@ -159,12 +164,6 @@ $router->add('/moderation/image-pending', [ModerationController::class, 'pending
 $router->add('/moderation/image-pending/page/(\d+)', [ModerationController::class, 'pending'], ['GET']);
 $router->add('/moderation/image-pending/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
     function ($hash) { ModerationController::servePendingImage($hash); }, ['GET']
-);
-
-// Delete image route (POST only)
-$router->add(
-    '/moderation/delete/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
-    function ($hash) { GalleryController::delete($hash); }, ['POST']
 );
 
 // Image Upvote route (POST only)
@@ -177,6 +176,12 @@ $router->add(
 $router->add(
     '/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/favorite',
     function ($hash) { GalleryController::favorite($hash); }, ['POST']
+);
+
+// Comment on image
+$router->add(
+    '/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/comment',
+    function ($hash) { GalleryController::comment($hash); }, ['POST']
 );
 
 // -------------------------

@@ -45,8 +45,39 @@
 }
 
 .gallery-item a {
-    display: block;
+    position: relative;
+    display: inline-block;
     width: 100%;
+}
+
+/* Thumbnail meta (views overlay) */
+.gallery-thumb-meta {
+    position: absolute;
+    left: 5px;
+    top: 135px;
+    z-index: 2;
+
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+
+    padding: 6px 10px;
+    border-radius: 999px;
+
+    background: rgba(0, 0, 0, 0.58);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.55);
+
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+
+    pointer-events: none;
+}
+
+.gallery-thumb-meta i {
+    font-size: 12px;
+    opacity: 0.9;
 }
 
 .gallery-item img {
@@ -282,7 +313,9 @@
 }
 
 .gallery-details-view h5 {
-    margin: 14px 0 0;
+    margin-top: 5px !important;
+    display: inline-block;
+    padding: 0 5px;
 }
 
 .gallery-details-view h5 a {
@@ -367,6 +400,294 @@
     font-size: 12px;
     white-space: normal;
     word-break: break-all;
+}
+
+/* =========================================================
+   COMMENTS MODAL (POPUP)
+========================================================= */
+.comments-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: none;
+
+    background: rgba(0, 0, 0, 0.70);
+    backdrop-filter: blur(3px);
+}
+
+.comments-modal-overlay.is-open {
+    display: block;
+}
+
+.comments-modal {
+    position: absolute;
+    left: 50%;
+    top: 30%;
+    transform: translate(-50%, -40%);
+
+    width: min(860px, calc(100vw - 40px));
+    max-height: min(80vh, 780px);
+
+    display: flex;
+    flex-direction: column;
+
+    padding: 16px;
+    border-radius: var(--radius-lg);
+
+    background: rgba(27, 31, 38, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 20px 55px rgba(0, 0, 0, 0.70);
+}
+
+.comments-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.comments-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text-main);
+}
+
+.comments-modal-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: rgba(34, 36, 38, 0.92);
+    color: #ffffff;
+    cursor: pointer;
+}
+
+.comments-modal-close:hover {
+    filter: brightness(1.06);
+}
+
+.comments-modal-body {
+    padding: 14px 2px;
+    overflow: auto;
+}
+
+/* Reuse your comment card styles if you already added them */
+.comments-modal-body .gallery-comments-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Sticky-ish form at bottom */
+.comments-modal-form {
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.comments-modal-form textarea {
+    flex: 1;
+    resize: vertical;
+    min-height: 90px;
+
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: rgba(10, 11, 14, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--color-text-main);
+    outline: none;
+}
+
+.comments-modal-form textarea:focus {
+    border-color: rgba(255, 255, 255, 0.18);
+    box-shadow: 0 0 0 2px rgba(120, 140, 255, 0.18);
+}
+
+.comments-modal-form button {
+    padding: 10px 14px;
+    border-radius: 999px;
+    background: rgba(34, 36, 38, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    color: #ffffff;
+    cursor: pointer;
+}
+
+.comments-modal-form button:hover {
+    filter: brightness(1.06);
+}
+
+.comments-modal-footer {
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.comments-modal form button,
+.comments-modal .comments-modal-form button {
+    align-self: flex-end;
+}
+
+/* =========================================================
+   COMMENTS MODAL - FORM LAYOUT FIX
+========================================================= */
+.comments-modal {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Body becomes scroll region */
+.comments-modal-body {
+    flex: 1;
+    overflow: auto;
+    padding: 14px 2px 0;
+}
+
+/* Form stays at bottom */
+.comments-modal-form {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Textarea full-width */
+.comments-modal-form textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 110px;
+
+    padding: 12px 12px;
+    border-radius: var(--radius-md);
+
+    background: rgba(10, 11, 14, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+
+    color: var(--color-text-main);
+    outline: none;
+}
+
+.comments-modal-form textarea::placeholder {
+    color: rgba(255, 255, 255, 0.35);
+}
+
+.comments-modal-form textarea:focus {
+    border-color: rgba(255, 255, 255, 0.18);
+    box-shadow: 0 0 0 2px rgba(120, 140, 255, 0.18);
+}
+
+/* Button row aligned right */
+.comments-modal-form button {
+    align-self: flex-end;
+
+    padding: 10px 16px;
+    border-radius: 999px;
+
+    background: rgba(34, 36, 38, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+
+    color: #ffffff;
+    cursor: pointer;
+}
+
+.comments-modal-form button:hover {
+    filter: brightness(1.06);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* =========================================================
+   COMMENTS LIST - SPACING / CARD LOOK
+========================================================= */
+.gallery-comments-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-bottom: 10px;
+}
+
+.gallery-comment {
+    padding: 12px;
+    border-radius: var(--radius-md);
+    background: rgba(10, 11, 14, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.gallery-comment-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.gallery-comment-meta strong {
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.gallery-comment-meta span {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.gallery-comment-body {
+    color: var(--color-text-main);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+/* Pagination controls */
+.comments-pagination {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.comments-page-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 78px;
+    padding: 9px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: rgba(34, 36, 38, 0.92);
+    color: #ffffff;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.comments-page-btn:hover {
+    filter: brightness(1.06);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.comments-page-btn.is-disabled {
+    opacity: 0.45;
+    cursor: default;
+    pointer-events: none;
+}
+
+.comments-page-info {
+    color: var(--color-text-muted);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.comments-modal-footer {
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 /* =========================================================
