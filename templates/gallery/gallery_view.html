@@ -7,9 +7,9 @@
                     <section>
                         {if $is_logged_in}
                         <div class="gallery-toolbar">
-                            <button title="Edit Image">
+                            <button type="button" class="js-open-edit-image" title="Edit Image">
                                 <i class="fa-solid fa-pen-to-square"></i>
-                            </button>
+                            </button>                            
 
                             <button title="Image Views">
                                 <i class="fa-solid fa-eye"></i>
@@ -98,10 +98,12 @@
                         </ul>
                     </section>
 
+                    {if $img_description}
                     <section>
                         <h3>Description</h3>
-                        <p>{$img_description}</p>
+                        <small>{$img_description}</small>
                     </section>
+                    {/if}
 
                     <section>
                         <h5><a href="/image/original/{$img_hash}">View Image</a></h5>
@@ -125,6 +127,49 @@
             </div>
         </div>
     </main>
+
+    {if $is_logged_in}
+    <div class="edit-image-modal-overlay js-edit-image-overlay" aria-hidden="true">
+        <div class="edit-image-modal" role="dialog" aria-modal="true" aria-label="Edit Image">
+            <div class="edit-image-modal-header">
+                <h3>Editing Image</h3>
+    
+                <button type="button" class="edit-image-modal-close js-close-edit-image" title="Close">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+    
+            {if $can_edit_image}
+            <form method="POST" action="/image/{$img_hash}/edit" class="edit-image-modal-form">
+                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+    
+                <div class="edit-image-field">
+                    <label>Image ID</label>
+                    <div class="edit-image-readonly">{$img_hash}</div>
+                </div>
+    
+                <div class="edit-image-field">
+                    <label for="description">Description</label>
+                    <textarea id="description" name="description" rows="5" placeholder="Write a description...">{$img_description}</textarea>
+                </div>
+    
+                <div class="edit-image-field">
+                    <label for="tags">Tags (coming soon)</label>
+                    <input id="tags" type="text" name="tags" placeholder="tag1 tag2 tag3" disabled>
+                </div>
+    
+                <div class="edit-image-actions">
+                    <button type="submit">Save</button>
+                </div>
+            </form>
+            {else}
+            <div class="edit-image-modal-denied">
+                <small>Sorry, you do not have permission to edit this image!</small>
+            </div>
+            {/if}
+        </div>
+    </div>    
+    {/if} 
 
     <div class="comments-modal-overlay js-comments-overlay" aria-hidden="true">
         <div class="comments-modal" role="dialog" aria-modal="true" aria-label="Image Comments">
@@ -195,46 +240,7 @@
 
         </div>
     </div>
-    
-    <script>
-        (function () {
-            const openBtn = document.querySelector('.js-open-comments');
-            const overlay = document.querySelector('.js-comments-overlay');
-            const closeBtn = document.querySelector('.js-close-comments');
-        
-            if (!openBtn || !overlay || !closeBtn) return;
-        
-            function openModal(e) {
-                if (e) e.preventDefault();
-                overlay.classList.add('is-open');
-                overlay.setAttribute('aria-hidden', 'false');
-                document.body.style.overflow = 'hidden';
-            }
-        
-            function closeModal() {
-                overlay.classList.remove('is-open');
-                overlay.setAttribute('aria-hidden', 'true');
-                document.body.style.overflow = '';
-            }
-        
-            openBtn.addEventListener('click', openModal);
-            closeBtn.addEventListener('click', closeModal);
 
-            // Auto-open modal when pagination links are used
-            const params = new URLSearchParams(window.location.search);
-            if (params.get('show_comments') === '1')
-            {
-                openModal();
-            }
-        
-            overlay.addEventListener('click', function (e) {
-                if (e.target === overlay) closeModal();
-            });
-        
-            document.addEventListener('keydown', function (e) {
-                if (e.key === 'Escape') closeModal();
-            });
-        })();
-        </script>        
+    <script src="/assets/js/gallery-modals.js"></script>
 
 {include file="global/footer.html"}

@@ -13,41 +13,42 @@
     </div>
     {/if}
     <main class="gallery-container">
-        {if !empty($images)}
-            <div class="gallery-grid">
-                {foreach $images as list($img_display_path, $img_url, $img_views)}
-                <div class="gallery-item">
-                    <a href="{$img_url}">
-                        <span class="gallery-thumb-meta" title="Views">
-                            <i class="fa-solid fa-eye"></i>
-                            {$img_views}
-                        </span>
-                        <img src="{$img_display_path}">
-                    </a>
-                </div>
-                {/foreach}
+    {if !empty($images)}
+        <div class="gallery-grid">
+            {foreach $images as list($img_display_path, $img_url, $img_views)}
+            <div class="gallery-item">
+                <a href="{$img_url}">
+                    <span class="gallery-thumb-meta" title="Views">
+                        <i class="fa-solid fa-eye"></i>
+                        {$img_views}
+                    </span>
+
+                    <img src="{$img_display_path}">
+                </a>
             </div>
+            {/foreach}
+        </div>
 
-            {if $pagination_prev || $pagination_next}
-                <div class="gallery-pagination">
-                    {if $pagination_prev}
-                    <a href="{$pagination_prev}">Prev</a>
-                    {/if}
-
-                    {foreach $pagination_pages as list($page_url, $page_number, $current)}
-                    <a href="{$page_url}" class="{if $current}current{/if}">
-                        {$page_number}
-                    </a>
-                    {/foreach}
-
-                    {if $pagination_next}
-                    <a href="{$pagination_next}">Next</a>
-                    {/if}
-                </div>
+        {if $pagination_prev || $pagination_next}
+        <div class="gallery-pagination">
+            {if $pagination_prev}
+            <a href="{$pagination_prev}">Prev</a>
             {/if}
-        {else}
-            <p style="text-align: center;">No images found or have not been approved yet!</p>
+
+            {foreach $pagination_pages as list($page_url, $page_number, $current)}
+            <a href="{$page_url}" class="{if $current}current{/if}">
+                {$page_number}
+            </a>
+            {/foreach}
+
+            {if $pagination_next}
+            <a href="{$pagination_next}">Next</a>
+            {/if}
+        </div>
         {/if}
+    {else}
+        <p style="text-align: center;">No images found or have not been approved yet!</p>
+    {/if}
     </main>
 
 {include file="global/footer.html"}

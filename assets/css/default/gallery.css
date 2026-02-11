@@ -315,7 +315,8 @@
 .gallery-details-view h5 {
     margin-top: 5px !important;
     display: inline-block;
-    padding: 0 5px;
+    padding: 0 2px;
+    font-size: 12px;
 }
 
 .gallery-details-view h5 a {
@@ -688,6 +689,150 @@
 .comments-modal-footer {
     padding-top: 12px;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* =========================================================
+   EDIT IMAGE MODAL
+========================================================= */
+.edit-image-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: none;
+
+    background: rgba(0, 0, 0, 0.70);
+    backdrop-filter: blur(3px);
+}
+
+.edit-image-modal-overlay.is-open {
+    display: block;
+}
+
+.edit-image-modal {
+    position: absolute;
+    left: 50%;
+    top: 40%;
+    transform: translate(-50%, -50%);
+
+    width: min(720px, calc(100vw - 40px));
+    max-height: min(80vh, 780px);
+
+    display: flex;
+    flex-direction: column;
+
+    padding: 16px;
+    border-radius: var(--radius-lg);
+
+    background: rgba(27, 31, 38, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 20px 55px rgba(0, 0, 0, 0.70);
+}
+
+.edit-image-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.edit-image-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text-main);
+}
+
+.edit-image-modal-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: rgba(34, 36, 38, 0.92);
+    color: #ffffff;
+    cursor: pointer;
+}
+
+.edit-image-modal-close:hover {
+    filter: brightness(1.06);
+}
+
+.edit-image-modal-form {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.edit-image-field label {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+
+.edit-image-readonly {
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: rgba(10, 11, 14, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--color-text-main);
+    overflow-wrap: anywhere;
+    font-size: 13px;
+}
+
+.edit-image-modal-form textarea,
+.edit-image-modal-form input[type="text"] {
+    width: 100%;
+    padding: 12px 12px;
+    border-radius: var(--radius-md);
+
+    background: rgba(10, 11, 14, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+
+    color: var(--color-text-main);
+    outline: none;
+    font-size: 12px;
+}
+
+.edit-image-modal-form textarea:focus,
+.edit-image-modal-form input[type="text"]:focus {
+    border-color: rgba(255, 255, 255, 0.18);
+    box-shadow: 0 0 0 2px rgba(120, 140, 255, 0.18);
+}
+
+.edit-image-modal-form input[disabled] {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.edit-image-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 4px;
+}
+
+.edit-image-actions button {
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: rgba(34, 36, 38, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    color: #ffffff;
+    cursor: pointer;
+}
+
+.edit-image-actions button:hover {
+    filter: brightness(1.06);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.edit-image-modal-denied {
+    padding-top: 14px;
+    color: var(--color-text-main);
+    line-height: 1.5;
 }
 
 /* =========================================================

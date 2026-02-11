@@ -223,7 +223,6 @@ class GalleryController
                 i.image_hash,
                 i.status,
                 i.description,
-                i.original_path,
                 i.age_sensitive,
                 i.created_at,
                 i.mime_type,
@@ -384,6 +383,24 @@ class GalleryController
             ];
         }
 
+        // Determine edit permissions for the UI (owner or staff)
+        $canEditImage = false;
+
+        $appUserId = (int) SessionManager::get('user_id');
+        if ($appUserId > 0)
+        {
+            $isOwner = ((int) ($img['user_id'] ?? 0) === $appUserId);
+
+            $userRole = Database::fetch("SELECT role_id FROM app_users WHERE id = :id LIMIT 1",
+                [':id' => $appUserId]
+            );
+
+            $roleName = RoleHelper::getRoleNameById((int) ($userRole['role_id'] ?? 0));
+            $isStaff = in_array($roleName, ['administrator', 'moderator'], true);
+
+            $canEditImage = ($isOwner || $isStaff);
+        }
+
         $template->assign('img_comment_count', $commentCount);
         $template->assign('comment_rows', $commentRows);
         $template->assign('comments_page', $commentsPage);
@@ -412,8 +429,79 @@ class GalleryController
         $template->assign('img_views', NumericalHelper::formatCount($img['views']));
         $template->assign('img_has_favorited', $hasFavorited);
 
+        $template->assign('can_edit_image', $canEditImage);
+
         $template->render('gallery/gallery_view.html');
     }
+
+    /**
+     * Edit a single image view with metadata.
+     *
+     * @param string $hash Unique hash identifier for the image.
+     * @return void
+     */
+    public static function edit(string $hash): void
+    {
+        $template = self::initTemplate();
+    
+        // Require login
+        RoleHelper::requireLogin();
+    
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            http_response_code(405);
+            $template->assign('title', 'Method Not Allowed');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+    
+        $csrfToken = $_POST['csrf_token'] ?? '';
+    
+        // Verify CSRF token to prevent cross-site request forgery
+        if (!Security::verifyCsrfToken($csrfToken))
+        {
+            http_response_code(403);
+            $template->assign('title', 'Access Denied');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+    
+        // Ensure hash is provided
+        $hash = trim($hash);
+        if ($hash === '')
+        {
+            http_response_code(404);
+            $template->assign('title', '404 Not Found');
+            $template->assign('message', 'Oops! We couldn’t find that image.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+    
+        $sql = "SELECT id, user_id, image_hash FROM app_images WHERE image_hash = :hash LIMIT 1";
+        $img = Database::fetch($sql, [':hash' => $hash]);
+    
+        if (!$img)
+        {
+            http_response_code(404);
+            $template->assign('title', 'Image Not Found');
+            $template->assign('message', 'The requested image could not be found.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+    
+        $description = trim((string)($_POST['description'] ?? ''));
+    
+        $sql = "UPDATE app_images SET description = :description, updated_at = NOW() WHERE image_hash = :image_hash LIMIT 1";
+        Database::execute($sql, [
+            ':description' => $description,
+            ':image_hash' => (string)$img['image_hash']
+        ]);
+    
+        header('Location: /image/' . $hash);
+        exit;
+    }    
 
     /**
      * Handle marking an image as favorite by logged-in user.

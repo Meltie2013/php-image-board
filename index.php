@@ -166,6 +166,12 @@ $router->add('/moderation/image-pending/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-
     function ($hash) { ModerationController::servePendingImage($hash); }, ['GET']
 );
 
+// Edit image
+$router->add(
+    '/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/edit',
+    function ($hash) { GalleryController::edit($hash); }, ['POST']
+);
+
 // Image Upvote route (POST only)
 $router->add(
     '/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/upvote',
