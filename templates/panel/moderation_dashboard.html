@@ -13,12 +13,8 @@
 
                 <div class="dashboard-content-wrapper">
                     <div class="dashboard-cards-wrapper">
+                        <div class="dashboard-label">Image Statistics</div>
                         <div class="dashboard-cards">
-                            <div class="dashboard-card small">
-                                <h3 class="total">Total Users</h3>
-                                <p class="total">{$total_users}</p>
-                            </div>
-
                             <div class="dashboard-card small">
                                 <h3 class="total">Total Images</h3>
                                 <p class="total">{$total_images}</p>
@@ -35,10 +31,32 @@
                             </div>
 
                             <div class="dashboard-card small">
-                                <h3 class="removed">Removed</h3>
+                                <h3 class="removed">Deleted</h3>
                                 <p class="removed">{$removed_count}</p>
                             </div>
 
+                            <div class="dashboard-card small">
+                                <h3 class="removed">Rejected</h3>
+                                <p class="removed">{$rejected_count}</p>
+                            </div>
+
+                            <div class="dashboard-card small">
+                                <h3 class="total">Combind Views</h3>
+                                <p class="total">{$total_view_count}</p>
+                            </div>
+
+                            <div class="dashboard-card small">
+                                <h3 class="total">Combind Likes</h3>
+                                <p class="total">&nbsp;</p>
+                            </div>
+                            <div class="dashboard-card small">
+                                <h3 class="total">Combind Favorites</h3>
+                                <p class="total">&nbsp;</p>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-label">Storage Statistics</div>
+                        <div class="dashboard-cards">
                             <div class="dashboard-card small">
                                 <div class="dashboard-card storage-graph" style="--used-percent: {$storage_usage_percent};">
                                     <div class="progress-circle"></div>

@@ -12,10 +12,11 @@
         <div class="logo">{$site_name}</div>
 
         <nav>
-            <a href="/index.php">Gallery</a>
+            <a href="#">Community Forum</a>
+            <a href="/gallery">Image Gallery</a>
 
             {if $is_logged_in}
-            <a href="/moderation">Moderation Panel</a>
+            <a href="/moderation/dashboard">Image Moderation</a>
             <a href="/profile/overview">My Profile</a>
             <a href="/user/logout">Logout</a>
             {else}

@@ -12,7 +12,9 @@
  * - Format dates into human-readable strings.
  * - Format birthdays separately with a simplified format.
  * - Automatically display relative dates:
- *     * Today
+ *     * X second(s) ago
+ *     * X minute(s) ago
+ *     * X hour(s) ago
  *     * Yesterday
  *     * X day(s) ago
  *     * 1 week ago
@@ -66,7 +68,29 @@ class DateHelper
         // Same calendar day
         if ($diffDays === 0)
         {
-            return 'Today';
+            $now = new DateTime('now', self::$appTimezone);
+
+            $diffSeconds = (int)abs($now->getTimestamp() - $datetime->getTimestamp());
+
+            // Seconds (under 1 minute)
+            if ($diffSeconds < 60)
+            {
+                return $diffSeconds . ' second' . ($diffSeconds === 1 ? '' : 's') . ' ago';
+            }
+
+            // Minutes (under 1 hour)
+            if ($diffSeconds < 3600)
+            {
+                $minutes = (int)floor($diffSeconds / 60);
+                return $minutes . ' minute' . ($minutes === 1 ? '' : 's') . ' ago';
+            }
+
+            // Hours (under 1 day)
+            if ($diffSeconds < 86400)
+            {
+                $hours = (int)floor($diffSeconds / 3600);
+                return $hours . ' hour' . ($hours === 1 ? '' : 's') . ' ago';
+            }
         }
 
         // Exactly 1 day difference

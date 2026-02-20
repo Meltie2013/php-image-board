@@ -23,7 +23,7 @@ class NumericalHelper
         }
 
         // Suffixes for different scales (thousands, millions, billions, trillions)
-        $units = ['', 'k', 'M', 'B', 'T'];
+        $units = ['', 'k', 'm', 'b', 't'];
 
         // Determine the "power" of 1000 (e.g., 1 = thousand, 2 = million)
         $power = (int)floor(log($number, 1000));

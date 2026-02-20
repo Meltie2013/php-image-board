@@ -204,8 +204,9 @@ main:not([class]) > h1 {
 }
 
 main:not([class]) > p {
-    text-align: center;
+    text-align: left;
     color: var(--color-text-muted);
+    font-size: 13px !important;
 }
 
 /* Tighten auth form spacing without affecting the rest of the app */
@@ -216,6 +217,7 @@ main:not([class]) form {
 main:not([class]) form button {
     width: 100%;
     margin-top: 6px;
+    margin-bottom: 10px;
 }
 
 main:not([class]) > p {

@@ -3,11 +3,26 @@
 /**
  * Controller responsible for handling gallery views, image display,
  * and serving stored image files to the client.
+ *
+ * Responsibilities:
+ * - Render the main gallery index with pagination
+ * - Render individual image detail pages (metadata, votes, favorites, comments)
+ * - Handle interactive actions (edit description, favorite, upvote, comment)
+ * - Serve original image files securely with optional per-user caching
+ *
+ * Security considerations:
+ * - CSRF protection for all state-changing POST actions
+ * - Per-session view tracking to reduce artificial view inflation
+ * - Age-gating logic for sensitive content (requires verified DOB)
+ * - Path normalization/realpath checks when serving files from disk
  */
 class GalleryController
 {
     /**
      * Cached config for controller usage.
+     *
+     * Stored statically so configuration is loaded once per request and reused
+     * across controller actions without repeated disk reads.
      *
      * @var array
      */
@@ -31,6 +46,9 @@ class GalleryController
     /**
      * Initialize template engine with optional cache clearing.
      *
+     * Also injects a CSRF token into the template scope so all rendered forms
+     * can submit state-changing actions safely.
+     *
      * @return TemplateEngine
      */
     private static function initTemplate(): TemplateEngine
@@ -48,6 +66,9 @@ class GalleryController
 
     /**
      * Retrieve a username by user ID.
+     *
+     * Used for display purposes in the gallery UI. Returns an empty string when
+     * the user ID is missing or no matching user is found.
      *
      * @param int|null $userId ID of the user, or null if not available.
      * @return string Username if found, otherwise empty string.
@@ -69,6 +90,11 @@ class GalleryController
     /**
      * Check if a user has access to age-sensitive content.
      *
+     * Access requires:
+     * - A valid date_of_birth
+     * - A non-null age_verified_at timestamp (indicating verification occurred)
+     * - DOB being older than the minimum allowed birth date based on site policy
+     *
      * @param array|null $user Array containing user's date_of_birth and age_verified_at
      * @param string $minBirthDate Calculated minimum birth date
      * @return bool True if allowed, false otherwise
@@ -80,6 +106,10 @@ class GalleryController
 
     /**
      * Display the gallery index with paginated images.
+     *
+     * Loads approved images, filters out age-sensitive items when the current user
+     * does not meet the age requirement, then builds pagination links and a compact
+     * image list for the template.
      *
      * @param int|null $page Current page number, defaults to 1.
      * @return void
@@ -105,7 +135,7 @@ class GalleryController
             );
         }
 
-        $requiredYears = (int)($config['profile']['years'] ?? 0);
+        $requiredYears = Security::sanitizeInt($config['profile']['years'] ?? 0);
         $minBirthDate = (new DateTime())->modify("-{$requiredYears} years")->format('Y-m-d');
 
         // Fetch all approved images
@@ -122,7 +152,7 @@ class GalleryController
         // Filter images based on age-sensitive access
         $filteredImages = array_filter($images, function ($img) use ($currentUser, $minBirthDate)
         {
-            return (int)$img['age_sensitive'] === 0 || self::checkAgeSensitiveAccess($currentUser, $minBirthDate);
+            return Security::sanitizeInt($img['age_sensitive'] === 0) || self::checkAgeSensitiveAccess($currentUser, $minBirthDate);
         });
 
         $totalImages = count($filteredImages);
@@ -135,15 +165,15 @@ class GalleryController
         foreach ($pageImages as $img)
         {
             $loopImages[] = [
-                "/image/original/" . $img['image_hash'],
-                "/image/" . $img['image_hash'],
+                "/gallery/original/" . $img['image_hash'],
+                "/gallery/" . $img['image_hash'],
                 (int)($img['views'] ?? 0),
             ];
         }
 
         // Pagination navigation links
-        $pagination_prev = $page > 1 ? ($page - 1 === 1 ? '/' : '/page/' . ($page - 1)) : null;
-        $pagination_next = $page < $totalPages ? '/page/' . ($page + 1) : null;
+        $pagination_prev = $page > 1 ? ($page - 1 === 1 ? '/' : '/gallery/page/' . ($page - 1)) : null;
+        $pagination_next = $page < $totalPages ? '/gallery/page/' . ($page + 1) : null;
 
         $range = $config['gallery']['pagination_range'];
         $start = max(1, $page - $range);
@@ -152,7 +182,7 @@ class GalleryController
         $pagination_pages = [];
         if ($start > 1)
         {
-            $pagination_pages[] = ['/page/1', 1, false];
+            $pagination_pages[] = ['/gallery/page/1', 1, false];
             if ($start > 2)
             {
                 $pagination_pages[] = [null, '...', false];
@@ -162,7 +192,7 @@ class GalleryController
         for ($i = $start; $i <= $end; $i++)
         {
             $pagination_pages[] = [
-                $i === 1 ? '/page/1' : '/page/' . $i,
+                $i === 1 ? '/gallery/page/1' : '/gallery/page/' . $i,
                 $i,
                 $i === $page
             ];
@@ -175,7 +205,7 @@ class GalleryController
                 $pagination_pages[] = [null, '...', false];
             }
 
-            $pagination_pages[] = ['/page/' . $totalPages, $totalPages, false];
+            $pagination_pages[] = ['/gallery/page/' . $totalPages, $totalPages, false];
         }
 
         $template = self::initTemplate();
@@ -190,6 +220,17 @@ class GalleryController
     /**
      * Display a single image view with metadata.
      *
+     * Includes:
+     * - Image metadata (dimensions, hashes, file size, created time, etc.)
+     * - Aggregated stats (votes, favorites, views)
+     * - Comment pagination and display
+     * - Permission flags for owner/staff edit actions
+     *
+     * Also enforces:
+     * - Approved-only visibility (404 for missing/unapproved)
+     * - Age-sensitive access control (403 when not allowed)
+     * - Per-session view tracking to prevent inflating counts by refreshing
+     *
      * @param string $hash Unique hash identifier for the image.
      * @return void
      */
@@ -201,7 +242,7 @@ class GalleryController
 
         $currentUser = null;
         $commentsPerPage = $config['gallery']['comments_per_page'];
-        $commentsPage = (int)($_GET['cpage'] ?? 1);
+        $commentsPage = Security::sanitizeInt($_GET['cpage'] ?? 1);
 
         if ($commentsPage < 1)
         {
@@ -265,7 +306,7 @@ class GalleryController
             return;
         }
 
-        if ((int)$img['age_sensitive'] === 1 && !self::checkAgeSensitiveAccess($currentUser, (new DateTime())->modify("-" . (int)(self::$config['profile']['years'] ?? 0) . " years")->format('Y-m-d')))
+        if (Security::sanitizeInt($img['age_sensitive'] === 1) && !self::checkAgeSensitiveAccess($currentUser, (new DateTime())->modify("-" . Security::sanitizeInt(self::$config['profile']['years'] ?? 0) . " years")->format('Y-m-d')))
         {
             http_response_code(403);
             $template->assign('title', 'Access Denied');
@@ -289,10 +330,10 @@ class GalleryController
             $viewedImages[] = $img['image_hash'];
             SessionManager::set('viewed_images', $viewedImages);
 
-            $img['views'] = (int)($img['views'] ?? 0) + 1;
+            $img['views'] = Security::sanitizeInt(($img['views'] ?? 0) + 1);
         }
 
-        if ((int)$img['age_sensitive'] === 1)
+        if (Security::sanitizeInt($img['age_sensitive'] === 1))
         {
             $alertColor   = 'alert-warning';
             $alertTag     = '<b>Heads Up!</b>';
@@ -386,20 +427,23 @@ class GalleryController
         // Determine edit permissions for the UI (owner or staff)
         $canEditImage = false;
 
-        $appUserId = (int) SessionManager::get('user_id');
+        $appUserId = Security::sanitizeInt(SessionManager::get('user_id'));
         if ($appUserId > 0)
         {
-            $isOwner = ((int) ($img['user_id'] ?? 0) === $appUserId);
+            $isOwner = (Security::sanitizeInt($img['user_id'] ?? 0) === $appUserId);
 
             $userRole = Database::fetch("SELECT role_id FROM app_users WHERE id = :id LIMIT 1",
                 [':id' => $appUserId]
             );
 
-            $roleName = RoleHelper::getRoleNameById((int) ($userRole['role_id'] ?? 0));
+            $roleName = RoleHelper::getRoleNameById(Security::sanitizeInt($userRole['role_id'] ?? 0));
             $isStaff = in_array($roleName, ['administrator', 'moderator'], true);
 
             $canEditImage = ($isOwner || $isStaff);
         }
+
+        // Image has tags (todo: not implemented)
+        $image_tags = false;
 
         $template->assign('img_comment_count', $commentCount);
         $template->assign('comment_rows', $commentRows);
@@ -430,12 +474,21 @@ class GalleryController
         $template->assign('img_has_favorited', $hasFavorited);
 
         $template->assign('can_edit_image', $canEditImage);
+        $template->assign('img_has_tag', $image_tags);
 
         $template->render('gallery/gallery_view.html');
     }
 
     /**
      * Edit a single image view with metadata.
+     *
+     * Updates the image description for a specific image hash.
+     * Access is restricted to authenticated users (RoleHelper::requireLogin()).
+     *
+     * Security considerations:
+     * - POST-only endpoint (rejects other methods)
+     * - CSRF protection for state-changing updates
+     * - Validates the image exists before updating
      *
      * @param string $hash Unique hash identifier for the image.
      * @return void
@@ -499,12 +552,20 @@ class GalleryController
             ':image_hash' => (string)$img['image_hash']
         ]);
     
-        header('Location: /image/' . $hash);
+        header('Location: /gallery/' . $hash);
         exit;
     }    
 
     /**
      * Handle marking an image as favorite by logged-in user.
+     *
+     * Creates a favorite association for the current user and the target image.
+     * Duplicate favorites are rejected to keep the relation unique.
+     *
+     * Security considerations:
+     * - Requires authentication
+     * - CSRF protection for POST action
+     * - Validates the image exists before inserting
      *
      * @param string $hash Unique hash of the image.
      */
@@ -551,7 +612,7 @@ class GalleryController
         {
             $template->assign('title', "Favorite Failed");
             $template->assign('message', "You have already marked this image as a favorite.");
-            $template->assign('link', "/image/{$hash}");
+            $template->assign('link', "/gallery/{$hash}");
             $template->render('errors/error_page.html');
             return;
         }
@@ -562,12 +623,20 @@ class GalleryController
 
         $template->assign('title', 'Successful Favorite!');
         $template->assign('message', "You have successfully marked this image as a favorite.");
-        $template->assign('link', "/image/{$hash}");
+        $template->assign('link', "/gallery/{$hash}");
         $template->render('errors/error_page.html');
     }
 
     /**
      * Handle up-vote for an image by logged-in user.
+     *
+     * Creates a vote association for the current user and the target image.
+     * Duplicate votes are rejected to enforce one vote per user per image.
+     *
+     * Security considerations:
+     * - Requires authentication
+     * - CSRF protection for POST action
+     * - Validates the image exists before inserting
      *
      * @param string $hash Unique hash of the image.
      */
@@ -614,7 +683,7 @@ class GalleryController
         {
             $template->assign('title', "Upvote Failed");
             $template->assign('message', "You have already upvoted this image.");
-            $template->assign('link', "/image/{$hash}");
+            $template->assign('link', "/gallery/{$hash}");
             $template->render('errors/error_page.html');
             return;
         }
@@ -625,12 +694,21 @@ class GalleryController
 
         $template->assign('title', 'Successful Upvote!');
         $template->assign('message', "You have successfully upvoted this image.");
-        $template->assign('link', "/image/{$hash}");
+        $template->assign('link', "/gallery/{$hash}");
         $template->render('errors/error_page.html');
     }
 
     /**
      * Handle posting a comment on an image by logged-in user.
+     *
+     * Inserts a new comment row tied to the image and current user, then redirects
+     * back to the image view. Empty comments are ignored.
+     *
+     * Security considerations:
+     * - Requires authentication
+     * - POST-only endpoint (rejects other methods)
+     * - CSRF protection for POST action
+     * - Sanitizes comment content before storing
      *
      * @param string $hash Unique hash of the image.
      */
@@ -668,7 +746,7 @@ class GalleryController
 
         if ($commentBody === '')
         {
-            header('Location: /image/' . $hash);
+            header('Location: /gallery/' . $hash);
             exit;
         }
 
@@ -696,12 +774,20 @@ class GalleryController
             ':comment_body' => $commentBody
         ]);
 
-        header('Location: /image/' . $hash);
+        header('Location: /gallery/' . $hash);
         exit;
     }
 
     /**
      * Serve an image file directly from the uploads directory.
+     *
+     * This endpoint is used by the gallery to deliver the actual image bytes.
+     * It enforces age restrictions (when applicable), uses a disk cache for speed,
+     * and protects against path traversal by resolving and validating real paths.
+     *
+     * Caching behavior:
+     * - Non-sensitive images may use global cache entries
+     * - Age-sensitive images use per-user cache keys to avoid cross-user leakage
      *
      * @param string $hash Unique hash identifier for the image.
      * @return void

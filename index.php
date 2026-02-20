@@ -111,19 +111,22 @@ $router->setNotFound(function ()
 // Explicit route registrations
 // -------------------------
 
+// Gallery index (new route)
+$router->add('/gallery', [GalleryController::class, 'index'], ['GET']);
+
 // Gallery upload routes
-$router->add('/upload-image', [UploadController::class, 'upload'], ['GET', 'POST']);
+$router->add('/gallery/upload-image', [UploadController::class, 'upload'], ['GET', 'POST']);
 
 // Gallery main routes
-$router->add('/page/(\d+)', [GalleryController::class, 'index'], ['GET']);
+$router->add('/gallery/page/(\d+)', [GalleryController::class, 'index'], ['GET']);
 
 // Gallery image routes
-$router->add('/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
+$router->add('/gallery/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
     [GalleryController::class, 'view'], ['GET']
 );
 
 // Gallery image direct serving (display original)
-$router->add('/image/original/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
+$router->add('/gallery/original/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
     function ($hash) { GalleryController::serveImage($hash); }, ['GET']
 );
 
@@ -140,7 +143,7 @@ $router->add('/profile/dob', [ProfileController::class, 'dob'], ['GET', 'POST'])
 $router->add('/profile/change-password', [ProfileController::class, 'change_password'], ['GET', 'POST']);
 
 // Moderation routes
-$router->add('/moderation', [ModerationController::class, 'dashboard'], ['GET']);
+$router->add('/moderation/dashboard', [ModerationController::class, 'dashboard'], ['GET']);
 $router->add('/moderation/image-comparison', [ModerationController::class, 'comparison'], ['GET', 'POST']);
 $router->add('/moderation/image-rehash', [ModerationController::class, 'rehash'], ['GET', 'POST']);
 
@@ -162,31 +165,31 @@ $router->add(
 // Pending images moderation page with optional page number
 $router->add('/moderation/image-pending', [ModerationController::class, 'pending'], ['GET']);
 $router->add('/moderation/image-pending/page/(\d+)', [ModerationController::class, 'pending'], ['GET']);
-$router->add('/moderation/image-pending/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
+$router->add('/moderation/image-pending/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
     function ($hash) { ModerationController::servePendingImage($hash); }, ['GET']
 );
 
 // Edit image
 $router->add(
-    '/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/edit',
+    '/gallery/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/edit',
     function ($hash) { GalleryController::edit($hash); }, ['POST']
 );
 
 // Image Upvote route (POST only)
 $router->add(
-    '/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/upvote',
+    '/gallery/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/upvote',
     function ($hash) { GalleryController::upvote($hash); }, ['POST']
 );
 
 // Favorite image route (POST only)
 $router->add(
-    '/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/favorite',
+    '/gallery/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/favorite',
     function ($hash) { GalleryController::favorite($hash); }, ['POST']
 );
 
 // Comment on image
 $router->add(
-    '/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/comment',
+    '/gallery/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/comment',
     function ($hash) { GalleryController::comment($hash); }, ['POST']
 );
 

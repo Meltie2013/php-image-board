@@ -4,13 +4,13 @@
         {include file="profile/profile_menu.html"}
 
         <section class="profile-content">
-            <h1>Edit Date of Birth</h1>
+            <h1>Update Date of Birth</h1>
 
             {if $error}
             <div class="alert alert-danger">
-                {foreach $error as $err}
-                    {$err}
-                {/foreach}
+            {foreach $error as $err}
+                {$err}
+            {/foreach}
             </div>
             {/if}
 
@@ -20,15 +20,26 @@
             </div>
             {/if}
 
+            {if $date_of_birth}
+            <div class="alert alert-warning">
+                <b>Warning:</b> Once you submit your DoB (Date of Birth), you can not change it. <a href="#">Learn more</a>
+            </div>
+            {else}
             <div class="alert alert-info">
                 <b>Message:</b> To view sensitive content, you must verify your age.
             </div>
+            {/if}
 
             <form method="post">
             <input type="hidden" name="csrf_token" value="{$csrf_token}">
                 <label for="date_of_birth">Date of Birth:</label>
                 <input type="date" name="date_of_birth" value="{$date_of_birth}">
+                
+                {if $date_of_birth}
+                <button type="submit" name="update_dob" disabled>Update Date of Birth</button>
+                {else}
                 <button type="submit" name="update_dob">Update Date of Birth</button>
+                {/if}
             </form>
         </section>
     </div>

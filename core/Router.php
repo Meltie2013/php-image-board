@@ -1,36 +1,56 @@
 <?php
 
+/**
+ * Minimal HTTP router for mapping URL paths to callbacks.
+ *
+ * Supports:
+ * - Static routes (e.g., "/login")
+ * - Simple parameter placeholders via "{param}" (e.g., "/image/{id}")
+ * - Per-route HTTP method restrictions (default: GET)
+ * - Optional default route for "/" and a configurable 404 handler
+ *
+ * This router is intentionally lightweight and framework-free. It matches the
+ * current request path (REQUEST_URI) against registered route regex patterns
+ * and invokes the first match.
+ */
 class Router
 {
-    // Array of routes (regex => [callback, methods])
+    // Array of routes keyed by regex pattern: pattern => [callback, allowedMethods]
     private array $routes = [];
 
-    // Not Found callback
+    // Callback executed when no route matches (404 handler)
     private $notFound = null;
 
-    // Default route callback
+    // Callback executed for "/" when no explicit route match is found
     private $defaultRoute = null;
 
     /**
-     * Add a route
+     * Register a route pattern and its handler.
      *
-     * @param string $path URL path (supports {param} placeholders)
-     * @param callable $callback Function to execute
-     * @param array $methods Allowed HTTP methods (default: GET)
+     * The $path may include simple placeholders in the form "{name}". Each placeholder
+     * becomes a single regex capture group matching any non-slash segment. Captured
+     * values are passed to the callback in placeholder order.
+     *
+     * Example:
+     *  add('/image/{id}', fn($id) => ...)
+     *
+     * @param string $path URL path pattern (supports {param} placeholders)
+     * @param callable $callback Handler to execute when the route matches
+     * @param array $methods Allowed HTTP methods for this route (default: ['GET'])
      */
     public function add(string $path, callable $callback, array $methods = ['GET']): void
     {
         // Convert placeholders {param} into regex capture groups
         $pattern = preg_replace('#\{([a-zA-Z0-9_]+)\}#', '([^/]+)', $path);
 
-        // Anchor the regex to match full path, case-sensitive
+        // Anchor the regex to require a full-path match
         $pattern = '#^' . $this->normalize($pattern) . '$#';
 
         $this->routes[$pattern] = [$callback, $methods];
     }
 
     /**
-     * Set 404 callback
+     * Set the callback executed when no routes match (404 handler).
      *
      * @param callable $callback
      */
@@ -40,7 +60,10 @@ class Router
     }
 
     /**
-     * Set default route (e.g., / -> login page)
+     * Set the callback executed for the root path "/" when no explicit route matches.
+     *
+     * Commonly used to route "/" to a login or landing page without requiring a
+     * dedicated route definition.
      *
      * @param callable $callback
      */
@@ -50,7 +73,18 @@ class Router
     }
 
     /**
-     * Dispatch the current request
+     * Dispatch the current HTTP request to the first matching route.
+     *
+     * Process:
+     * - Reads the request path from REQUEST_URI (path only, no query string)
+     * - Normalizes the path for consistent matching
+     * - Iterates through registered routes in insertion order
+     * - Validates HTTP method before executing the callback
+     *
+     * If no route matches:
+     * - Calls the default route for "/" when configured
+     * - Otherwise calls the notFound handler when configured
+     * - Falls back to a basic 404 response if no handler is set
      */
     public function dispatch(): void
     {
@@ -102,10 +136,14 @@ class Router
     }
 
     /**
-     * Normalize URL path (trim trailing slash, ensure leading slash)
+     * Normalize a URL path for consistent route matching.
      *
-     * @param string $path
-     * @return string
+     * - Ensures a single leading slash
+     * - Trims any trailing slashes
+     * - Guarantees "/" is returned for empty paths
+     *
+     * @param string $path Raw or partially-normalized path
+     * @return string Normalized path beginning with "/"
      */
     private function normalize(string $path): string
     {

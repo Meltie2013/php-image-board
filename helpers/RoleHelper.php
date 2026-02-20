@@ -1,5 +1,24 @@
 <?php
 
+/**
+ * RoleHelper
+ *
+ * Centralized helper for role lookup and access control checks.
+ *
+ * Responsibilities:
+ * - Resolve role names/descriptions from the app_roles table
+ * - Provide simple guard methods for protected routes/actions
+ *   (authentication required, or specific roles required)
+ *
+ * Intended usage:
+ * - Controllers call requireLogin() at the top of any action that must be
+ *   restricted to authenticated users.
+ * - Controllers call requireRole() for staff/admin-only pages or actions.
+ *
+ * Security notes:
+ * - Access control is enforced server-side via session values (user_id/user_role).
+ * - All DB lookups are performed through prepared statements (Database::fetch).
+ */
 class RoleHelper
 {
     /**
@@ -69,6 +88,10 @@ class RoleHelper
      * login page. Use this at the beginning of any protected controller
      * action where authentication is mandatory.
      *
+     * Notes:
+     * - Relies on SessionManager to determine authentication state.
+     * - Exits immediately after redirect to prevent further output.
+     *
      * @return void
      */
     public static function requireLogin(): void
@@ -87,6 +110,11 @@ class RoleHelper
      * This helper ensures that only users with specific roles can access
      * certain areas of the application. If the user does not match an
      * allowed role, they will be shown an access denied page.
+     *
+     * Notes:
+     * - Role comparisons are normalized to lowercase to avoid case mismatches.
+     * - If a TemplateEngine is provided, a friendly error page is rendered.
+     * - Always terminates the request with exit() after denying access.
      *
      * @param array $allowedRoles Array of allowed role names (e.g. ['administrator','moderator'])
      * @param TemplateEngine|null $template Optional template engine for rendering a nicer error page

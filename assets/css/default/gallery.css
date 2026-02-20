@@ -426,7 +426,7 @@
     top: 30%;
     transform: translate(-50%, -40%);
 
-    width: min(860px, calc(100vw - 40px));
+    width: min(720px, calc(100vw - 40px));
     max-height: min(80vh, 780px);
 
     display: flex;
@@ -642,6 +642,10 @@
     color: var(--color-text-main);
     line-height: 1.5;
     overflow-wrap: anywhere;
+}
+
+.gallery-comment-body small {
+    font-size: 12px !important;
 }
 
 /* Pagination controls */

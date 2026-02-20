@@ -1,12 +1,38 @@
 <?php
 
+/**
+ * Lightweight PDO database wrapper for the application.
+ *
+ * Provides a single shared PDO connection and convenience helpers for
+ * common query patterns (fetch one, fetch all, execute, insert).
+ *
+ * Notes:
+ * - Call Database::init() once during bootstrap before using any methods.
+ * - All queries use prepared statements to support safe parameter binding.
+ * - Includes basic transaction helpers for multi-step operations.
+ */
 class Database
 {
+    /**
+     * Shared PDO connection instance for the application.
+     *
+     * This class is intentionally static to provide a single, reusable connection
+     * across the request lifecycle (simple service-style access without DI).
+     *
+     * @var PDO|null
+     */
     private static ?PDO $pdo = null;
 
     /**
-     * Initialize database connection
+     * Initialize the PDO database connection (only once per request).
      *
+     * Builds a MySQL DSN from the provided configuration and creates a PDO instance
+     * with secure defaults:
+     * - Exceptions enabled for consistent error handling
+     * - Associative array fetch mode for ergonomic result access
+     * - Native prepared statements (no emulation) for safer parameter binding
+     *
+     * Expected config format:
      * @param array $config [
      *     'host' => 'localhost',
      *     'dbname' => 'dbname',
@@ -14,7 +40,8 @@ class Database
      *     'pass' => 'dbpass',
      *     'charset' => 'utf8mb4'
      * ]
-     * @throws PDOException
+     *
+     * @throws PDOException When the connection cannot be established.
      */
     public static function init(array $config): void
     {
@@ -22,9 +49,9 @@ class Database
         {
             $dsn = "mysql:host={$config['host']};dbname={$config['dbname']};charset={$config['charset']}";
             $options = [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,          // Throw exceptions
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,     // Fetch associative arrays
-                PDO::ATTR_EMULATE_PREPARES => false,                  // Use native prepares
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,          // Throw exceptions on SQL/connection errors
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,     // Return rows as associative arrays by default
+                PDO::ATTR_EMULATE_PREPARES => false,                  // Use native prepares for safer, more predictable bindings
             ];
 
             try
@@ -33,23 +60,29 @@ class Database
             }
             catch (PDOException $e)
             {
-                // Log error to server log, do not expose details to user
+                // Log full details server-side; never expose connection details to the client.
                 error_log("Database connection error: " . $e->getMessage());
+
+                // Re-throw a generic message to avoid leaking credentials/hostnames.
                 throw new PDOException("Database connection failed.");
             }
         }
     }
 
     /**
-     * Execute a query with optional parameters
+     * Prepare and execute a SQL statement with optional bound parameters.
      *
-     * @param string $sql
-     * @param array $params
-     * @return PDOStatement
+     * This is the core helper used by fetch/fetchAll/execute/insert.
+     * Always uses prepared statements to protect against SQL injection.
+     *
+     * @param string $sql SQL statement (with optional named or positional placeholders)
+     * @param array $params Values to bind to placeholders (named or positional)
+     * @return PDOStatement Executed statement ready for fetching or rowCount()
      */
     public static function query(string $sql, array $params = []): PDOStatement
     {
         self::ensureConnection();
+
         $stmt = self::$pdo->prepare($sql);
         $stmt->execute($params);
 
@@ -57,11 +90,13 @@ class Database
     }
 
     /**
-     * Fetch single row
+     * Fetch a single row from a query.
      *
-     * @param string $sql
-     * @param array $params
-     * @return array|null
+     * Returns the first row as an associative array, or null if no rows match.
+     *
+     * @param string $sql SQL statement
+     * @param array $params Values to bind to placeholders
+     * @return array|null First row, or null when no results are found
      */
     public static function fetch(string $sql, array $params = []): ?array
     {
@@ -72,11 +107,13 @@ class Database
     }
 
     /**
-     * Fetch all rows
+     * Fetch all rows from a query.
      *
-     * @param string $sql
-     * @param array $params
-     * @return array
+     * Returns an array of associative arrays. If no rows match, an empty array is returned.
+     *
+     * @param string $sql SQL statement
+     * @param array $params Values to bind to placeholders
+     * @return array List of rows (each row is an associative array)
      */
     public static function fetchAll(string $sql, array $params = []): array
     {
@@ -86,11 +123,14 @@ class Database
     }
 
     /**
-     * Insert a row and return last insert ID
+     * Execute an INSERT statement and return the last insert ID.
      *
-     * @param string $sql
-     * @param array $params
-     * @return string Last insert ID
+     * Use this for tables with auto-increment primary keys. The returned value is
+     * driver-dependent and is provided as a string by PDO.
+     *
+     * @param string $sql INSERT statement
+     * @param array $params Values to bind to placeholders
+     * @return string Last insert ID generated by the database connection
      */
     public static function insert(string $sql, array $params = []): string
     {
@@ -100,11 +140,14 @@ class Database
     }
 
     /**
-     * Update or delete row(s)
+     * Execute an UPDATE or DELETE statement and return the number of affected rows.
      *
-     * @param string $sql
-     * @param array $params
-     * @return int Rows affected
+     * Note: Depending on the database and settings, updating a row with identical values
+     * may report 0 affected rows even though the statement was valid.
+     *
+     * @param string $sql UPDATE/DELETE statement
+     * @param array $params Values to bind to placeholders
+     * @return int Number of rows affected
      */
     public static function execute(string $sql, array $params = []): int
     {
@@ -114,7 +157,9 @@ class Database
     }
 
     /**
-     * Begin transaction
+     * Begin a database transaction.
+     *
+     * Use transactions to ensure a set of related queries either all succeed or all fail.
      */
     public static function beginTransaction(): void
     {
@@ -123,7 +168,9 @@ class Database
     }
 
     /**
-     * Commit transaction
+     * Commit the current transaction.
+     *
+     * Finalizes all changes made since beginTransaction().
      */
     public static function commit(): void
     {
@@ -132,7 +179,9 @@ class Database
     }
 
     /**
-     * Rollback transaction
+     * Roll back the current transaction.
+     *
+     * Reverts all changes made since beginTransaction().
      */
     public static function rollBack(): void
     {
@@ -141,7 +190,11 @@ class Database
     }
 
     /**
-     * Ensure PDO connection exists
+     * Ensure the PDO connection has been initialized before usage.
+     *
+     * This prevents silent failures and makes misuse obvious during development.
+     *
+     * @throws RuntimeException If init() has not been called yet.
      */
     private static function ensureConnection(): void
     {
@@ -152,9 +205,12 @@ class Database
     }
 
     /**
-     * Get PDO instance (if needed)
+     * Get the underlying PDO instance.
      *
-     * @return PDO
+     * Prefer using Database::query()/fetch()/fetchAll() unless direct PDO access is required
+     * (e.g., advanced driver features or integration with a library expecting PDO).
+     *
+     * @return PDO Active PDO connection instance
      */
     public static function getPDO(): PDO
     {

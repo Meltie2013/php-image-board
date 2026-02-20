@@ -101,6 +101,7 @@
     flex-wrap: wrap;
     gap: 14px;
     padding-left: 60px;
+    margin-bottom: 25px !important;
 }
 
 .moderation-dashboard .dashboard-card {
@@ -133,6 +134,15 @@
     font-size: 22px;
     font-weight: 700;
     letter-spacing: 0.02em;
+}
+
+.moderation-dashboard .dashboard-label {
+    padding-left: 60px;
+    margin: 0 0 8px;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #cfd1dc;
 }
 
 .moderation-dashboard .dashboard-card .approved { color: #a8f5c2; }

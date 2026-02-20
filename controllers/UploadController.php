@@ -1,13 +1,33 @@
 <?php
 
 /**
-* Controller responsible for handling image uploads, hashing, duplicate detection,
-* resizing, and secure storage of uploaded files.
-*/
+ * Controller responsible for handling image uploads, hashing, duplicate detection,
+ * resizing, and secure storage of uploaded files.
+ *
+ * Responsibilities:
+ * - Render the upload form and process upload submissions
+ * - Validate uploaded files (size, MIME type, extension, image integrity)
+ * - Enforce storage limits before accepting large files
+ * - Resize uploaded images to configured maximum dimensions
+ * - Generate strong cryptographic hashes (md5/sha1/sha256/sha512) for integrity
+ * - Generate perceptual hashes (pHash/aHash/dHash) for similarity/duplicate detection
+ * - Store image metadata and hashes in the database
+ * - Log upload attempts (success/failure) for auditing and troubleshooting
+ *
+ * Security considerations:
+ * - CSRF protection on upload POST requests
+ * - Extension and MIME validation (server-side detection via finfo)
+ * - Image validity check via getimagesize()
+ * - Blocks executable/script file extensions
+ * - Randomized storage names to prevent predictable paths and overwrites
+ */
 class UploadController
 {
     /**
      * Cached config for controller usage.
+     *
+     * Stored statically so configuration is loaded once per request and reused
+     * across controller actions without repeated disk reads.
      *
      * @var array
      */
@@ -31,6 +51,9 @@ class UploadController
     /**
      * Initialize template engine with optional cache clearing.
      *
+     * Also injects a CSRF token into the template scope so the upload form can
+     * submit safely and all state-changing actions remain CSRF-protected.
+     *
      * @return TemplateEngine
      */
     private static function initTemplate(): TemplateEngine
@@ -48,28 +71,44 @@ class UploadController
     }
 
     /**
-    * Base directory where uploaded files are stored.
-    */
+     * Base directory where uploaded files are stored.
+     *
+     * This path is used as the filesystem root for writing resized images and
+     * reading stored files for hashing/metadata extraction.
+     */
     private static $uploadDir = __DIR__ . "/../uploads/";
 
     /**
-    * Disallowed file extensions for uploads (for security).
-    */
+     * Disallowed file extensions for uploads (for security).
+     *
+     * These extensions are blocked to reduce the risk of uploading executable
+     * or script content that could be run if misconfigured server rules exist.
+     */
     private static $blockedExtensions = [
         'php','php3','php4','php5','phtml','cgi','pl','asp','aspx',
         'exe','bat','sh','cmd','com','dll','js','vbs','py','rb'
     ];
 
     /**
-    * Log details of an upload attempt into the database.
-    *
-    * @param int $userId ID of the user attempting the upload.
-    * @param array $file File array from $_FILES.
-    * @param string $status Upload status (success/failed).
-    * @param array $errors Error messages if failed.
-    * @param string|null $storedPath Path where the file was stored.
-    * @return void
-    */
+     * Log details of an upload attempt into the database.
+     *
+     * Captures:
+     * - Original filename and detected extension
+     * - Reported MIME from the browser (untrusted) and detected MIME via finfo
+     * - File size and IP address
+     * - Final stored path when successful (or null when failed)
+     * - Failure reason(s) when validation fails
+     *
+     * This creates an audit trail that is useful for debugging user issues,
+     * detecting abuse patterns, and reviewing repeated malicious attempts.
+     *
+     * @param int $userId ID of the user attempting the upload.
+     * @param array $file File array from $_FILES.
+     * @param string $status Upload status (success/failed).
+     * @param array $errors Error messages if failed.
+     * @param string|null $storedPath Path where the file was stored.
+     * @return void
+     */
     private static function logUploadAttempt($userId, $file, $status, $errors = [], $storedPath = null)
     {
         $originalName   = $file['name'] ?? 'unknown';
@@ -115,14 +154,25 @@ class UploadController
     }
 
     /**
-    * Handle image upload request.
-    * - Validates file type and size
-    * - Generates perceptual hashes
-    * - Detects near-duplicates
-    * - Stores metadata in database
-    *
-    * @return void
-    */
+     * Handle image upload request.
+     * - Validates file type and size
+     * - Generates perceptual hashes
+     * - Detects near-duplicates
+     * - Stores metadata in database
+     *
+     * Expected behavior:
+     * - GET: Render upload form with max size and CSRF token
+     * - POST: Validate upload and store image + metadata/hashes on success
+     *
+     * Security considerations:
+     * - Requires authentication (RoleHelper::requireLogin())
+     * - CSRF token validation
+     * - Enforces max upload size and storage capacity constraints
+     * - Validates MIME via finfo and final extension allowlist
+     * - Ensures uploaded file is a real image via getimagesize()
+     *
+     * @return void
+     */
     public static function upload()
     {
         $errors = [];
@@ -143,7 +193,7 @@ class UploadController
 
             $userId = SessionManager::get('user_id');
 
-            $csrfToken = $_POST['csrf_token'] ?? '';
+            $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
 
             // Verify CSRF token to prevent cross-site request forgery
             if (!Security::verifyCsrfToken($csrfToken))
@@ -192,12 +242,14 @@ class UploadController
                     $errors[] = "Invalid file type.";
                 }
 
+                // Block dangerous/exec extensions regardless of MIME (defense-in-depth)
                 $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
                 if (in_array($ext, self::$blockedExtensions))
                 {
                     $errors[] = "File extension .$ext is not allowed.";
                 }
                 
+                // Prefer extension derived from detected MIME to avoid spoofed filenames
                 $safeExt = $mimeToExt[$mimeType] ?? $ext;
                 
                 // Ensure the final extension is one of the allowed types
@@ -206,6 +258,7 @@ class UploadController
                     $errors[] = "File extension .$safeExt is not allowed.";
                 }
 
+                // Verify the payload parses as an image (reduces non-image spoofing)
                 if (!@getimagesize($file['tmp_name']))
                 {
                     $errors[] = "The file is not a valid image.";
@@ -214,34 +267,43 @@ class UploadController
 
             if (!empty($errors))
             {
+                // Record failed attempts for auditing/troubleshooting
                 self::logUploadAttempt($userId, $file, 'failed', $errors);
             }
 
             if (empty($errors))
             {
+                // Persist the upload using a randomized basename to avoid collisions and predictability
                 $ext = $safeExt;
                 $basename = 'img_' . bin2hex(random_bytes(16));
                 $originalPath = "uploads/images/original/" . $basename . "." . $ext;
 
+                // Move to a temporary location first (safer lifecycle before final resize/store)
                 $tmpPath = self::$uploadDir . "tmp_" . $basename . "." . $ext;
                 move_uploaded_file($file['tmp_name'], $tmpPath);
 
+                // Create final resized copy and store in uploads path
                 self::makeResized($tmpPath, $originalPath, 1280, 1280);
 
+                // Remove temporary file after successful resize
                 unlink($tmpPath);
 
+                // Read stored file contents for integrity hashes
                 $fileData = file_get_contents(self::$uploadDir . str_replace("uploads/", "", $originalPath));
                 $md5 = md5($fileData);
                 $sha1 = sha1($fileData);
                 $sha256 = hash("sha256", $fileData);
                 $sha512 = hash("sha512", $fileData);
 
+                // Extract image metadata from the stored file
                 [$width, $height] = getimagesize(self::$uploadDir . str_replace("uploads/", "", $originalPath));
                 $sizeBytes = filesize(self::$uploadDir . str_replace("uploads/", "", $originalPath));
                 $mimeType = mime_content_type(self::$uploadDir . str_replace("uploads/", "", $originalPath));
 
+                // Generate a unique, user-facing image identifier
                 $imageHash = self::generateImageHashFormatted();
 
+                // Optionally auto-approve uploads (debug/development mode)
                 $moderated = $config['debugging']['allow_approve_uploads'] ? 'NOW()' : 'NULL';
 
                 // Use updated safe hash functions
@@ -250,7 +312,7 @@ class UploadController
                 $ahash = HashingHelper::aHash($fullPath);
                 $dhash = HashingHelper::dHash($fullPath);
 
-                // Split phash into 16 blocks of 4 chars each
+                // Split phash into 16 blocks of 4 chars each (supports faster similarity querying)
                 $phashBlocks = [];
                 for ($i = 0; $i < 16; $i++)
                 {
@@ -309,6 +371,7 @@ class UploadController
             }
         }
 
+        // Provide page state to the view (errors, success text, and upload limits)
         $template->assign('error', $errors);
         $template->assign('success', $success);
         $template->assign('max_image_size', $config['gallery']['upload_max_image_size']);
@@ -327,6 +390,12 @@ class UploadController
      *  - mixed_upper (letters+digits, uppercase letters)
      *
      * Uses batch checking to reduce database queries for collisions.
+     *
+     * Implementation notes:
+     * - Generates a small batch of candidates per loop, then checks all at once
+     *   to reduce repeated round trips to the database.
+     * - Uses cryptographically secure randomness (random_int) for each character.
+     * - Alternates per-group balance to avoid generating overly digit-heavy hashes.
      *
      * @param string|null $hashType Optional hash type, defaults to 'mixed_lower'
      * @return string A unique image hash
@@ -449,19 +518,19 @@ class UploadController
     }
   
     /**
-    * Creates a resized copy of the given image while preserving
-    * aspect ratio and handling transparency for PNG/WebP formats.
-    *
-    * Upscales images ≤600x600 by 2x but never exceeds 1280x1280.
-    * Maintains maximum image quality and optionally sharpens upscaled images.
-    *
-    * @param string $src Path to source image
-    * @param string $dest Destination relative path for resized image
-    * @param int $maxWidth Maximum width constraint
-    * @param int $maxHeight Maximum height constraint
-    *
-    * @return void
-    */
+     * Creates a resized copy of the given image while preserving
+     * aspect ratio and handling transparency for PNG/WebP formats.
+     *
+     * Delegates the heavy lifting to ImageHelper::resize(), which centralizes
+     * the resizing implementation so upload handling stays focused on workflow.
+     *
+     * @param string $src Path to source image
+     * @param string $dest Destination relative path for resized image
+     * @param int $maxWidth Maximum width constraint
+     * @param int $maxHeight Maximum height constraint
+     *
+     * @return void
+     */
     private static function makeResized($src, $dest, $maxWidth, $maxHeight)
     {
         $srcPath = $src;

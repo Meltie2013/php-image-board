@@ -1,5 +1,24 @@
 <?php
 
+/**
+ * Lightweight template compiler and renderer for the gallery UI.
+ *
+ * Provides a small, framework-free templating layer with:
+ * - Variable interpolation:      {$var}
+ * - Function output helpers:     {function($var)}
+ * - Basic control structures:    {if ...}{else}{/if}, {foreach ... as ...}{/foreach}, {for ...}{/for}, {while ...}{/while}
+ * - Template includes:           {include file="partial.tpl"}
+ * - Raw output escape hatch:     {raw $var}
+ *
+ * Templates are compiled to cached PHP files for performance. The compiled output
+ * uses safe defaults (escaping, tag stripping with a limited allowlist) to reduce
+ * XSS risk when rendering user-controlled values.
+ *
+ * Notes:
+ * - Globals are automatically injected (site name, version, user info, etc.).
+ * - Cache can be disabled via config for development; disabling also clears cache.
+ * - This compiler intentionally supports a limited syntax to keep it auditable.
+ */
 class TemplateEngine
 {
     private string $templateDir;
@@ -8,6 +27,18 @@ class TemplateEngine
     private array $globals = [];
     private bool $disableCache = false;
 
+    /**
+     * Create a new TemplateEngine instance and prepare cache + automatic globals.
+     *
+     * Initializes:
+     * - Template directory and cache directory paths
+     * - Cache directory creation if missing
+     * - Automatic global variables shared across all templates
+     * - Cache behavior based on configuration (optionally clears cache when disabled)
+     *
+     * Note: This constructor loads the project config internally so templates can
+     * reference consistent values (site name, version, pagination settings, etc.).
+     */
     public function __construct(string $templateDir, string $cacheDir, array $config = [])
     {
         $config = require __DIR__ . '/../config/config.php';
@@ -28,6 +59,7 @@ class TemplateEngine
             'age_requirement' => $config['profile']['years'],
             'site_user' => SessionManager::get('username', ''),
             'displayed_comments' => $config['gallery']['comments_per_page'],
+            'site_user_role' => SessionManager::get('user_role'),
         ];
 
         // Disable cache if config set
@@ -38,11 +70,28 @@ class TemplateEngine
         }
     }
 
+    /**
+     * Assign a template variable for use during render().
+     *
+     * Variables assigned here override globals when keys overlap (because vars are
+     * merged after globals at render time).
+     *
+     * @param string $key Variable name used in templates (e.g., "images")
+     * @param mixed $value Value to expose to the template
+     */
     public function assign(string $key, mixed $value): void
     {
         $this->vars[$key] = $value;
     }
 
+    /**
+     * Render a template to the output buffer.
+     *
+     * Merges globals and assigned variables, extracts them into the template scope,
+     * then includes the compiled PHP version of the template.
+     *
+     * @param string $template Template filename relative to templateDir (e.g., "gallery/index.tpl")
+     */
     public function render(string $template): void
     {
         extract(array_merge($this->globals, $this->vars), EXTR_SKIP);
@@ -50,6 +99,22 @@ class TemplateEngine
         include $this->compile($template);
     }
 
+    /**
+     * Compile a template into a cached PHP file and return the compiled path.
+     *
+     * Compilation occurs when:
+     * - The compiled file does not exist yet
+     * - The source template is newer than the compiled file
+     * - Caching is disabled via configuration
+     *
+     * The compiler performs a single-pass parse using regex callbacks to transform
+     * supported template tags into PHP output/control structures.
+     *
+     * @param string $template Template filename relative to templateDir
+     * @return string Absolute path to the compiled PHP file
+     *
+     * @throws RuntimeException When the source template does not exist
+     */
     private function compile(string $template): string
     {
         $templatePath = $this->templateDir . '/' . $template;
@@ -66,6 +131,14 @@ class TemplateEngine
             $content = file_get_contents($templatePath);
 
             // --- Unified template parsing ---
+            // Converts supported template directives into PHP:
+            // - {$var}                 => echo (tag-stripped with allowlist)
+            // - {func(args)}           => echo escaped function output
+            // - {if}/{elseif}/{else}   => PHP condition blocks
+            // - {foreach}/{for}/{while}=> PHP loop blocks
+            // - {block name="..."}     => Comment markers (structure hint only)
+            // - {include file="..."}   => Recursive compile + include of partial templates
+            // - {raw $var}             => Raw output (use sparingly; trusted content only)
             $content = preg_replace_callback(
                 '/\{\s*\$([a-zA-Z0-9_]+)\s*\}|' . // {$var}
                 '\{([a-zA-Z_][a-zA-Z0-9_]*)\((.*?)\)\}|' . // {function($var)}
@@ -83,7 +156,8 @@ class TemplateEngine
                 '\{\/block\}|' . // {/block}
                 '\{include\s+file="(.+?)"\}|' . // {include file="..."}
                 '\{raw\s+\$([a-zA-Z0-9_]+)\}/s', // {raw $var}
-                function($m) {
+                function($m)
+                {
                     if (!empty($m[1])) return '<?= strip_tags((string)($' . $m[1] . ' ?? ""), "<b><i><u><strong><em>") ?>';
                     if (!empty($m[2])) return '<?= htmlspecialchars(' . $m[2] . '(' . trim($m[3]) . '), ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8") ?>';
                     if (!empty($m[4])) return "\n<?php if (" . str_replace('||', ' || ', trim($m[4])) . "): ?>";
@@ -115,6 +189,8 @@ class TemplateEngine
             );
 
             // --- Cleanup ---
+            // Normalizes whitespace in compiled output for cleaner diffs and fewer
+            // unexpected layout changes in rendered HTML.
             $content = preg_replace('/[ \t]+$/m', '', $content); // trailing spaces
             $content = preg_replace("/\n{3,}/", "\n\n", $content); // max 2 blank lines
 
@@ -124,6 +200,12 @@ class TemplateEngine
         return $compiledPath;
     }
 
+    /**
+     * Clear all compiled template files from the cache directory.
+     *
+     * Useful during development or when deploying template changes.
+     * Only removes compiled PHP files generated by this engine.
+     */
     public function clearCache(): void
     {
         foreach (glob($this->cacheDir . '/*.php') as $file)

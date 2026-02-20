@@ -1,13 +1,37 @@
 <?php
 
+/**
+ * Session bootstrapper and persistence layer for the application.
+ *
+ * Responsibilities:
+ * - Starts PHP sessions with hardened cookie settings (HttpOnly, SameSite, Secure when HTTPS)
+ * - Enforces a lightweight session fingerprint (User-Agent + normalized IP) to reduce hijacking risk
+ * - Tracks inactivity timeout and performs automatic logout when exceeded
+ * - Persists session state to the database for auditing, multi-device management, and cleanup
+ *
+ * Notes:
+ * - Call SessionManager::init() early during bootstrap before reading/writing session data.
+ * - Fingerprinting is intentionally "lenient" to reduce false positives (e.g., mobile networks).
+ * - Database persistence assumes the app_sessions table exists and is writable.
+ */
 class SessionManager
 {
-    // Configuration array
+    // Session configuration loaded from config.php (cookie name, timeout settings, etc.)
     private static array $config = [];
+
+    // Tracks the active session_id stored in the database for this request lifecycle
     private static ?string $dbSessionId = null;
 
     /**
-     * Initialize session with secure settings
+     * Initialize the PHP session with secure defaults and persistence.
+     *
+     * Process:
+     * - Applies session name and hardened cookie parameters
+     * - Starts the PHP session (if not already started)
+     * - Verifies/sets a fingerprint to detect suspicious session reuse
+     * - Enforces inactivity timeout
+     * - Persists the session to the database for tracking and logout control
+     * - Performs passive fingerprint diversity monitoring (detection only)
      *
      * @param array $config Configuration array from config.php
      */
@@ -37,7 +61,7 @@ class SessionManager
         {
             $_SESSION['fingerprint'] = $fingerprint;
         }
-        elseif ($_SESSION['fingerprint'] !== $fingerprint)
+        else if ($_SESSION['fingerprint'] !== $fingerprint)
         {
             // Possible hijack attempt – log/jail and destroy session
             self::logSuspiciousActivity($_SESSION['user_id'] ?? null, 'fingerprint_mismatch');
@@ -56,7 +80,14 @@ class SessionManager
     }
 
     /**
-     * Generate a lenient fingerprint hash for the current request
+     * Generate a lenient fingerprint hash for the current request.
+     *
+     * Fingerprint inputs:
+     * - User-Agent (stable per browser/device)
+     * - Normalized IP (reduced precision to tolerate common IP churn)
+     *
+     * This is not meant to be "perfect identity"—only a best-effort signal to
+     * detect obvious hijacking while minimizing false positives.
      */
     private static function generateFingerprint(): string
     {
@@ -68,7 +99,13 @@ class SessionManager
     }
 
     /**
-     * Normalize IP for fingerprinting (lenient)
+     * Normalize an IP address for fingerprinting (intentionally lenient).
+     *
+     * - IPv4: zeros the last octet (e.g., 203.0.113.42 -> 203.0.113.0)
+     * - IPv6: keeps only the first 4 hextets (e.g., 2001:db8:abcd:0012::)
+     *
+     * This reduces false positives for users behind NAT, carriers, or networks
+     * that rotate addresses frequently.
      */
     private static function normalizeIp(string $ip): string
     {
@@ -77,7 +114,7 @@ class SessionManager
             $parts = explode('.', $ip);
             return "{$parts[0]}.{$parts[1]}.{$parts[2]}.0";
         }
-        elseif (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6))
+        else if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6))
         {
             $parts = explode(':', $ip);
             return implode(':', array_slice($parts, 0, 4)) . '::';
@@ -87,14 +124,19 @@ class SessionManager
     }
 
     /**
-     * Log suspicious activity for auditing / temporary jail
+     * Record suspicious behavior for auditing and potential temporary jail logic.
+     *
+     * Inserts a record into user_security_events with a time window indicating
+     * when the activity should be considered blocked (if your app enforces it).
+     *
+     * @param int|null $userId User ID when known; null for anonymous sessions
+     * @param string $eventType Short event key describing the incident
+     * @param int $blockMinutes Suggested block window length (default: 10 minutes)
      */
     private static function logSuspiciousActivity(?int $userId, string $eventType, int $blockMinutes = 10): void
     {
         $blockedUntil = date('Y-m-d H:i:s', time() + ($blockMinutes * 60));
-        Database::query(
-            "INSERT INTO user_security_events (user_id, ip, event_type, blocked_until)
-             VALUES (:uid, :ip, :event, :blocked)",
+        Database::query("INSERT INTO user_security_events (user_id, ip, event_type, blocked_until) VALUES (:uid, :ip, :event, :blocked)",
             [
                 'uid' => $userId,
                 'ip' => inet_pton($_SERVER['REMOTE_ADDR'] ?? ''),
@@ -105,8 +147,11 @@ class SessionManager
     }
 
     /**
-     * Monitor User-Agent fingerprint diversity for suspicious patterns
-     * Detection only – no blocking
+     * Monitor User-Agent fingerprint diversity for suspicious patterns.
+     *
+     * Detection only – this method does not block requests.
+     * It flags cases where the same User-Agent string is associated with many
+     * distinct fingerprints in a short time window (a common bot/attack signal).
      */
     private static function monitorFingerprintPatterns(): void
     {
@@ -115,10 +160,7 @@ class SessionManager
         $now = date('Y-m-d H:i:s');
 
         // Count distinct fingerprints using this UA in the last 5 minutes
-        $row = Database::fetch(
-            "SELECT COUNT(DISTINCT fingerprint) AS total
-             FROM app_sessions
-             WHERE ua = :ua AND last_activity > DATE_SUB(:now, INTERVAL 5 MINUTE)",
+        $row = Database::fetch("SELECT COUNT(DISTINCT fingerprint) AS total FROM app_sessions WHERE ua = :ua AND last_activity > DATE_SUB(:now, INTERVAL 5 MINUTE)",
             [
                 'ua' => $ua,
                 'now' => $now
@@ -133,8 +175,7 @@ class SessionManager
         if ($count >= $threshold)
         {
             // Insert or update security_events table
-            Database::query(
-                "INSERT INTO security_events (ua, fingerprints, first_seen, last_seen, flagged_at, notes)
+            Database::query("INSERT INTO security_events (ua, fingerprints, first_seen, last_seen, flagged_at, notes)
                  VALUES (:ua, :fingerprints, :first_seen, :last_seen, :flagged_at, :notes)
                  ON DUPLICATE KEY UPDATE fingerprints = :fingerprints_upd, last_seen = :last_seen_upd",
                 [
@@ -152,8 +193,12 @@ class SessionManager
     }
 
     /**
-     * Check if user session has timed out due to inactivity
-     * Logs out user automatically if timeout reached
+     * Enforce inactivity timeout for the current session.
+     *
+     * If the session has been idle longer than the configured timeout,
+     * the session is destroyed and the user is redirected to login.
+     *
+     * This method also updates the "last_activity" timestamp on each request.
      */
     private static function checkTimeout(): void
     {
@@ -166,7 +211,7 @@ class SessionManager
             if ($inactive > $timeout)
             {
                 self::destroy(); // Auto logout
-                header("Location: /login");
+                header("Location: /user/login");
                 exit();
             }
         }
@@ -175,7 +220,16 @@ class SessionManager
     }
 
     /**
-     * Persist session to database
+     * Persist the current session state to the database.
+     *
+     * Stores metadata for auditing and security analysis:
+     * - user_id (when authenticated)
+     * - session_id, IP (binary), User-Agent, fingerprint
+     * - first_ip (captures the initial IP seen for the session)
+     * - last_activity and optional expires_at
+     *
+     * Session contents are serialized and stored to support recovery/debugging
+     * and administrative session management (use with care).
      */
     private static function persistSession(): void
     {
@@ -196,18 +250,14 @@ class SessionManager
         $data = serialize($_SESSION);
 
         // Check if session already exists
-        $exists = Database::fetch(
-            "SELECT session_id FROM app_sessions WHERE session_id = :sid LIMIT 1",
+        $exists = Database::fetch("SELECT session_id FROM app_sessions WHERE session_id = :sid LIMIT 1",
             ['sid' => $sessionId]
         );
 
         if ($exists)
         {
-            Database::query(
-                "UPDATE app_sessions
-                 SET user_id = :uid, ip = :ip, first_ip = :first_ip, ua = :ua, fingerprint = :fp,
-                     last_activity = :last, expires_at = :expires, data = :data
-                 WHERE session_id = :sid",
+            Database::query("UPDATE app_sessions SET user_id = :uid, ip = :ip, first_ip = :first_ip, ua = :ua, fingerprint = :fp,
+                     last_activity = :last, expires_at = :expires, data = :data WHERE session_id = :sid",
                 [
                     'uid' => $userId,
                     'ip' => $ip,
@@ -223,8 +273,7 @@ class SessionManager
         }
         else
         {
-            Database::query(
-                "INSERT INTO app_sessions (session_id, user_id, ip, first_ip, ua, fingerprint, last_activity, expires_at, data)
+            Database::query("INSERT INTO app_sessions (session_id, user_id, ip, first_ip, ua, fingerprint, last_activity, expires_at, data)
                  VALUES (:sid, :uid, :ip, :first_ip, :ua, :fp, :last, :expires, :data)",
                 [
                     'sid' => $sessionId,
@@ -244,7 +293,10 @@ class SessionManager
     }
 
     /**
-     * Regenerate session ID (for login or security sensitive actions)
+     * Regenerate the session ID and keep the database record in sync.
+     *
+     * This should be called after authentication and other security-sensitive
+     * events to reduce session fixation risk.
      */
     public static function regenerate(): void
     {
@@ -253,8 +305,7 @@ class SessionManager
         self::$dbSessionId = session_id();
 
         // Update DB to new session ID
-        Database::query(
-            "UPDATE app_sessions SET session_id = :new WHERE session_id = :old",
+        Database::query("UPDATE app_sessions SET session_id = :new WHERE session_id = :old",
             ['new' => self::$dbSessionId, 'old' => $oldSession]
         );
 
@@ -262,22 +313,22 @@ class SessionManager
     }
 
     /**
-     * Destroy current session and all data
+     * Destroy the current session and remove associated persisted data.
+     *
+     * Deletes the app_sessions record, expires the session cookie, and clears
+     * the PHP session from memory to fully log the user out.
      */
     public static function destroy(): void
     {
         // Delete DB record
         if (self::$dbSessionId)
         {
-            Database::query(
-                "DELETE FROM app_sessions WHERE session_id = :sid",
+            Database::query("DELETE FROM app_sessions WHERE session_id = :sid",
                 ['sid' => self::$dbSessionId]
             );
 
             self::$dbSessionId = null;
         }
-
-        $_SESSION = [];
 
         if (ini_get("session.use_cookies"))
         {
@@ -292,7 +343,10 @@ class SessionManager
     }
 
     /**
-     * Set session variable
+     * Set a session value and persist the updated session to the database.
+     *
+     * @param string $key Session key name
+     * @param mixed $value Value to store
      */
     public static function set(string $key, mixed $value): void
     {
@@ -301,7 +355,11 @@ class SessionManager
     }
 
     /**
-     * Get session variable
+     * Get a session value with an optional default when the key is missing.
+     *
+     * @param string $key Session key name
+     * @param mixed $default Value returned when the key is not set
+     * @return mixed Stored session value or the provided default
      */
     public static function get(string $key, mixed $default = null): mixed
     {
@@ -309,7 +367,10 @@ class SessionManager
     }
 
     /**
-     * Check if session variable exists
+     * Determine whether a session key is present.
+     *
+     * @param string $key Session key name
+     * @return bool True if the key exists; otherwise false
      */
     public static function has(string $key): bool
     {
@@ -317,7 +378,9 @@ class SessionManager
     }
 
     /**
-     * Remove session variable
+     * Remove a session key and persist the updated session to the database.
+     *
+     * @param string $key Session key name to remove
      */
     public static function remove(string $key): void
     {
@@ -326,24 +389,27 @@ class SessionManager
     }
 
     /**
-     * Clean expired sessions
+     * Delete expired sessions from the database.
+     *
+     * Intended for periodic housekeeping (cron job or occasional on-request cleanup).
      */
     public static function cleanExpired(): void
     {
         $now = date('Y-m-d H:i:s');
-        Database::query(
-            "DELETE FROM app_sessions WHERE expires_at IS NOT NULL AND expires_at < :now",
+        Database::query("DELETE FROM app_sessions WHERE expires_at IS NOT NULL AND expires_at < :now",
             ['now' => $now]
         );
     }
 
     /**
      * Invalidate all sessions for a user except the current one.
+     *
+     * Useful for "Log out other devices" functionality after a password change
+     * or when the user wants to forcibly revoke other logins.
      */
     public static function logoutOtherDevices(int $userId, string $currentSessionId): void
     {
-        Database::query(
-            "DELETE FROM app_sessions WHERE user_id = :id AND session_id != :sid",
+        Database::query("DELETE FROM app_sessions WHERE user_id = :id AND session_id != :sid",
             ['id' => $userId, 'sid' => $currentSessionId]
         );
     }

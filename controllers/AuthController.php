@@ -19,12 +19,18 @@ class AuthController
     /**
      * Cached config for controller usage.
      *
+     * Stored statically so config is loaded once per request and reused across
+     * controller methods (login/register/logout) without repeated disk reads.
+     *
      * @var array
      */
     private static array $config;
 
     /**
      * Load and cache config once per request.
+     *
+     * The config file is read on first use, then retained for subsequent calls.
+     * This keeps controller methods focused on request logic rather than setup.
      *
      * @return array
      */
@@ -40,6 +46,10 @@ class AuthController
 
     /**
      * Initialize template engine with optional cache clearing.
+     *
+     * Creates a TemplateEngine instance pointed at the project's templates/cache
+     * directories. When template caching is disabled in config, the compiled cache
+     * is cleared to ensure changes are reflected immediately (development-friendly).
      *
      * @return TemplateEngine
      */
@@ -58,11 +68,17 @@ class AuthController
     /**
      * Handle user login requests.
      *
-     * - Displays login form
-     * - Validates form submission (CSRF, required fields)
-     * - Authenticates user with username/email + password
-     * - Sets session data on success
-     * - Redirects to profile overview if already logged in
+     * Flow:
+     * - If already authenticated, redirect to the profile overview
+     * - On POST, validate CSRF token and required fields
+     * - Look up user record + role, then enforce status/lockout rules
+     * - Verify password and establish session on success
+     * - Track failed attempts and apply temporary jail / escalation on failure
+     *
+     * Security considerations:
+     * - CSRF validation for form submission
+     * - Session regeneration on successful login to mitigate fixation
+     * - Lockout + jail logic to slow brute-force attempts
      *
      * @return void
      */
@@ -83,9 +99,9 @@ class AuthController
         if ($_SERVER['REQUEST_METHOD'] === 'POST')
         {
             // Sanitize and retrieve submitted form fields
-            $username  = Security::sanitizeString($_POST['username'] ?? '');
-            $password  = $_POST['password'] ?? '';
-            $csrfToken = $_POST['csrf_token'] ?? '';
+            $email  = Security::sanitizeEmail($_POST['email'] ?? '');
+            $password  = Security::sanitizeString($_POST['password'] ?? '');
+            $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
 
             // Verify CSRF token to prevent cross-site request forgery
             if (!Security::verifyCsrfToken($csrfToken))
@@ -93,19 +109,16 @@ class AuthController
                 $errors[] = "Invalid request.";
             }
 
-            // Ensure username/email and password fields are not empty
-            if (empty($username) || empty($password))
+            // Ensure email and password fields are not empty
+            if (empty($email) || empty($password))
             {
                 $errors[] = "All fields required.";
             }
 
-            // Fetch user by username with role details
-            $user = Database::fetch(
-                "SELECT u.id, u.username, u.password_hash, u.failed_logins, u.last_failed_login, u.status, r.name AS role_name
-                 FROM app_users u
-                 INNER JOIN app_roles r ON u.role_id = r.id
-                 WHERE u.username = :username LIMIT 1",
-                ['username' => $username]
+            // Fetch user by email with role details
+            $user = Database::fetch("SELECT u.id, u.username, u.email, u.password_hash, u.avatar_path, u.failed_logins, u.last_failed_login, u.status, r.name AS role_name
+                 FROM app_users u INNER JOIN app_roles r ON u.role_id = r.id WHERE u.email = :email LIMIT 1",
+                ['email' => $email]
             );
 
             $userIdToCheck = $user['id'] ?? null;
@@ -120,10 +133,7 @@ class AuthController
                 }
 
                 // Check if the user is currently jailed (temporary block)
-                $blocked = Database::fetch(
-                    "SELECT blocked_until FROM user_security_events
-                     WHERE user_id = :uid
-                     ORDER BY blocked_until DESC LIMIT 1",
+                $blocked = Database::fetch("SELECT blocked_until FROM user_security_events WHERE user_id = :uid ORDER BY blocked_until DESC LIMIT 1",
                     ['uid' => $userIdToCheck]
                 );
 
@@ -135,10 +145,7 @@ class AuthController
                 // Check for permanent suspension (6+ failed attempts)
                 if ((int)$user['failed_logins'] >= 6 && empty($errors))
                 {
-                    Database::query(
-                        "UPDATE app_users
-                         SET status = 'suspended'
-                         WHERE id = :id",
+                    Database::query("UPDATE app_users SET status = 'suspended' WHERE id = :id",
                         ['id' => $userIdToCheck]
                     );
 
@@ -152,10 +159,7 @@ class AuthController
                 if ($user && Security::verifyPassword($password, $user['password_hash']))
                 {
                     // Successful login: reset failed login counter
-                    Database::query(
-                        "UPDATE app_users
-                         SET failed_logins = 0, last_failed_login = NULL, last_login = NOW()
-                         WHERE id = :id",
+                    Database::query("UPDATE app_users SET failed_logins = 0, last_failed_login = NULL, last_login = NOW() WHERE id = :id",
                         ['id' => $userIdToCheck]
                     );
 
@@ -166,6 +170,7 @@ class AuthController
                     SessionManager::set('user_id', $user['id']);
                     SessionManager::set('user_role', $user['role_name']);
                     SessionManager::set('username', $user['username']);
+                    SessionManager::set('user_avatar', $user['avatar_path']);
 
                     // Redirect user to profile overview
                     header('Location: /profile/overview');
@@ -190,10 +195,7 @@ class AuthController
                     }
 
                     // Update user's failed login info
-                    Database::query(
-                        "UPDATE app_users
-                         SET failed_logins = :fails, last_failed_login = NOW()
-                         WHERE id = :id",
+                    Database::query("UPDATE app_users SET failed_logins = :fails, last_failed_login = NOW() WHERE id = :id",
                         ['fails' => $failedLogins, 'id' => $userIdToCheck]
                     );
 
@@ -201,9 +203,7 @@ class AuthController
                     if ($failedLogins >= $threshold)
                     {
                         $blockedUntil = date('Y-m-d H:i:s', $now + $resetWindow); // 10 min jail
-                        Database::query(
-                            "INSERT INTO user_security_events (user_id, ip, event_type, blocked_until)
-                             VALUES (:uid, :ip, :event, :blocked)",
+                        Database::query("INSERT INTO user_security_events (user_id, ip, event_type, blocked_until) VALUES (:uid, :ip, :event, :blocked)",
                             [
                                 'uid' => $userIdToCheck,
                                 'ip' => inet_pton($_SERVER['REMOTE_ADDR'] ?? ''),
@@ -216,7 +216,8 @@ class AuthController
                     }
                     else
                     {
-                        $errors[] = "Invalid username and/or password.";
+                        // Generic message avoids confirming whether the email exists
+                        $errors[] = "Invalid email and/or password.";
                     }
                 }
             }
@@ -236,11 +237,18 @@ class AuthController
     /**
      * Handle user registration requests.
      *
-     * - Displays registration form
-     * - Validates form submission (CSRF, required fields, regex checks)
-     * - Ensures username/email uniqueness
-     * - Inserts new user into database
-     * - Redirects to login on success
+     * Flow:
+     * - If already authenticated, redirect to the profile overview
+     * - On POST, validate CSRF token and required fields
+     * - Validate username/email/password requirements
+     * - Verify email confirmation matches
+     * - Check for existing username/email duplicates
+     * - Create the account in a "pending" state for approval workflows
+     *
+     * Security considerations:
+     * - CSRF validation for form submission
+     * - Password hashing via Security helper (algorithm configurable)
+     * - Avoids leaking sensitive DB errors to the user
      *
      * @return void
      */
@@ -264,9 +272,9 @@ class AuthController
             $username    = Security::sanitizeString($_POST['username'] ?? '');
             $email       = Security::sanitizeEmail($_POST['email'] ?? '');
             $cemail      = Security::sanitizeEmail($_POST['confirm_email'] ?? '');
-            $password    = $_POST['password'] ?? '';
-            $confirmPass = $_POST['confirm_password'] ?? '';
-            $csrfToken   = $_POST['csrf_token'] ?? '';
+            $password    = Security::sanitizeString($_POST['password'] ?? '');
+            $confirmPass = Security::sanitizeString($_POST['confirm_password'] ?? '');
+            $csrfToken   = Security::sanitizeString($_POST['csrf_token'] ?? '');
 
             // --- Security checks ---
             if (!Security::verifyCsrfToken($csrfToken))
@@ -275,7 +283,8 @@ class AuthController
             }
 
             // --- Field validation ---
-            if (empty($username) || empty($email) || empty($cemail) || empty($password) || empty($confirmPass)) {
+            if (empty($username) || empty($email) || empty($cemail) || empty($password) || empty($confirmPass))
+            {
                 $errors[] = "All fields are required.";
             }
 
@@ -307,8 +316,7 @@ class AuthController
             // --- Check for duplicates ---
             if (empty($errors))
             {
-                $exists = Database::fetch(
-                    "SELECT id FROM app_users WHERE username = :username OR email = :email LIMIT 1",
+                $exists = Database::fetch("SELECT id FROM app_users WHERE username = :username OR email = :email LIMIT 1",
                     ['username' => $username, 'email' => $email]
                 );
 
@@ -323,9 +331,7 @@ class AuthController
             {
                 $hashedPassword = Security::hashPassword($password);
 
-                Database::insert(
-                    "INSERT INTO app_users (username, email, password_hash, role_id, status, created_at)
-                     VALUES (:username, :email, :password_hash, :role_id, :status, NOW())",
+                Database::insert("INSERT INTO app_users (username, email, password_hash, role_id, status, created_at) VALUES (:username, :email, :password_hash, :role_id, :status, NOW())",
                     [
                         'username'      => $username,
                         'email'         => $email,
@@ -351,7 +357,7 @@ class AuthController
      * Log out the current user.
      *
      * - Destroys all session data
-     * - Redirects user to login page
+     * - Redirects user to index page
      *
      * @return void
      */
@@ -360,7 +366,7 @@ class AuthController
         // Destroy all session data
         SessionManager::destroy();
 
-        // Redirect to login page
+        // Redirect to index page
         header('Location: /index.php');
         exit();
     }

@@ -81,17 +81,19 @@ class ModerationController
 
 
         // Fetch counts
-        $totalUserResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_users WHERE status NOT IN ('deleted')");
         $totalImagesResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status IN ('approved', 'pending', 'deleted', 'rejected')");
         $approvedCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'approved'");
         $pendingCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'pending'");
-        $removedCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status IN ('deleted', 'rejected')");
+        $removedCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'deleted'");
+        $rejectedCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'rejected'");
+        $viewsCountResult = Database::fetch("SELECT COALESCE(SUM(views), 0) AS total_views FROM app_images WHERE status = 'approved';");
 
-        $total_users = (int)($totalUserResult['cnt'] ?? 0);
         $total_images = (int)($totalImagesResult['cnt'] ?? 0);
         $approved_count = (int)($approvedCountResult['cnt'] ?? 0);
         $pending_count = (int)($pendingCountResult['cnt'] ?? 0);
         $removed_count = (int)($removedCountResult['cnt'] ?? 0);
+        $rejected_count = (int)($rejectedCountResult['cnt'] ?? 0);
+        $combind_count = (int)($viewsCountResult['total_views'] ?? 0);
 
         // Storage info using StorageHelper
         $storage_used = StorageHelper::getUsedStorageReadable();
@@ -107,11 +109,12 @@ class ModerationController
         $storage_usage_percent = ($percentNumeric / 100) * 360 . 'deg';
 
         // Assign flat template variables
-        $template->assign('total_users', NumericalHelper::formatCount($total_users));
         $template->assign('total_images', NumericalHelper::formatCount($total_images));
         $template->assign('approved_count', NumericalHelper::formatCount($approved_count));
         $template->assign('pending_count', NumericalHelper::formatCount($pending_count));
         $template->assign('removed_count', NumericalHelper::formatCount($removed_count));
+        $template->assign('rejected_count', NumericalHelper::formatCount($rejected_count));
+        $template->assign('total_view_count', NumericalHelper::formatCount($combind_count));
 
         $template->assign('storage_used', $storage_used);
         $template->assign('storage_remaining', $storage_remaining);
@@ -568,9 +571,9 @@ class ModerationController
 
         $template->assign('image_hashes', $flatImageHashes);
         $template->assign('selected_image1_hash', $selectedImage1['image_hash'] ?? '');
-        $template->assign('selected_image1_original_path', !empty($selectedImage1['image_hash']) ? '/image/original/' . $selectedImage1['image_hash'] : '');
+        $template->assign('selected_image1_original_path', !empty($selectedImage1['image_hash']) ? '/gallery/original/' . $selectedImage1['image_hash'] : '');
         $template->assign('selected_image2_hash', $selectedImage2['image_hash'] ?? '');
-        $template->assign('selected_image2_original_path', !empty($selectedImage2['image_hash']) ? '/image/original/' . $selectedImage2['image_hash'] : '');
+        $template->assign('selected_image2_original_path', !empty($selectedImage2['image_hash']) ? '/gallery/original/' . $selectedImage2['image_hash'] : '');
 
         $template->render('panel/moderation_comparison.html');
     }

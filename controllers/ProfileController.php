@@ -177,10 +177,7 @@ class ProfileController
 
         // Fetch user record
         $userId = SessionManager::get('user_id');
-        $user = Database::fetch(
-            "SELECT id, username, display_name, email, avatar_path, date_of_birth, password_hash, age_verified_at
-             FROM app_users
-             WHERE id = :id LIMIT 1",
+        $user = Database::fetch("SELECT id, username, display_name, email, avatar_path, date_of_birth, password_hash, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
             ['id' => $userId]
         );
 
@@ -223,7 +220,13 @@ class ProfileController
 
                 case 'dob':
                     // Validate and update date of birth
-                    $dob = $_POST['date_of_birth'] ?? '';
+                    $dobInput = $_POST['date_of_birth'] ?? '';
+
+                    // YYYY-MM-DD, must be a real calendar date, and not in the future
+                    $dob = Security::sanitizeDate($dobInput, 'Y-m-d', '1900-01-01',
+                        (new DateTimeImmutable('now'))->format('Y-m-d')
+                    );
+
                     if (!$dob || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dob))
                     {
                         $errors[] = "Invalid date format. Use YYYY-MM-DD.";

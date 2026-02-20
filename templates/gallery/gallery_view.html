@@ -7,9 +7,11 @@
                     <section>
                         {if $is_logged_in}
                         <div class="gallery-toolbar">
+                            {if $can_edit_image}
                             <button type="button" class="js-open-edit-image" title="Edit Image">
                                 <i class="fa-solid fa-pen-to-square"></i>
-                            </button>                            
+                            </button>
+                            {/if}
 
                             <button title="Image Views">
                                 <i class="fa-solid fa-eye"></i>
@@ -22,7 +24,7 @@
                                 {$img_favorites}
                             </button>
                             {else}
-                            <form method="POST" action="/image/{$img_hash}/favorite">
+                            <form method="POST" action="/gallery/{$img_hash}/favorite">
                                 <input type="hidden" name="csrf_token" value="{$csrf_token}">
                                 <button type="submit" title="Add Favorite">
                                     <i class="fa-solid fa-star"></i>
@@ -37,7 +39,7 @@
                                 {$img_votes}
                             </button>
                             {else}
-                            <form method="POST" action="/image/{$img_hash}/upvote">
+                            <form method="POST" action="/gallery/{$img_hash}/upvote">
                                 <input type="hidden" name="csrf_token" value="{$csrf_token}">
                                 <button type="submit" title="Up Vote">
                                     <i class="fa-solid fa-thumbs-up"></i>
@@ -87,12 +89,12 @@
                         <h3>Hashes</h3>
                         <ul>
                             <li>
-                                <strong>MD5 Hash:</strong>
+                                <strong>MD5:</strong>
                                 <small>{$img_md5}</small>
                             </li>
 
                             <li>
-                                <strong>SHA-1 Hash:</strong>
+                                <strong>SHA-1:</strong>
                                 <small>{$img_sha1}</small>
                             </li>
                         </ul>
@@ -106,14 +108,16 @@
                     {/if}
 
                     <section>
-                        <h5><a href="/image/original/{$img_hash}">View Image</a></h5>
+                        <h5><a href="/gallery/original/{$img_hash}">View Image</a></h5>
                         <h5><a href="#" class="js-open-comments">Comments ({$img_comment_count})</a></h5>
                     </section>
 
+                    {if $img_has_tag}
                     <section>
                         <h3>Tags</h3>
 
                     </section>
+                    {/if}
                 </div>
             </div>
 
@@ -123,7 +127,7 @@
                     <b>{$alert_tag}</b> {$alert_message} <a href="#">Learn more</a>
                 </div>
                 {/if}
-                <img src="/image/original/{$img_hash}" class="gallery-image-view">
+                <img src="/gallery/original/{$img_hash}" class="gallery-image-view">
             </div>
         </div>
     </main>
@@ -140,7 +144,7 @@
             </div>
     
             {if $can_edit_image}
-            <form method="POST" action="/image/{$img_hash}/edit" class="edit-image-modal-form">
+            <form method="POST" action="/gallery/{$img_hash}/edit" class="edit-image-modal-form">
                 <input type="hidden" name="csrf_token" value="{$csrf_token}">
     
                 <div class="edit-image-field">
@@ -182,7 +186,7 @@
             </div>
 
             {if $is_logged_in}
-            <form method="POST" action="/image/{$img_hash}/comment" class="comments-modal-form">
+            <form method="POST" action="/gallery/{$img_hash}/comment" class="comments-modal-form">
                 <input type="hidden" name="csrf_token" value="{$csrf_token}">
                 <textarea name="comment_body" rows="3" placeholder="Write a comment..." required></textarea>
                 <button type="submit">Post Comment</button>
@@ -211,7 +215,7 @@
                 {if $comments_total_pages > 1}
                 <div class="comments-pagination">
                     {if $comments_has_prev}
-                    <a class="comments-page-btn" href="/image/{$img_hash}?cpage={$comments_prev_page}&show_comments=1">Prev</a>
+                    <a class="comments-page-btn" href="/gallery/{$img_hash}?cpage={$comments_prev_page}&show_comments=1">Prev</a>
                     {else}
                     <span class="comments-page-btn is-disabled">Prev</span>
                     {/if}
@@ -219,7 +223,7 @@
                     <span class="comments-page-info">Page {$comments_page} of {$comments_total_pages}</span>
 
                     {if $comments_has_next}
-                    <a class="comments-page-btn" href="/image/{$img_hash}?cpage={$comments_next_page}&show_comments=1">Next</a>
+                    <a class="comments-page-btn" href="/gallery/{$img_hash}?cpage={$comments_next_page}&show_comments=1">Next</a>
                     {else}
                     <span class="comments-page-btn is-disabled">Next</span>
                     {/if}
