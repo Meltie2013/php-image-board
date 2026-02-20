@@ -203,7 +203,30 @@ class UploadController
 
             if ($file['error'] !== UPLOAD_ERR_OK)
             {
-                $errors[] = "Upload failed. Try again later!";
+                $uploadErrors = [
+                    UPLOAD_ERR_INI_SIZE   => 'The uploaded file exceeds the server upload_max_filesize limit.',
+                    UPLOAD_ERR_FORM_SIZE  => 'The uploaded file exceeds the form MAX_FILE_SIZE limit.',
+                    UPLOAD_ERR_PARTIAL    => 'The uploaded file was only partially uploaded.',
+                    UPLOAD_ERR_NO_FILE    => 'No file was uploaded.',
+                    UPLOAD_ERR_NO_TMP_DIR => 'Missing a temporary folder on the server.',
+                    UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk.',
+                    UPLOAD_ERR_EXTENSION  => 'A PHP extension stopped the file upload.'
+                ];
+
+                $uploadErrorsUser = [
+                    UPLOAD_ERR_INI_SIZE   => 'This file is too large. Please choose a smaller image.',
+                    UPLOAD_ERR_FORM_SIZE  => 'This file is too large. Please choose a smaller image.',
+                    UPLOAD_ERR_PARTIAL    => 'The upload did not complete. Please try again.',
+                    UPLOAD_ERR_NO_FILE    => 'No file was uploaded. Please choose an image.',
+                    UPLOAD_ERR_NO_TMP_DIR => 'Upload is temporarily unavailable. Please try again later.',
+                    UPLOAD_ERR_CANT_WRITE => 'Upload is temporarily unavailable. Please try again later.',
+                    UPLOAD_ERR_EXTENSION  => 'Upload is temporarily unavailable. Please try again later.'
+                ];
+
+                $errors[] = $uploadErrorsUser[$file['error']] ?? "Upload failed. Try again later!";
+
+                // Keep the detailed reason for the database log, without exposing it to the user
+                $errorsDetailed = [$uploadErrors[$file['error']] ?? 'Unknown upload error.'];
             }
             else
             {
@@ -221,12 +244,30 @@ class UploadController
                     $errors[] = "Upload failed. Not enough storage available.";
                 }
 
-                $finfo = finfo_open(FILEINFO_MIME_TYPE);
-                $mimeType = finfo_file($finfo, $file['tmp_name']);
+                $mimeType = false;
 
+                $finfo = finfo_open(FILEINFO_MIME_TYPE);
                 if ($finfo)
                 {
+                    $mimeType = finfo_file($finfo, $file['tmp_name']);
                     finfo_close($finfo);
+                }
+
+                // Some modified/optimized images may be detected as octet-stream or fail finfo detection.
+                // Fall back to getimagesize() (image parser) which usually returns a reliable image MIME.
+                if (empty($mimeType) || $mimeType === 'application/octet-stream')
+                {
+                    $imgInfo = @getimagesize($file['tmp_name']);
+                    if (!empty($imgInfo['mime']))
+                    {
+                        $mimeType = $imgInfo['mime'];
+                    }
+                }
+
+                // Last resort fallback (less strict), keeps behavior predictable if the server lacks proper magic DB.
+                if (empty($mimeType) || $mimeType === 'application/octet-stream')
+                {
+                    $mimeType = @mime_content_type($file['tmp_name']) ?: ($file['type'] ?? 'unknown');
                 }
 
                 $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -258,8 +299,8 @@ class UploadController
                     $errors[] = "File extension .$safeExt is not allowed.";
                 }
 
-                // Verify the payload parses as an image (reduces non-image spoofing)
-                if (!@getimagesize($file['tmp_name']))
+                // Verify the file signature matches the detected image type (blocks common spoofing/polyglots)
+                if (empty($errors) && !self::hasValidImageSignature($file['tmp_name'], $mimeType))
                 {
                     $errors[] = "The file is not a valid image.";
                 }
@@ -268,7 +309,7 @@ class UploadController
             if (!empty($errors))
             {
                 // Record failed attempts for auditing/troubleshooting
-                self::logUploadAttempt($userId, $file, 'failed', $errors);
+                self::logUploadAttempt($userId, $file, 'failed', $errorsDetailed ?? $errors);
             }
 
             if (empty($errors))
@@ -280,94 +321,135 @@ class UploadController
 
                 // Move to a temporary location first (safer lifecycle before final resize/store)
                 $tmpPath = self::$uploadDir . "tmp_" . $basename . "." . $ext;
-                move_uploaded_file($file['tmp_name'], $tmpPath);
 
-                // Create final resized copy and store in uploads path
-                self::makeResized($tmpPath, $originalPath, 1280, 1280);
-
-                // Remove temporary file after successful resize
-                unlink($tmpPath);
-
-                // Read stored file contents for integrity hashes
-                $fileData = file_get_contents(self::$uploadDir . str_replace("uploads/", "", $originalPath));
-                $md5 = md5($fileData);
-                $sha1 = sha1($fileData);
-                $sha256 = hash("sha256", $fileData);
-                $sha512 = hash("sha512", $fileData);
-
-                // Extract image metadata from the stored file
-                [$width, $height] = getimagesize(self::$uploadDir . str_replace("uploads/", "", $originalPath));
-                $sizeBytes = filesize(self::$uploadDir . str_replace("uploads/", "", $originalPath));
-                $mimeType = mime_content_type(self::$uploadDir . str_replace("uploads/", "", $originalPath));
-
-                // Generate a unique, user-facing image identifier
-                $imageHash = self::generateImageHashFormatted();
-
-                // Optionally auto-approve uploads (debug/development mode)
-                $moderated = $config['debugging']['allow_approve_uploads'] ? 'NOW()' : 'NULL';
-
-                // Use updated safe hash functions
-                $fullPath = self::$uploadDir . str_replace("uploads/", "", $originalPath);
-                $phash = HashingHelper::pHash($fullPath, 32, 16);
-                $ahash = HashingHelper::aHash($fullPath);
-                $dhash = HashingHelper::dHash($fullPath);
-
-                // Split phash into 16 blocks of 4 chars each (supports faster similarity querying)
-                $phashBlocks = [];
-                for ($i = 0; $i < 16; $i++)
+                // Ensure base upload directory exists and is writable
+                if (!is_dir(self::$uploadDir) || !is_writable(self::$uploadDir))
                 {
-                    $phashBlocks[$i] = substr($phash, $i * 4, 4);
+                    $errors[] = "Upload failed. Upload directory is not writable.";
                 }
 
-                // Insert MD5/SHA hashes into app_images
-                Database::insert("
-                    INSERT INTO app_images
-                        (image_hash, user_id, description, status,
-                         original_path, mime_type, width, height, size_bytes,
-                         md5, sha1, sha256, sha512, moderated_at, created_at, updated_at)
-                    VALUES
-                        (:image_hash, :user_id, :description, :status,
-                         :original_path, :mime_type, :width, :height, :size_bytes,
-                         :md5, :sha1, :sha256, :sha512, $moderated, NOW(), NOW())
-                ", [
-                    ':image_hash' => $imageHash,
-                    ':user_id' => $userId,
-                    ':description' => $description,
-                    ':status' => $config['debugging']['allow_approve_uploads'] ? 'approved' : 'pending',
-                    ':original_path' => $originalPath,
-                    ':mime_type' => $mimeType,
-                    ':width' => $width,
-                    ':height' => $height,
-                    ':size_bytes' => $sizeBytes,
-                    ':md5' => $md5,
-                    ':sha1' => $sha1,
-                    ':sha256' => $sha256,
-                    ':sha512' => $sha512
-                ]);
+                // Ensure destination directory exists (uploads/images/original/)
+                $finalPath = self::$uploadDir . str_replace("uploads/", "", $originalPath);
+                $finalDir = dirname($finalPath);
+                if (empty($errors) && (!is_dir($finalDir)))
+                {
+                    if (!@mkdir($finalDir, 0755, true) && !is_dir($finalDir))
+                    {
+                        $errors[] = "Upload failed. Could not create destination directory.";
+                    }
+                }
 
-                // Insert into app_image_hashes
-                Database::insert("
-                    INSERT INTO app_image_hashes
-                        (image_hash, phash, ahash, dhash,
-                         phash_block_0, phash_block_1, phash_block_2, phash_block_3,
-                         phash_block_4, phash_block_5, phash_block_6, phash_block_7,
-                         phash_block_8, phash_block_9, phash_block_10, phash_block_11,
-                         phash_block_12, phash_block_13, phash_block_14, phash_block_15)
-                    VALUES
-                        (:image_hash, :phash, :ahash, :dhash,
-                         :phash_block_0, :phash_block_1, :phash_block_2, :phash_block_3,
-                         :phash_block_4, :phash_block_5, :phash_block_6, :phash_block_7,
-                         :phash_block_8, :phash_block_9, :phash_block_10, :phash_block_11,
-                         :phash_block_12, :phash_block_13, :phash_block_14, :phash_block_15)
-                ", array_merge([
-                    ':image_hash' => $imageHash,
-                    ':phash' => $phash,
-                    ':ahash' => $ahash,
-                    ':dhash' => $dhash
-                ], array_combine(array_map(fn($i)=>":phash_block_$i", range(0,15)), $phashBlocks)));
+                if (empty($errors) && !move_uploaded_file($file['tmp_name'], $tmpPath))
+                {
+                    $errors[] = "Upload failed. Could not move uploaded file.";
+                }
 
-                $success = "Uploaded successfully! Image pending approval!";
-                self::logUploadAttempt($userId, $file, 'success');
+                // Create final resized copy and store in uploads path
+                if (empty($errors))
+                {
+                    self::makeResized($tmpPath, $originalPath, 1280, 1280);
+
+                    // Ensure the resize actually produced the destination file
+                    if (!file_exists($finalPath) || filesize($finalPath) <= 0)
+                    {
+                        $errors[] = "Upload failed. Image processing failed.";
+                    }
+                }
+
+                // Remove temporary file after resize attempt
+                if (file_exists($tmpPath))
+                {
+                    unlink($tmpPath);
+                }
+
+                if (!empty($errors))
+                {
+                    // Record failed attempts for auditing/troubleshooting
+                    self::logUploadAttempt($userId, $file, 'failed', $errors);
+                }
+                else
+                {
+                    // Read stored file contents for integrity hashes
+                    $fileData = file_get_contents($finalPath);
+                    $md5 = md5($fileData);
+                    $sha1 = sha1($fileData);
+                    $sha256 = hash("sha256", $fileData);
+                    $sha512 = hash("sha512", $fileData);
+
+                    // Extract image metadata from the stored file
+                    [$width, $height] = getimagesize($finalPath);
+                    $sizeBytes = filesize($finalPath);
+                    $mimeType = mime_content_type($finalPath);
+
+                    // Generate a unique, user-facing image identifier
+                    $imageHash = self::generateImageHashFormatted();
+
+                    // Optionally auto-approve uploads (debug/development mode)
+                    $moderated = $config['debugging']['allow_approve_uploads'] ? 'NOW()' : 'NULL';
+
+                    // Use updated safe hash functions
+                    $fullPath = $finalPath;
+                    $phash = HashingHelper::pHash($fullPath, 32, 16);
+                    $ahash = HashingHelper::aHash($fullPath);
+                    $dhash = HashingHelper::dHash($fullPath);
+
+                    // Split phash into 16 blocks of 4 chars each (supports faster similarity querying)
+                    $phashBlocks = [];
+                    for ($i = 0; $i < 16; $i++)
+                    {
+                        $phashBlocks[$i] = substr($phash, $i * 4, 4);
+                    }
+
+                    // Insert MD5/SHA hashes into app_images
+                    Database::insert("
+                        INSERT INTO app_images
+                            (image_hash, user_id, description, status,
+                             original_path, mime_type, width, height, size_bytes,
+                             md5, sha1, sha256, sha512, moderated_at, created_at, updated_at)
+                        VALUES
+                            (:image_hash, :user_id, :description, :status,
+                             :original_path, :mime_type, :width, :height, :size_bytes,
+                             :md5, :sha1, :sha256, :sha512, $moderated, NOW(), NOW())
+                    ", [
+                        ':image_hash' => $imageHash,
+                        ':user_id' => $userId,
+                        ':description' => $description,
+                        ':status' => $config['debugging']['allow_approve_uploads'] ? 'approved' : 'pending',
+                        ':original_path' => $originalPath,
+                        ':mime_type' => $mimeType,
+                        ':width' => $width,
+                        ':height' => $height,
+                        ':size_bytes' => $sizeBytes,
+                        ':md5' => $md5,
+                        ':sha1' => $sha1,
+                        ':sha256' => $sha256,
+                        ':sha512' => $sha512
+                    ]);
+
+                    // Insert into app_image_hashes
+                    Database::insert("
+                        INSERT INTO app_image_hashes
+                            (image_hash, phash, ahash, dhash,
+                             phash_block_0, phash_block_1, phash_block_2, phash_block_3,
+                             phash_block_4, phash_block_5, phash_block_6, phash_block_7,
+                             phash_block_8, phash_block_9, phash_block_10, phash_block_11,
+                             phash_block_12, phash_block_13, phash_block_14, phash_block_15)
+                        VALUES
+                            (:image_hash, :phash, :ahash, :dhash,
+                             :phash_block_0, :phash_block_1, :phash_block_2, :phash_block_3,
+                             :phash_block_4, :phash_block_5, :phash_block_6, :phash_block_7,
+                             :phash_block_8, :phash_block_9, :phash_block_10, :phash_block_11,
+                             :phash_block_12, :phash_block_13, :phash_block_14, :phash_block_15)
+                    ", array_merge([
+                        ':image_hash' => $imageHash,
+                        ':phash' => $phash,
+                        ':ahash' => $ahash,
+                        ':dhash' => $dhash
+                    ], array_combine(array_map(fn($i)=>":phash_block_$i", range(0,15)), $phashBlocks)));
+
+                    $success = "Uploaded successfully! Image pending approval!";
+                    self::logUploadAttempt($userId, $file, 'success');
+                }
             }
         }
 
@@ -538,5 +620,86 @@ class UploadController
 
         // Use the new ImageHelper class to handle resizing
         ImageHelper::resize($srcPath, $destPath, $maxWidth, $maxHeight);
+    }
+
+    /**
+     * Read the first N bytes of a file for signature checks.
+     *
+     * @param string $path
+     * @param int $length
+     * @return string
+     */
+    private static function readFileHead($path, $length = 64)
+    {
+        $fh = @fopen($path, 'rb');
+        if (!$fh)
+        {
+            return '';
+        }
+
+        $data = fread($fh, $length);
+        fclose($fh);
+
+        return $data !== false ? $data : '';
+    }
+
+    /**
+     * Validates the uploaded payload signature against the detected MIME type.
+     *
+     * Blocks common executable/script formats regardless of extension/MIME spoofing,
+     * and ensures the header bytes match the expected image container.
+     *
+     * @param string $tmpPath
+     * @param string $mimeType
+     * @return bool
+     */
+    private static function hasValidImageSignature($tmpPath, $mimeType)
+    {
+        $head = self::readFileHead($tmpPath, 64);
+        if ($head === '')
+        {
+            return false;
+        }
+
+        // Block obvious executable / script containers (defense-in-depth)
+        if (strncmp($head, "MZ", 2) === 0) // Windows PE/EXE
+        {
+            return false;
+        }
+
+        if (strncmp($head, "\x7F" . "ELF", 4) === 0) // Linux ELF
+        {
+            return false;
+        }
+
+        if (strncmp($head, "#!", 2) === 0) // Shebang scripts
+        {
+            return false;
+        }
+
+        if (strncmp($head, "PK\x03\x04", 4) === 0) // ZIP (often used for polyglots)
+        {
+            return false;
+        }
+
+        // Validate expected image container signatures
+        switch ($mimeType)
+        {
+            case 'image/jpeg':
+                return (strncmp($head, "\xFF\xD8\xFF", 3) === 0);
+
+            case 'image/png':
+                return (strncmp($head, "\x89PNG\r\n\x1A\n", 8) === 0);
+
+            case 'image/gif':
+                return (strncmp($head, "GIF87a", 6) === 0 || strncmp($head, "GIF89a", 6) === 0);
+
+            case 'image/webp':
+                // WebP is RIFF....WEBP
+                return (strncmp($head, "RIFF", 4) === 0 && substr($head, 8, 4) === "WEBP");
+
+            default:
+                return false;
+        }
     }
 }

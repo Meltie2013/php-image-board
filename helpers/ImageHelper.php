@@ -30,6 +30,15 @@ class ImageHelper
         $srcPath = $src;
         $destPath = $dest;
 
+        $mimeType = mime_content_type($srcPath);
+
+        // Preserve animated GIFs by resizing all frames instead of flattening the first frame
+        if ($mimeType === 'image/gif' && self::isAnimatedGif($srcPath))
+        {
+            self::resizeAnimatedGif($srcPath, $destPath, $maxWidth, $maxHeight);
+            return;
+        }
+
         /** @var Imagick $image */
         $image = new Imagick($srcPath);
 
@@ -78,8 +87,6 @@ class ImageHelper
         // Resize with high-quality filter
         $image->resizeImage($newWidth, $newHeight, Imagick::FILTER_LANCZOS, 1);
 
-        $mimeType = mime_content_type($srcPath);
-
         // Optional: sharpen upscaled JPEG/WebP images for better clarity
         if ($scale > 1 && in_array($mimeType, ['image/jpeg', 'image/webp']))
         {
@@ -107,6 +114,10 @@ class ImageHelper
                 $image->setImageCompressionQuality(95);
                 break;
 
+            case 'image/gif':
+                $image->setImageFormat('gif');
+                break;
+
             default:
                 $image->setImageFormat('jpeg');
                 $image->setImageCompression(Imagick::COMPRESSION_JPEG);
@@ -115,5 +126,88 @@ class ImageHelper
 
         $image->writeImage($destPath);
         unset($image);
+    }
+
+    /**
+    * Detects whether a GIF is animated by checking for multiple frames.
+    *
+    * @param string $path Path to the GIF file
+    *
+    * @return bool
+    */
+    private static function isAnimatedGif($path)
+    {
+        try
+        {
+            $gif = new Imagick();
+            $gif->pingImage($path);
+            $count = $gif->getNumberImages();
+            unset($gif);
+
+            return $count > 1;
+        }
+        catch (ImagickException $e)
+        {
+            return false;
+        }
+    }
+
+    /**
+    * Resizes an animated GIF while preserving animation, timing, and transparency.
+    *
+    * @param string $src Path to source GIF
+    * @param string $dest Destination path for resized GIF
+    * @param int $maxWidth Maximum width constraint
+    * @param int $maxHeight Maximum height constraint
+    *
+    * @return void
+    *
+    * @throws ImagickException
+    */
+    private static function resizeAnimatedGif($src, $dest, $maxWidth, $maxHeight)
+    {
+        $gif = new Imagick();
+        $gif->readImage($src);
+
+        // Coalesce frames so each frame is a full canvas (required before resizing)
+        $gif = $gif->coalesceImages();
+
+        $width = $gif->getImageWidth();
+        $height = $gif->getImageHeight();
+
+        // Determine scale factor (same logic as static images)
+        if ($width <= 600 && $height <= 600)
+        {
+            $scale = min(2, $maxWidth / $width, $maxHeight / $height);
+        }
+        else
+        {
+            $scale = min($maxWidth / $width, $maxHeight / $height, 1);
+        }
+
+        $newWidth = (int)($width * $scale);
+        $newHeight = (int)($height * $scale);
+
+        foreach ($gif as $frame)
+        {
+            // Resize each frame while preserving aspect ratio
+            $frame->resizeImage($newWidth, $newHeight, Imagick::FILTER_LANCZOS, 1);
+            $frame->setImagePage(0, 0, 0, 0);
+            $frame->setImageFormat('gif');
+        }
+
+        // Re-optimize frames after resizing
+        $gif = $gif->deconstructImages();
+
+        // optimizeImageLayers() can return bool or Imagick depending on Imagick version/build
+        $optimized = $gif->optimizeImageLayers();
+        if ($optimized instanceof Imagick)
+        {
+            $gif = $optimized;
+        }
+
+        // Write all frames (true preserves animation)
+        $gif->writeImages($dest, true);
+        unset($gif);
     }
 }
