@@ -113,7 +113,7 @@ return [
 
     'gallery' => [
         'upload_max_storage'    => '10gb', // Max total storage size for uploads
-        'images_displayed'      => 28,     // total images displayed per page (default 28 - 7 x 4)
+        'images_displayed'      => 32,     // total images displayed per page (default 32 - 8 x 4)
         'pagination_range'      => 3,      // How many pages to show before/after current
         'upload_max_image_size' => 2,      // Max upload size per image (in MB)
         'comments_per_page'     => 5,       // total comments to show per page (default 5)
