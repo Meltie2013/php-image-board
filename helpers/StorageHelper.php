@@ -40,13 +40,25 @@ class StorageHelper
     {
         if (empty(self::$config))
         {
-            self::$config = require __DIR__ . '/../config/config.php';
+            // Prefer SettingsManager (merged config + DB overrides) when available.
+            if (class_exists('SettingsManager') && SettingsManager::isInitialized())
+            {
+                self::$config = SettingsManager::getConfig();
+            }
+            else
+            {
+                self::$config = require __DIR__ . '/../config/config.php';
+            }
+
+            // Ensure gallery section exists with safe defaults
+            if (empty(self::$config['gallery']) || !is_array(self::$config['gallery']))
+            {
+                self::$config['gallery'] = [];
+            }
 
             // Normalize max storage from shorthand notation (e.g., "100GB") into bytes
-            if (isset(self::$config['gallery']['upload_max_storage']))
-            {
-                self::$config['gallery']['upload_max_storage'] = self::parseSize(self::$config['gallery']['upload_max_storage']);
-            }
+            $rawMaxStorage = self::$config['gallery']['upload_max_storage'] ?? '500mb';
+            self::$config['gallery']['upload_max_storage'] = self::parseSize($rawMaxStorage);
         }
 
         return self::$config;
@@ -206,7 +218,8 @@ class StorageHelper
     public static function getMaxStorageReadable(): string
     {
         $config = self::getConfig();
-        return self::formatFileSize($config['gallery']['upload_max_storage']);
+        $max = (int)($config['gallery']['upload_max_storage'] ?? 0);
+        return self::formatFileSize($max);
     }
 
     /**

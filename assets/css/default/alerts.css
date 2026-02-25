@@ -17,7 +17,7 @@
         0 0 0 1px rgba(255, 255, 255, 0.02);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     line-height: 1.5;
     color: var(--color-text-main);
     display: flex;

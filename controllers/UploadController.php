@@ -42,7 +42,7 @@ class UploadController
     {
         if (empty(self::$config))
         {
-            self::$config = require __DIR__ . '/../config/config.php';
+            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require __DIR__ . '/../config/config.php');
         }
 
         return self::$config;
@@ -76,7 +76,7 @@ class UploadController
      * This path is used as the filesystem root for writing resized images and
      * reading stored files for hashing/metadata extraction.
      */
-    private static $uploadDir = __DIR__ . "/../uploads/";
+    private static $uploadDir = __DIR__ . "/../images/";
 
     /**
      * Disallowed file extensions for uploads (for security).
@@ -190,12 +190,10 @@ class UploadController
         {
             $file = $_FILES['image'];
             $description = Security::sanitizeString($_POST['description'] ?? '');
-
-            $userId = SessionManager::get('user_id');
-
-            $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
+            $userId = TypeHelper::toInt(SessionManager::get('user_id'));
 
             // Verify CSRF token to prevent cross-site request forgery
+            $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
             if (!Security::verifyCsrfToken($csrfToken))
             {
                 $errors[] = "Invalid request.";
@@ -317,7 +315,7 @@ class UploadController
                 // Persist the upload using a randomized basename to avoid collisions and predictability
                 $ext = $safeExt;
                 $basename = 'img_' . bin2hex(random_bytes(16));
-                $originalPath = "uploads/images/original/" . $basename . "." . $ext;
+                $originalPath = "images/original/" . $basename . "." . $ext;
 
                 // Move to a temporary location first (safer lifecycle before final resize/store)
                 $tmpPath = self::$uploadDir . "tmp_" . $basename . "." . $ext;
@@ -328,8 +326,8 @@ class UploadController
                     $errors[] = "Upload failed. Upload directory is not writable.";
                 }
 
-                // Ensure destination directory exists (uploads/images/original/)
-                $finalPath = self::$uploadDir . str_replace("uploads/", "", $originalPath);
+                // Ensure destination directory exists (images/original/)
+                $finalPath = self::$uploadDir . str_replace("images/", "", $originalPath);
                 $finalDir = dirname($finalPath);
                 if (empty($errors) && (!is_dir($finalDir)))
                 {
@@ -616,7 +614,7 @@ class UploadController
     private static function makeResized($src, $dest, $maxWidth, $maxHeight)
     {
         $srcPath = $src;
-        $destPath = self::$uploadDir . str_replace("uploads/", "", $dest);
+        $destPath = self::$uploadDir . str_replace("images/", "", $dest);
 
         // Use the new ImageHelper class to handle resizing
         ImageHelper::resize($srcPath, $destPath, $maxWidth, $maxHeight);

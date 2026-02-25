@@ -3,20 +3,42 @@
 # If something you don't want on GitHub, place it below.
 #
 
+# -------------------------
 # ignore configuration file without the .dist
-/config/config.php
+# -------------------------
+/config/**
+!/config/**/
+!/config/**/config.php.dist
 
+# -------------------------
 # ignore tools folder
+# -------------------------
 /tools
 
-# ignore cache templates if in development environment
-/cache/templates/*
+# -------------------------
+# cache/templates (keep index.html)
+# -------------------------
+/cache/templates/**
+!/cache/templates/**/
+!/cache/templates/**/index.html
 
-# ignore cache images if in development environment
-/cache/images/*
+# -------------------------
+# cache/images (keep index.html)
+# -------------------------
+/cache/images/**
+!/cache/images/**/
+!/cache/images/**/index.html
 
-# ingore uploaded avatar in folder
-/uploads/avatars/*
+# -------------------------
+# uploads/avatars (keep index.html)
+# -------------------------
+/uploads/avatars/**
+!/uploads/avatars/**/
+!/uploads/avatars/**/index.html
 
-# ignore uploaded images in images folder
-/uploads/images/*
+# -------------------------
+# images (keep index.html, including /images/original/index.html)
+# -------------------------
+/images/**
+!/images/**/
+!/images/**/index.html

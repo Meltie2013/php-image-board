@@ -37,7 +37,7 @@ class GalleryController
     {
         if (empty(self::$config))
         {
-            self::$config = require __DIR__ . '/../config/config.php';
+            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require __DIR__ . '/../config/config.php');
         }
 
         return self::$config;
@@ -81,10 +81,8 @@ class GalleryController
         }
 
         // Query to fetch username by user ID
-        $sql = "SELECT username FROM app_users WHERE id = :id LIMIT 1";
-        $result = Database::fetch($sql, [':id' => $userId]);
-
-        return $result['username'] ?? '';
+        $result = Database::fetch("SELECT username FROM app_users WHERE id = :id LIMIT 1", [':id' => $userId]);
+        return TypeHelper::toString($result['username']) ?? '';
     }
 
     /**
@@ -119,15 +117,28 @@ class GalleryController
         $config = self::getConfig();
         $imagesPerPage = $config['gallery']['images_displayed'];
 
-        $page = max(1, (int)($page ?? 1));
-        $limit = $imagesPerPage;
+        // Route param parsing should be tolerant (never throw)
+        $page = TypeHelper::toInt($page) ?? 1;
+        if ($page < 1)
+        {
+            $page = 1;
+        }
+
+        // Config values should be tolerant as well (never throw in production)
+        $limit = TypeHelper::toInt($imagesPerPage) ?? 1;
+        if ($limit < 1)
+        {
+            $limit = 1;
+        }
+
         $offset = ($page - 1) * $limit;
 
-        $userId = SessionManager::get('user_id');
+        // Session values are frequently strings; parse safely
+        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
         $currentUser = null;
 
         // Fetch logged-in user's DOB and verification status if available
-        if ($userId)
+        if ($userId > 0)
         {
             $currentUser = Database::fetch(
                 "SELECT date_of_birth, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
@@ -135,15 +146,17 @@ class GalleryController
             );
         }
 
-        $requiredYears = Security::sanitizeInt($config['profile']['years'] ?? 0);
+        $requiredYears = TypeHelper::toInt($config['profile']['years'] ?? 0) ?? 0;
+        if ($requiredYears < 0)
+        {
+            $requiredYears = 0;
+        }
+
         $minBirthDate = (new DateTime())->modify("-{$requiredYears} years")->format('Y-m-d');
 
         // Fetch all approved images
-        $sql = "SELECT i.image_hash, i.age_sensitive, i.created_at, i.views, u.date_of_birth, u.age_verified_at
-                FROM app_images i
-                LEFT JOIN app_users u ON i.user_id = u.id
-                WHERE i.status = 'approved'
-                ORDER BY i.created_at DESC";
+        $sql = "SELECT i.image_hash, i.original_path, i.age_sensitive, i.created_at, i.views, u.date_of_birth, u.age_verified_at FROM app_images i
+                LEFT JOIN app_users u ON i.user_id = u.id WHERE i.status = 'approved' ORDER BY i.created_at DESC";
 
         $stmt = Database::getPDO()->prepare($sql);
         $stmt->execute();
@@ -152,11 +165,12 @@ class GalleryController
         // Filter images based on age-sensitive access
         $filteredImages = array_filter($images, function ($img) use ($currentUser, $minBirthDate)
         {
-            return Security::sanitizeInt($img['age_sensitive'] === 0) || self::checkAgeSensitiveAccess($currentUser, $minBirthDate);
+            $ageSensitive = TypeHelper::toInt($img['age_sensitive'] ?? 0) ?? 0;
+            return ($ageSensitive === 0) || self::checkAgeSensitiveAccess($currentUser, $minBirthDate);
         });
 
         $totalImages = count($filteredImages);
-        $totalPages = max(1, ceil($totalImages / $limit));
+        $totalPages = max(1, (int)ceil($totalImages / $limit));
 
         // Slice array for pagination
         $pageImages = array_slice($filteredImages, $offset, $limit);
@@ -164,18 +178,31 @@ class GalleryController
         $loopImages = [];
         foreach ($pageImages as $img)
         {
+            $imageHash = TypeHelper::toString($img['image_hash'] ?? null, allowEmpty: false) ?? '';
+            if ($imageHash === '')
+            {
+                // Skip malformed rows rather than throwing
+                continue;
+            }
+
+            $views = TypeHelper::toInt($img['views'] ?? null) ?? 0;
             $loopImages[] = [
-                "/gallery/original/" . $img['image_hash'],
-                "/gallery/" . $img['image_hash'],
-                (int)($img['views'] ?? 0),
+                "/" . $img['original_path'],
+                "/gallery/" . $imageHash,
+                $views,
             ];
         }
 
         // Pagination navigation links
-        $pagination_prev = $page > 1 ? ($page - 1 === 1 ? '/' : '/gallery/page/' . ($page - 1)) : null;
+        $pagination_prev = $page > 1 ? ($page - 1 === 1 ? '/gallery' : '/gallery/page/' . ($page - 1)) : null;
         $pagination_next = $page < $totalPages ? '/gallery/page/' . ($page + 1) : null;
 
-        $range = $config['gallery']['pagination_range'];
+        $range = TypeHelper::toInt($config['gallery']['pagination_range'] ?? null) ?? 2;
+        if ($range < 0)
+        {
+            $range = 0;
+        }
+
         $start = max(1, $page - $range);
         $end = min($totalPages, $page + $range);
 
@@ -238,26 +265,43 @@ class GalleryController
     {
         $config = self::getConfig();
         $template = self::initTemplate();
-        $userId = SessionManager::get('user_id');
+
+        // Session values are frequently strings; parse safely
+        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+
+        // Hash is a route param; never throw here
+        $hash = TypeHelper::toString($hash);
+        if ($hash === '')
+        {
+            http_response_code(404);
+            $template->assign('title', 'Image Not Found');
+            $template->assign('message', 'The requested image could not be found.');
+            $template->render('errors/error_page.html');
+            return;
+        }
 
         $currentUser = null;
-        $commentsPerPage = $config['gallery']['comments_per_page'];
-        $commentsPage = Security::sanitizeInt($_GET['cpage'] ?? 1);
 
+        $commentsPerPage = TypeHelper::toInt($config['gallery']['comments_per_page']) ?? 5;
+        if ($commentsPerPage < 1)
+        {
+            $commentsPerPage = 10;
+        }
+
+        $commentsPage = TypeHelper::toInt($_GET['cpage'] ?? 1);
         if ($commentsPage < 1)
         {
             $commentsPage = 1;
         }
 
-        if ($userId)
+        if ($userId > 0)
         {
-            $currentUser = Database::fetch(
-                "SELECT date_of_birth, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
+            $currentUser = Database::fetch("SELECT date_of_birth, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
                 [':id' => $userId]
             );
         }
 
-        $sql = "
+        $img = Database::fetch("
             SELECT
                 i.id,
                 i.user_id,
@@ -293,9 +337,7 @@ class GalleryController
             WHERE i.image_hash = :hash
             AND i.status = 'approved'
             LIMIT 1
-        ";
-
-        $img = Database::fetch($sql, ['hash' => $hash]);
+        ", [':hash' => $hash]);
 
         if (!$img)
         {
@@ -306,11 +348,30 @@ class GalleryController
             return;
         }
 
-        if (Security::sanitizeInt($img['age_sensitive'] === 1) && !self::checkAgeSensitiveAccess($currentUser, (new DateTime())->modify("-" . Security::sanitizeInt(self::$config['profile']['years'] ?? 0) . " years")->format('Y-m-d')))
+        $requiredYears = TypeHelper::toInt($config['profile']['years']) ?? 0;
+        if ($requiredYears < 0)
+        {
+            $requiredYears = 0;
+        }
+
+        $minBirthDate = (new DateTime())->modify("-{$requiredYears} years")->format('Y-m-d');
+
+        $ageSensitive = TypeHelper::toInt($img['age_sensitive']) ?? 0;
+        if ($ageSensitive === 1 && !self::checkAgeSensitiveAccess($currentUser, $minBirthDate))
         {
             http_response_code(403);
             $template->assign('title', 'Access Denied');
             $template->assign('message', 'The server understood your request, but you are not authorized to view this image.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $imageId = TypeHelper::toInt($img['id']) ?? null;
+        if ($imageId < 1)
+        {
+            http_response_code(404);
+            $template->assign('title', 'Image Not Found');
+            $template->assign('message', 'The requested image could not be found.');
             $template->render('errors/error_page.html');
             return;
         }
@@ -322,22 +383,22 @@ class GalleryController
             $viewedImages = [];
         }
 
-        if (!in_array($img['image_hash'], $viewedImages, true))
+        $imgHash = TypeHelper::toString($img['image_hash'] ?? null, allowEmpty: false) ?? '';
+        if ($imgHash !== '' && !in_array($imgHash, $viewedImages, true))
         {
-            $sql = "UPDATE app_images SET views = views + 1 WHERE id = :id LIMIT 1";
-            Database::execute($sql, [':id' => (int)$img['id']]);
+            Database::execute("UPDATE app_images SET views = views + 1 WHERE id = :id LIMIT 1", [':id' => $imageId]);
 
-            $viewedImages[] = $img['image_hash'];
+            $viewedImages[] = $imgHash;
             SessionManager::set('viewed_images', $viewedImages);
 
-            $img['views'] = Security::sanitizeInt(($img['views'] ?? 0) + 1);
+            $img['views'] = (TypeHelper::toInt($img['views']) ?? 0) + 1;
         }
 
-        if (Security::sanitizeInt($img['age_sensitive'] === 1))
+        if ($ageSensitive === 1)
         {
             $alertColor   = 'alert-warning';
             $alertTag     = '<b>Heads Up!</b>';
-            $alertMessage = 'This image is marked <b>sensitive</b> and may not be suitable for users under <b>' . self::$config['profile']['years'] . '</b> years of age.';
+            $alertMessage = 'This image is marked <b>sensitive</b> and may not be suitable for users under <b>' . ($config['profile']['years'] ?? 0) . '</b> years of age.';
 
             $template->assign('alert_color', $alertColor);
             $template->assign('alert_tag', $alertTag);
@@ -355,40 +416,33 @@ class GalleryController
             $template->assign('alert_message', $alertMessage);
         }
 
-        $username = self::getUsernameById((int)$img['user_id']);
+        $ownerUserId = TypeHelper::toInt($img['user_id'] ?? null);
+        $username = self::getUsernameById($ownerUserId);
 
         $hasVoted = false;
-        if ($userId)
+        if ($userId > 0)
         {
-            $sql = "SELECT 1 FROM app_image_votes WHERE user_id = :user_id AND image_id = :image_id LIMIT 1";
-            $voted = Database::fetch($sql, [
-                ':user_id' => $userId,
-                ':image_id' => $img['id']
-            ]);
-            $hasVoted = (bool)$voted;
+            $voted = Database::fetch("SELECT 1 FROM app_image_votes WHERE user_id = :user_id AND image_id = :image_id LIMIT 1",
+                [':user_id' => $userId, ':image_id' => $imageId]
+            );
+            $hasVoted = TypeHelper::rowExists($voted);
         }
 
         $hasFavorited = false;
-        if ($userId)
+        if ($userId > 0)
         {
-            $sql = "SELECT 1 FROM app_image_favorites WHERE user_id = :user_id AND image_id = :image_id LIMIT 1";
-            $favorited = Database::fetch($sql, [
-                ':user_id' => $userId,
-                ':image_id' => $img['id']
-            ]);
-            $hasFavorited = (bool)$favorited;
+            $favorited = Database::fetch("SELECT 1 FROM app_image_favorites WHERE user_id = :user_id AND image_id = :image_id LIMIT 1",
+                [':user_id' => $userId, ':image_id' => $imageId]
+            );
+            $hasFavorited = TypeHelper::rowExists($favorited);
         }
 
         // Fetch comments count (pagination)
-        $commentCountRow = Database::fetch(
-            "SELECT COUNT(*) AS count
-               FROM app_image_comments
-              WHERE image_id = :image_id
-                AND is_deleted = 0",
-            [':image_id' => $img['id']]
+        $commentCountRow = Database::fetch("SELECT COUNT(*) AS count FROM app_image_comments WHERE image_id = :image_id AND is_deleted = 0",
+            [':image_id' => $imageId]
         );
 
-        $commentCount = (int)($commentCountRow['count'] ?? 0);
+        $commentCount = TypeHelper::toInt($commentCountRow['count']) ?? 0;
         $commentsTotalPages = (int)ceil($commentCount / $commentsPerPage);
 
         if ($commentsTotalPages < 1)
@@ -403,15 +457,9 @@ class GalleryController
 
         $commentsOffset = ($commentsPage - 1) * $commentsPerPage;
 
-        $comments = Database::fetchAll(
-            "SELECT c.comment_body, c.created_at, u.username
-               FROM app_image_comments c
-               LEFT JOIN app_users u ON c.user_id = u.id
-              WHERE c.image_id = :image_id
-                AND c.is_deleted = 0
-              ORDER BY c.created_at DESC
-              LIMIT {$commentsPerPage} OFFSET {$commentsOffset}",
-            [':image_id' => $img['id']]
+        $comments = Database::fetchAll( "SELECT c.comment_body, c.created_at, u.username FROM app_image_comments c LEFT JOIN app_users u ON c.user_id = u.id
+              WHERE c.image_id = :image_id AND c.is_deleted = 0 ORDER BY c.created_at DESC LIMIT {$commentsPerPage} OFFSET {$commentsOffset}",
+            [':image_id' => $imageId]
         );
 
         $commentRows = [];
@@ -427,16 +475,18 @@ class GalleryController
         // Determine edit permissions for the UI (owner or staff)
         $canEditImage = false;
 
-        $appUserId = Security::sanitizeInt(SessionManager::get('user_id'));
+        $appUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
         if ($appUserId > 0)
         {
-            $isOwner = (Security::sanitizeInt($img['user_id'] ?? 0) === $appUserId);
+            $imgUserId = TypeHelper::toInt($img['user_id']) ?? 0;
+            $isOwner = ($imgUserId === $appUserId);
 
             $userRole = Database::fetch("SELECT role_id FROM app_users WHERE id = :id LIMIT 1",
                 [':id' => $appUserId]
             );
 
-            $roleName = RoleHelper::getRoleNameById(Security::sanitizeInt($userRole['role_id'] ?? 0));
+            $roleId = TypeHelper::toInt($userRole['role_id']) ?? 0;
+            $roleName = RoleHelper::getRoleNameById($roleId);
             $isStaff = in_array($roleName, ['administrator', 'moderator'], true);
 
             $canEditImage = ($isOwner || $isStaff);
@@ -496,10 +546,10 @@ class GalleryController
     public static function edit(string $hash): void
     {
         $template = self::initTemplate();
-    
+
         // Require login
         RoleHelper::requireLogin();
-    
+
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
         {
             http_response_code(405);
@@ -508,10 +558,9 @@ class GalleryController
             $template->render('errors/error_page.html');
             return;
         }
-    
-        $csrfToken = $_POST['csrf_token'] ?? '';
-    
+
         // Verify CSRF token to prevent cross-site request forgery
+        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
         if (!Security::verifyCsrfToken($csrfToken))
         {
             http_response_code(403);
@@ -520,9 +569,9 @@ class GalleryController
             $template->render('errors/error_page.html');
             return;
         }
-    
+
         // Ensure hash is provided
-        $hash = trim($hash);
+        $hash = TypeHelper::toString($hash);
         if ($hash === '')
         {
             http_response_code(404);
@@ -531,10 +580,12 @@ class GalleryController
             $template->render('errors/error_page.html');
             return;
         }
-    
-        $sql = "SELECT id, user_id, image_hash FROM app_images WHERE image_hash = :hash LIMIT 1";
-        $img = Database::fetch($sql, [':hash' => $hash]);
-    
+
+        $img = Database::fetch(
+            "SELECT id, user_id, image_hash FROM app_images WHERE image_hash = :hash LIMIT 1",
+            [':hash' => $hash]
+        );
+
         if (!$img)
         {
             http_response_code(404);
@@ -543,18 +594,19 @@ class GalleryController
             $template->render('errors/error_page.html');
             return;
         }
-    
-        $description = trim((string)($_POST['description'] ?? ''));
-    
-        $sql = "UPDATE app_images SET description = :description, updated_at = NOW() WHERE image_hash = :image_hash LIMIT 1";
-        Database::execute($sql, [
-            ':description' => $description,
-            ':image_hash' => (string)$img['image_hash']
-        ]);
-    
+
+        // Description should be tolerant (user input)
+        $image = TypeHelper::requireString($img['image_hash'] ?? null, allowEmpty: false);
+        $description = TypeHelper::toString($_POST['description'] ?? null, allowEmpty: true) ?? '';
+        $description = TypeHelper::toString($description); // todo: this line might not be needed
+
+        Database::execute("UPDATE app_images SET description = :description, updated_at = NOW() WHERE image_hash = :image_hash LIMIT 1",
+            [':description' => $description, ':image_hash' => $image]
+        );
+
         header('Location: /gallery/' . $hash);
         exit;
-    }    
+    }
 
     /**
      * Handle marking an image as favorite by logged-in user.
@@ -572,14 +624,31 @@ class GalleryController
     public static function favorite(string $hash): void
     {
         $template = self::initTemplate();
-        $userId = SessionManager::get('user_id');
 
         // Require login
         RoleHelper::requireLogin();
 
-        $csrfToken = $_POST['csrf_token'] ?? '';
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            http_response_code(405);
+            $template->assign('title', 'Method Not Allowed');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        if ($userId < 1)
+        {
+            http_response_code(403);
+            $template->assign('title', 'Access Denied');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
 
         // Verify CSRF token to prevent cross-site request forgery
+        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
         if (!Security::verifyCsrfToken($csrfToken))
         {
             http_response_code(403);
@@ -589,9 +658,18 @@ class GalleryController
             return;
         }
 
+        $hash = TypeHelper::toString($hash);
+        if ($hash === '')
+        {
+            http_response_code(404);
+            $template->assign('title', 'Image Not Found');
+            $template->assign('message', 'The requested image could not be found.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
         // Find the image by hash
-        $sql = "SELECT id FROM app_images WHERE image_hash = :hash LIMIT 1";
-        $image = Database::fetch($sql, [':hash' => $hash]);
+        $image = Database::fetch("SELECT id FROM app_images WHERE image_hash = :hash LIMIT 1", [':hash' => $hash]);
 
         if (!$image)
         {
@@ -602,13 +680,23 @@ class GalleryController
             return;
         }
 
-        $imageId = (int)$image['id'];
+        $imageId = TypeHelper::toInt($image['id'] ?? null) ?? 0;
+        if ($imageId < 1)
+        {
+            $template->assign('title', "Favorite Failed");
+            $template->assign('message', "The image you attempted to favorite does not exist.");
+            $template->assign('link', null);
+            $template->render('errors/error_page.html');
+            return;
+        }
 
         // Check if user already favorited
-        $sql = "SELECT 1 FROM app_image_favorites WHERE user_id = :user_id AND image_id = :image_id LIMIT 1";
-        $existing = Database::fetch($sql, [':user_id' => $userId, ':image_id' => $imageId]);
+        $existing = Database::fetch(
+            "SELECT 1 FROM app_image_favorites WHERE user_id = :user_id AND image_id = :image_id LIMIT 1",
+            [':user_id' => $userId, ':image_id' => $imageId]
+        );
 
-        if ($existing)
+        if (TypeHelper::rowExists($existing))
         {
             $template->assign('title', "Favorite Failed");
             $template->assign('message', "You have already marked this image as a favorite.");
@@ -618,8 +706,10 @@ class GalleryController
         }
 
         // Insert favorite
-        $sql = "INSERT INTO app_image_favorites (user_id, image_id) VALUES (:user_id, :image_id)";
-        Database::execute($sql, [':user_id' => $userId, ':image_id' => $imageId]);
+        Database::execute(
+            "INSERT INTO app_image_favorites (user_id, image_id) VALUES (:user_id, :image_id)",
+            [':user_id' => $userId, ':image_id' => $imageId]
+        );
 
         $template->assign('title', 'Successful Favorite!');
         $template->assign('message', "You have successfully marked this image as a favorite.");
@@ -643,14 +733,31 @@ class GalleryController
     public static function upvote(string $hash): void
     {
         $template = self::initTemplate();
-        $userId = SessionManager::get('user_id');
 
         // Require login
         RoleHelper::requireLogin();
 
-        $csrfToken = $_POST['csrf_token'] ?? '';
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            http_response_code(405);
+            $template->assign('title', 'Method Not Allowed');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        if ($userId < 1)
+        {
+            http_response_code(403);
+            $template->assign('title', 'Access Denied');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
 
         // Verify CSRF token to prevent cross-site request forgery
+        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
         if (!Security::verifyCsrfToken($csrfToken))
         {
             http_response_code(403);
@@ -660,9 +767,18 @@ class GalleryController
             return;
         }
 
+        $hash = TypeHelper::toString($hash);
+        if ($hash === '')
+        {
+            http_response_code(404);
+            $template->assign('title', 'Image Not Found');
+            $template->assign('message', 'The requested image could not be found.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
         // Find the image by hash
-        $sql = "SELECT id FROM app_images WHERE image_hash = :hash LIMIT 1";
-        $image = Database::fetch($sql, [':hash' => $hash]);
+        $image = Database::fetch("SELECT id FROM app_images WHERE image_hash = :hash LIMIT 1", [':hash' => $hash]);
 
         if (!$image)
         {
@@ -673,13 +789,23 @@ class GalleryController
             return;
         }
 
-        $imageId = (int)$image['id'];
+        $imageId = TypeHelper::toInt($image['id'] ?? null) ?? 0;
+        if ($imageId < 1)
+        {
+            $template->assign('title', "Upvote Failed");
+            $template->assign('message', "The image you attempted to upvote does not exist.");
+            $template->assign('link', null);
+            $template->render('errors/error_page.html');
+            return;
+        }
 
         // Check if user already voted
-        $sql = "SELECT 1 FROM app_image_votes WHERE user_id = :user_id AND image_id = :image_id LIMIT 1";
-        $existing = Database::fetch($sql, [':user_id' => $userId, ':image_id' => $imageId]);
+        $existing = Database::fetch(
+            "SELECT 1 FROM app_image_votes WHERE user_id = :user_id AND image_id = :image_id LIMIT 1",
+            [':user_id' => $userId, ':image_id' => $imageId]
+        );
 
-        if ($existing)
+        if (TypeHelper::rowExists($existing))
         {
             $template->assign('title', "Upvote Failed");
             $template->assign('message', "You have already upvoted this image.");
@@ -689,8 +815,10 @@ class GalleryController
         }
 
         // Insert vote
-        $sql = "INSERT INTO app_image_votes (user_id, image_id) VALUES (:user_id, :image_id)";
-        Database::execute($sql, [':user_id' => $userId, ':image_id' => $imageId]);
+        Database::execute(
+            "INSERT INTO app_image_votes (user_id, image_id) VALUES (:user_id, :image_id)",
+            [':user_id' => $userId, ':image_id' => $imageId]
+        );
 
         $template->assign('title', 'Successful Upvote!');
         $template->assign('message', "You have successfully upvoted this image.");
@@ -715,7 +843,6 @@ class GalleryController
     public static function comment(string $hash): void
     {
         $template = self::initTemplate();
-        $userId = SessionManager::get('user_id');
 
         // Require login
         RoleHelper::requireLogin();
@@ -729,9 +856,18 @@ class GalleryController
             return;
         }
 
-        $csrfToken = $_POST['csrf_token'] ?? '';
+        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        if ($userId < 1)
+        {
+            http_response_code(403);
+            $template->assign('title', 'Access Denied');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
 
         // Verify CSRF token to prevent cross-site request forgery
+        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
         if (!Security::verifyCsrfToken($csrfToken))
         {
             http_response_code(403);
@@ -741,9 +877,17 @@ class GalleryController
             return;
         }
 
-        $commentBody = $_POST['comment_body'] ?? '';
-        $commentBody = Security::sanitizeString($commentBody);
+        $hash = TypeHelper::toString($hash);
+        if ($hash === '')
+        {
+            http_response_code(404);
+            $template->assign('title', 'Image Not Found');
+            $template->assign('message', 'The requested image could not be found.');
+            $template->render('errors/error_page.html');
+            return;
+        }
 
+        $commentBody = Security::sanitizeString($_POST['comment_body'] ?? '');
         if ($commentBody === '')
         {
             header('Location: /gallery/' . $hash);
@@ -751,8 +895,9 @@ class GalleryController
         }
 
         // Find the approved image by hash
-        $sql = "SELECT id FROM app_images WHERE image_hash = :hash AND status = 'approved' LIMIT 1";
-        $image = Database::fetch($sql, [':hash' => $hash]);
+        $image = Database::fetch("SELECT id FROM app_images WHERE image_hash = :hash AND status = 'approved' LIMIT 1",
+            [':hash' => $hash]
+        );
 
         if (!$image)
         {
@@ -763,16 +908,26 @@ class GalleryController
             return;
         }
 
-        $imageId = (int)$image['id'];
+        $imageId = TypeHelper::toInt($image['id'] ?? null) ?? 0;
+        if ($imageId < 1)
+        {
+            http_response_code(404);
+            $template->assign('title', 'Image Not Found');
+            $template->assign('message', 'The requested image could not be found.');
+            $template->render('errors/error_page.html');
+            return;
+        }
 
         // Insert comment
-        $sql = "INSERT INTO app_image_comments (image_id, user_id, comment_body)
-                VALUES (:image_id, :user_id, :comment_body)";
-        Database::execute($sql, [
-            ':image_id' => $imageId,
-            ':user_id' => (int)$userId,
-            ':comment_body' => $commentBody
-        ]);
+        Database::execute(
+            "INSERT INTO app_image_comments (image_id, user_id, comment_body)
+             VALUES (:image_id, :user_id, :comment_body)",
+            [
+                ':image_id' => $imageId,
+                ':user_id' => $userId,
+                ':comment_body' => $commentBody
+            ]
+        );
 
         header('Location: /gallery/' . $hash);
         exit;
@@ -795,21 +950,29 @@ class GalleryController
     public static function serveImage(string $hash): void
     {
         $template = self::initTemplate();
-        $userId = SessionManager::get('user_id');
+        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
         $currentUser = null;
 
-        // Fetch current user data for age-sensitive checks
-        if ($userId)
+        $hash = TypeHelper::toString($hash);
+        if ($hash === '')
         {
-            $currentUser = Database::fetch(
-                "SELECT date_of_birth, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
+            http_response_code(404);
+            $template->assign('title', 'Image Not Found');
+            $template->assign('message', 'The requested image could not be found.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        // Fetch current user data for age-sensitive checks
+        if ($userId > 0)
+        {
+            $currentUser = Database::fetch("SELECT date_of_birth, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
                 [':id' => $userId]
             );
         }
 
         // Fetch image metadata from the database
-        $sql = "
-            SELECT
+        $sql = "SELECT
                 original_path,
                 mime_type,
                 age_sensitive,
@@ -820,10 +983,9 @@ class GalleryController
             LEFT JOIN app_users u ON i.user_id = u.id
             WHERE i.image_hash = :hash
             AND (i.status = 'approved' OR i.status = 'rejected')
-            LIMIT 1
-        ";
-        $image = Database::fetch($sql, ['hash' => $hash]);
+            LIMIT 1";
 
+        $image = Database::fetch($sql, [':hash' => $hash]);
         if (!$image)
         {
             http_response_code(404);
@@ -833,12 +995,21 @@ class GalleryController
             return;
         }
 
+        $ageSensitive = TypeHelper::toInt($image['age_sensitive']) ?? 0;
+
         // Determine if per-user cache should be applied
-        $usePerUserCache = (int)$image['age_sensitive'] === 1;
+        $usePerUserCache = ($ageSensitive === 1);
 
         // Age-restricted access check
-        if ($usePerUserCache && !self::checkAgeSensitiveAccess($currentUser,
-            (new DateTime())->modify("-" . (int)(self::$config['profile']['years'] ?? 0) . " years")->format('Y-m-d')))
+        $config = self::getConfig();
+        $requiredYears = TypeHelper::toInt($config['profile']['years']) ?? 0;
+        if ($requiredYears < 0)
+        {
+            $requiredYears = 0;
+        }
+
+        $minBirthDate = (new DateTime())->modify("-{$requiredYears} years")->format('Y-m-d');
+        if ($usePerUserCache && !self::checkAgeSensitiveAccess($currentUser, $minBirthDate))
         {
             http_response_code(403);
             $template->assign('title', 'Access Denied');
@@ -852,7 +1023,7 @@ class GalleryController
         if ($cachedPath)
         {
             // Cached image exists – serve immediately
-            $mimeType = mime_content_type($cachedPath) ?: $image['mime_type'] ?: 'application/octet-stream';
+            $mimeType = mime_content_type($cachedPath) ?: ($image['mime_type'] ?: 'application/octet-stream');
             header('Content-Type: ' . $mimeType);
             header('Content-Length: ' . filesize($cachedPath));
             header('Cache-Control: public, max-age=604800'); // Browser caching (7 days)
@@ -861,9 +1032,18 @@ class GalleryController
         }
 
         // Resolve original file path
-        $baseDir = realpath(__DIR__ . '/../uploads/');
-        $fullPath = realpath($baseDir . '/' . ltrim(str_replace("uploads/", "", $image['original_path']), '/'));
+        $baseDir = realpath(__DIR__ . '/../images/');
+        $originalPath = TypeHelper::toString($image['original_path'] ?? null, allowEmpty: false) ?? '';
+        if (!$baseDir || $originalPath === '')
+        {
+            http_response_code(404);
+            $template->assign('title', 'Image Not Found');
+            $template->assign('message', 'The requested image could not be found.');
+            $template->render('errors/error_page.html');
+            return;
+        }
 
+        $fullPath = realpath($baseDir . '/' . ltrim(str_replace("images/", "", $originalPath), '/'));
         if (!$fullPath || strpos($fullPath, $baseDir) !== 0 || !file_exists($fullPath))
         {
             http_response_code(404);
@@ -876,7 +1056,7 @@ class GalleryController
         // Store image in cache and serve
         $cachedPath = ImageCacheEngine::storeImage($hash, $fullPath, $usePerUserCache ? $userId : null);
 
-        header('Content-Type: ' . $image['mime_type']);
+        header('Content-Type: ' . ($image['mime_type'] ?: 'application/octet-stream'));
         header('Content-Length: ' . filesize($cachedPath));
         header('Cache-Control: public, max-age=604800'); // Allow browser caching (7 days)
         readfile($cachedPath);

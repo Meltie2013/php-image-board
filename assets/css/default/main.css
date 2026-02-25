@@ -166,6 +166,99 @@ header nav a:hover {
 }
 
 /* =========================================================
+   ADDON: ICON LINKS + TOOLTIP (keeps header height unchanged)
+========================================================= */
+
+header nav {
+    line-height: 1;
+    gap: 20px;
+}
+
+header nav a.nav-icon {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+
+    position: relative;
+
+    color: var(--color-text-muted);
+    text-decoration: none;
+
+    transition:
+        background var(--transition-fast),
+        color var(--transition-fast),
+        transform 0.08s ease;
+}
+
+header nav a.nav-icon i {
+    font-size: 16px;
+    line-height: 1;
+    display: block;
+}
+
+header nav a.nav-icon:hover,
+header nav a.nav-icon:focus-visible {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--color-text-main);
+    transform: translateY(-1px);
+    outline: none;
+}
+
+/* Tooltip bubble */
+header nav a.nav-icon::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 10px);
+    transform: translateX(-50%);
+
+    padding: 6px 10px;
+    border-radius: 8px;
+
+    background: rgba(10, 11, 14, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--color-text-main);
+
+    font-size: 12px;
+    line-height: 1.2;
+    white-space: nowrap;
+
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-fast);
+    z-index: 999;
+}
+
+/* Tooltip arrow */
+header nav a.nav-icon::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 4px);
+    transform: translateX(-50%);
+
+    border: 6px solid transparent;
+    border-bottom-color: rgba(10, 11, 14, 0.96);
+
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-fast);
+    z-index: 999;
+}
+
+/* Show tooltip */
+header nav a.nav-icon:hover::after,
+header nav a.nav-icon:hover::before,
+header nav a.nav-icon:focus-visible::after,
+header nav a.nav-icon:focus-visible::before {
+    opacity: 1;
+}
+
+/* =========================================================
    DEFAULT MAIN CONTENT (AUTH PAGES)
    Templates like login/register use <main> without a class.
    We style only those mains so gallery pages remain full-width.
@@ -403,7 +496,7 @@ footer {
     margin-top: auto;
     padding: 16px 20px;
     text-align: center;
-    font-size: 13px;
+    font-size: 12px;
     color: var(--color-text-soft);
     border-top: 1px solid rgba(255, 255, 255, 0.04);
     background: rgba(10, 11, 14, 0.85);

@@ -1,9 +1,4 @@
--- phpMyAdmin SQL Dump
--- version 5.1.1deb5ubuntu1
--- https://www.phpmyadmin.net/
---
--- Host: 10.220.100.102:3306
--- Generation Time: Feb 08, 2026 at 09:38 PM
+-- Generation Time: Feb 25, 2026 at 03:40 PM
 -- Server version: 10.6.22-MariaDB-0ubuntu0.22.04.1
 -- PHP Version: 8.1.2-1ubuntu2.23
 
@@ -16,12 +11,6 @@ SET time_zone = "+00:00";
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
 /*!40101 SET NAMES utf8mb4 */;
-
---
--- Database: `php_cms_gallery_dev`
---
-
--- --------------------------------------------------------
 
 --
 -- Table structure for table `app_images`
@@ -189,6 +178,51 @@ CREATE TABLE `app_sessions` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `app_settings`
+--
+
+CREATE TABLE `app_settings` (
+  `key` varchar(128) NOT NULL,
+  `value` varchar(150) NOT NULL,
+  `type` varchar(16) NOT NULL DEFAULT 'string',
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `app_settings`
+--
+
+INSERT INTO `app_settings` (`key`, `value`, `type`, `updated_at`) VALUES
+('debugging.allow_approve_uploads', '0', 'bool', '2026-02-25 13:49:45'),
+('debugging.allow_error_outputs', '0', 'bool', '2026-02-25 13:49:56'),
+('gallery.comments_per_page', '5', 'int', '2026-02-25 12:28:16'),
+('gallery.images_displayed', '24', 'int', '2026-02-25 12:55:22'),
+('gallery.pagination_range', '3', 'int', '2026-02-25 12:28:16'),
+('gallery.upload_max_image_size', '2', 'int', '2026-02-25 12:55:13'),
+('gallery.upload_max_storage', '500mb', 'string', '2026-02-25 14:58:43'),
+('profile.avatar_size', '250', 'int', '2026-02-25 12:28:16'),
+('profile.years', '13', 'int', '2026-02-25 12:28:16'),
+('site.name', 'PHP Image Gallery', 'string', '2026-02-25 11:54:07'),
+('site.version', '0.1.4', 'string', '2026-02-25 15:27:39'),
+('template.allowed_functions', '[\"strtoupper\",\"strtolower\",\"ucfirst\",\"lcfirst\"]', 'json', '2026-02-25 11:45:18'),
+('template.disable_cache', '1', 'bool', '2026-02-25 12:00:22'),
+('upload.hash_type', 'mixed_lower', 'string', '2026-02-25 12:28:16');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `app_updates`
+--
+
+CREATE TABLE `app_updates` (
+  `id` int(11) NOT NULL,
+  `filename` varchar(255) NOT NULL,
+  `applied_at` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `app_users`
 --
 
@@ -309,6 +343,19 @@ ALTER TABLE `app_sessions`
   ADD KEY `fk_sessions_user` (`user_id`);
 
 --
+-- Indexes for table `app_settings`
+--
+ALTER TABLE `app_settings`
+  ADD PRIMARY KEY (`key`);
+
+--
+-- Indexes for table `app_updates`
+--
+ALTER TABLE `app_updates`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `filename` (`filename`);
+
+--
 -- Indexes for table `app_users`
 --
 ALTER TABLE `app_users`
@@ -368,6 +415,12 @@ ALTER TABLE `app_image_votes`
 --
 ALTER TABLE `app_roles`
   MODIFY `id` tinyint(3) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+
+--
+-- AUTO_INCREMENT for table `app_updates`
+--
+ALTER TABLE `app_updates`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `app_users`

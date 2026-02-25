@@ -27,6 +27,11 @@ class TemplateEngine
     private array $globals = [];
     private bool $disableCache = false;
 
+    // Template function whitelist (configurable via config/db settings)
+    private array $allowedFunctions = [];
+    private string $configHashPath = '';
+
+
     /**
      * Create a new TemplateEngine instance and prepare cache + automatic globals.
      *
@@ -41,7 +46,10 @@ class TemplateEngine
      */
     public function __construct(string $templateDir, string $cacheDir, array $config = [])
     {
-        $config = require __DIR__ . '/../config/config.php';
+        if (empty($config))
+        {
+            $config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require __DIR__ . '/../config/config.php');
+        }
         $this->templateDir = rtrim($templateDir, '/');
         $this->cacheDir = rtrim($cacheDir, '/');
 
@@ -61,6 +69,54 @@ class TemplateEngine
             'displayed_comments' => $config['gallery']['comments_per_page'],
             'site_user_role' => SessionManager::get('user_role'),
         ];
+
+        // Allowed template functions (whitelisted)
+        $allowed = [];
+        if (!empty($config['template']['allowed_functions']) && is_array($config['template']['allowed_functions']))
+        {
+            foreach ($config['template']['allowed_functions'] as $fn)
+            {
+                if (!is_string($fn)) continue;
+                $fn = trim($fn);
+                if ($fn === '') continue;
+
+                // Only allow valid function name characters
+                if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $fn))
+                {
+                    continue;
+                }
+
+                $allowed[] = $fn;
+            }
+        }
+
+        // De-dupe and cap to avoid abuse
+        $allowed = array_values(array_unique($allowed));
+        if (count($allowed) > 64)
+        {
+            $allowed = array_slice($allowed, 0, 64);
+        }
+
+        $this->allowedFunctions = $allowed;
+
+        // If template security settings change, clear cache to prevent stale compiled templates
+        $this->configHashPath = $this->cacheDir . '/.template_config_hash';
+        $hashPayload = [
+            'allowed_functions' => $this->allowedFunctions,
+        ];
+        $currentHash = hash('sha256', json_encode($hashPayload));
+
+        if (is_file($this->configHashPath))
+        {
+            $oldHash = trim((string)@file_get_contents($this->configHashPath));
+            if ($oldHash !== $currentHash)
+            {
+                $this->clearCache();
+            }
+        }
+
+        @file_put_contents($this->configHashPath, $currentHash);
+
 
         // Disable cache if config set
         $this->disableCache = !empty($config['template']['disable_cache']);
@@ -139,7 +195,9 @@ class TemplateEngine
             // - {block name="..."}     => Comment markers (structure hint only)
             // - {include file="..."}   => Recursive compile + include of partial templates
             // - {raw $var}             => Raw output (use sparingly; trusted content only)
-            $content = preg_replace_callback(
+            $allowedFunctions = $this->allowedFunctions;
+
+                        $content = preg_replace_callback(
                 '/\{\s*\$([a-zA-Z0-9_]+)\s*\}|' . // {$var}
                 '\{([a-zA-Z_][a-zA-Z0-9_]*)\((.*?)\)\}|' . // {function($var)}
                 '\{if\s+(.+?)\}|' . // {if condition}
@@ -156,10 +214,21 @@ class TemplateEngine
                 '\{\/block\}|' . // {/block}
                 '\{include\s+file="(.+?)"\}|' . // {include file="..."}
                 '\{raw\s+\$([a-zA-Z0-9_]+)\}/s', // {raw $var}
-                function($m)
+                function($m) use ($allowedFunctions)
                 {
                     if (!empty($m[1])) return '<?= strip_tags((string)($' . $m[1] . ' ?? ""), "<b><i><u><strong><em>") ?>';
-                    if (!empty($m[2])) return '<?= htmlspecialchars(' . $m[2] . '(' . trim($m[3]) . '), ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8") ?>';
+                    if (!empty($m[2]))
+                    {
+                        $fn = $m[2];
+                        if (!in_array($fn, $allowedFunctions, true))
+                        {
+                            return '<?= "" ?>';
+                        }
+
+                        $args = trim($m[3]);
+
+                        return '<?= (function_exists("' . $fn . '") ? htmlspecialchars(' . $fn . '(' . $args . '), ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8") : "") ?>';
+                    }
                     if (!empty($m[4])) return "\n<?php if (" . str_replace('||', ' || ', trim($m[4])) . "): ?>";
                     if (!empty($m[5])) return "\n<?php elseif (" . trim($m[5]) . "): ?>";
                     if (isset($m[0]) && $m[0] === '{else}') return "\n<?php else: ?>";

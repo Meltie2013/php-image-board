@@ -27,7 +27,7 @@
                             <form method="POST" action="/gallery/{$img_hash}/favorite">
                                 <input type="hidden" name="csrf_token" value="{$csrf_token}">
                                 <button type="submit" title="Add Favorite">
-                                    <i class="fa-solid fa-star"></i>
+                                    <i class="fa-regular fa-star"></i>
                                     {$img_favorites}
                                 </button>
                             </form>
@@ -42,7 +42,7 @@
                             <form method="POST" action="/gallery/{$img_hash}/upvote">
                                 <input type="hidden" name="csrf_token" value="{$csrf_token}">
                                 <button type="submit" title="Up Vote">
-                                    <i class="fa-solid fa-thumbs-up"></i>
+                                    <i class="fa-regular fa-thumbs-up"></i>
                                     {$img_votes}
                                 </button>
                             </form>
@@ -60,12 +60,12 @@
                             </button>
 
                             <button title="Login to Favorite">
-                                <i class="fa-solid fa-star"></i>
+                                <i class="fa-regular fa-star"></i>
                                 {$img_favorites}
                             </button>
 
                             <button title="Login to Upvote">
-                                <i class="fa-solid fa-thumbs-up"></i>
+                                <i class="fa-regular fa-thumbs-up"></i>
                                 {$img_votes}
                             </button>
                         </div>

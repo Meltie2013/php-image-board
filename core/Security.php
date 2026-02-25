@@ -157,7 +157,7 @@ class Security
      * @param mixed $input Raw user input
      * @return bool True/false normalized boolean value
      */
-    public static function sanitizeBool(mixed $input): ?bool
+    public static function sanitizeBool(mixed $input): bool
     {
         return filter_var($input, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
     }
@@ -171,7 +171,7 @@ class Security
      * @param mixed $input Raw user input
      * @return float|null Valid float value, or null when invalid
      */
-    public static function sanitizeFloat(mixed $input): float
+    public static function sanitizeFloat(mixed $input): ?float
     {
         $filtered = filter_var($input, FILTER_VALIDATE_FLOAT);
         return $filtered !== false ? $filtered : null;
@@ -192,13 +192,7 @@ class Security
      * @param string|null $timezone Timezone for parsing/comparison (default: UTC)
      * @return string|null Normalized date string in $format, or null if invalid
      */
-    public static function sanitizeDate(
-        string $input,
-        string $format = 'Y-m-d',
-        ?string $min = null,
-        ?string $max = null,
-        ?string $timezone = 'UTC'
-    ): ?string
+    public static function sanitizeDate(string $input, string $format = 'Y-m-d', ?string $min = null, ?string $max = null, ?string $timezone = 'UTC'): ?string
     {
         $input = trim($input);
         if ($input === '')

@@ -38,7 +38,7 @@ class AuthController
     {
         if (empty(self::$config))
         {
-            self::$config = require __DIR__ . '/../config/config.php';
+            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require __DIR__ . '/../config/config.php');
         }
 
         return self::$config;
@@ -87,7 +87,7 @@ class AuthController
         $errors = [];
 
         // Check if user is already logged in
-        $userId = SessionManager::get('user_id');
+        $userId = TypeHelper::toInt(SessionManager::get('user_id'));
         if ($userId)
         {
             // Redirect authenticated users to their profile overview
@@ -121,9 +121,8 @@ class AuthController
                 ['email' => $email]
             );
 
-            $userIdToCheck = $user['id'] ?? null;
-
             // If user exists, enforce status and lockout checks before password validation
+            $userIdToCheck = TypeHelper::toInt($user['id'] ?? null);
             if ($userIdToCheck)
             {
                 // Block suspended accounts immediately
@@ -143,7 +142,7 @@ class AuthController
                 }
 
                 // Check for permanent suspension (6+ failed attempts)
-                if ((int)$user['failed_logins'] >= 6 && empty($errors))
+                if ((TypeHelper::toInt($user['failed_logins'] ?? null) ?? 0) >= 6 && empty($errors))
                 {
                     Database::query("UPDATE app_users SET status = 'suspended' WHERE id = :id",
                         ['id' => $userIdToCheck]
@@ -167,7 +166,7 @@ class AuthController
                     SessionManager::regenerate();
 
                     // Store important user details in session
-                    SessionManager::set('user_id', $user['id']);
+                    SessionManager::set('user_id', $userIdToCheck);
                     SessionManager::set('user_role', $user['role_name']);
                     SessionManager::set('username', $user['username']);
                     SessionManager::set('user_avatar', $user['avatar_path']);
@@ -179,7 +178,7 @@ class AuthController
                 else
                 {
                     // Failed login: calculate attempt count
-                    $failedLogins = (int)$user['failed_logins'];
+                    $failedLogins = TypeHelper::toInt($user['failed_logins'] ?? null) ?? 0;
                     $lastFailed = strtotime($user['last_failed_login'] ?? '0');
                     $now = time();
                     $resetWindow = 600; // 10 minutes
@@ -258,7 +257,7 @@ class AuthController
         $success = '';
 
         // Prevent already logged-in users from registering again
-        $userId = SessionManager::get('user_id');
+        $userId = TypeHelper::toInt(SessionManager::get('user_id'));
         if ($userId)
         {
             header('Location: /profile/overview');

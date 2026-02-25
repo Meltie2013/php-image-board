@@ -21,7 +21,7 @@ class ModerationController
     {
         if (empty(self::$config))
         {
-            self::$config = require __DIR__ . '/../config/config.php';
+            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require __DIR__ . '/../config/config.php');
         }
         return self::$config;
     }
@@ -88,12 +88,12 @@ class ModerationController
         $rejectedCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'rejected'");
         $viewsCountResult = Database::fetch("SELECT COALESCE(SUM(views), 0) AS total_views FROM app_images WHERE status = 'approved';");
 
-        $total_images = (int)($totalImagesResult['cnt'] ?? 0);
-        $approved_count = (int)($approvedCountResult['cnt'] ?? 0);
-        $pending_count = (int)($pendingCountResult['cnt'] ?? 0);
-        $removed_count = (int)($removedCountResult['cnt'] ?? 0);
-        $rejected_count = (int)($rejectedCountResult['cnt'] ?? 0);
-        $combind_count = (int)($viewsCountResult['total_views'] ?? 0);
+        $total_images = TypeHelper::toInt($totalImagesResult['cnt'] ?? null) ?? 0;
+        $approved_count = TypeHelper::toInt($approvedCountResult['cnt'] ?? null) ?? 0;
+        $pending_count = TypeHelper::toInt($pendingCountResult['cnt'] ?? null) ?? 0;
+        $removed_count = TypeHelper::toInt($removedCountResult['cnt'] ?? null) ?? 0;
+        $rejected_count = TypeHelper::toInt($rejectedCountResult['cnt'] ?? null) ?? 0;
+        $combind_count = TypeHelper::toInt($viewsCountResult['total_views'] ?? null) ?? 0;
 
         // Storage info using StorageHelper
         $storage_used = StorageHelper::getUsedStorageReadable();
@@ -103,7 +103,7 @@ class ModerationController
 
         // Get percentage as numeric value
         $percentString = StorageHelper::getStorageUsagePercent(2);
-        $percentNumeric = (float) rtrim($percentString, '%');
+        $percentNumeric = TypeHelper::toFloat(rtrim($percentString, '%')) ?? 0.0;
 
         // Convert to degrees for conic-gradient
         $storage_usage_percent = ($percentNumeric / 100) * 360 . 'deg';
@@ -122,7 +122,7 @@ class ModerationController
         $template->assign('storage_percent', $storage_percent);
         $template->assign('storage_usage_percent', $storage_usage_percent);
 
-        $template->render('panel/moderation_dashboard.html');
+        $template->render('moderation/moderation_dashboard.html');
     }
 
     /**
@@ -138,13 +138,17 @@ class ModerationController
         RoleHelper::requireLogin();
         RoleHelper::requireRole(['administrator', 'moderator'], $template);
 
-        $page = (int)($page ?? 1);
+        $page = TypeHelper::toInt($page ?? null) ?? 1;
+        if ($page < 1)
+        {
+            $page = 1;
+        }
         $perPage = 15; // number of images per page
         $offset = ($page - 1) * $perPage;
 
         // Fetch total pending images count
         $totalCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'pending'");
-        $totalCount = (int)($totalCountResult['cnt'] ?? 0);
+        $totalCount = TypeHelper::toInt($totalCountResult['cnt'] ?? null) ?? 0;
 
         // Fetch paginated pending images
         $rows = Database::fetchAll("
@@ -198,7 +202,7 @@ class ModerationController
         $template->assign('pagination_prev', $paginationPrev);
         $template->assign('pagination_next', $paginationNext);
 
-        $template->render('panel/moderation_pending.html');
+        $template->render('moderation/moderation_pending.html');
     }
 
     /**
@@ -242,7 +246,7 @@ class ModerationController
 
         // Ensure a valid hash is provided
         // (The router passes the hash from the URL, but we still validate it here.)
-        $hash = trim($hash);
+        $hash = TypeHelper::toString($hash);
         if ($hash === '')
         {
             http_response_code(404);
@@ -335,7 +339,7 @@ class ModerationController
 
         // Ensure a valid hash is provided
         // (The router passes the hash from the URL, but we still validate it here.)
-        $hash = trim($hash);
+        $hash = TypeHelper::toString($hash);
         if ($hash === '')
         {
             http_response_code(404);
@@ -429,7 +433,7 @@ class ModerationController
 
         // Ensure a valid hash is provided
         // (The router passes the hash from the URL, but we still validate it here.)
-        $hash = trim($hash);
+        $hash = TypeHelper::toString($hash);
         if ($hash === '')
         {
             http_response_code(404);
@@ -575,7 +579,7 @@ class ModerationController
         $template->assign('selected_image2_hash', $selectedImage2['image_hash'] ?? '');
         $template->assign('selected_image2_original_path', !empty($selectedImage2['image_hash']) ? '/gallery/original/' . $selectedImage2['image_hash'] : '');
 
-        $template->render('panel/moderation_comparison.html');
+        $template->render('moderation/moderation_comparison.html');
     }
 
     /**
@@ -645,7 +649,7 @@ class ModerationController
             // Recalculate hashes for each selected image
             foreach ($images as $img)
             {
-                $imgPath = __DIR__ . '/../uploads/' . str_replace("uploads/", "", $img['original_path']);
+                $imgPath = __DIR__ . '/../images/' . str_replace("images/", "", $img['original_path']);
 
                 if (file_exists($imgPath))
                 {
@@ -727,7 +731,7 @@ class ModerationController
         $template->assign('message', $message);
 
         // Render moderation panel template with rehash tool
-        $template->render('panel/moderation_rehash.html');
+        $template->render('moderation/moderation_rehash.html');
     }
 
     /**
@@ -765,8 +769,8 @@ class ModerationController
             return;
         }
 
-        $baseDir = realpath(__DIR__ . '/../uploads/');
-        $fullPath = realpath($baseDir . '/' . ltrim(str_replace("uploads/", "", $image['original_path']), '/'));
+        $baseDir = realpath(__DIR__ . '/../images/');
+        $fullPath = realpath($baseDir . '/' . ltrim(str_replace("images/", "", $image['original_path']), '/'));
 
         if (!$fullPath || strpos($fullPath, $baseDir) !== 0 || !file_exists($fullPath))
         {

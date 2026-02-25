@@ -12,16 +12,42 @@
         <div class="logo">{$site_name}</div>
 
         <nav>
-            <a href="#">Community Forum</a>
-            <a href="/gallery">Image Gallery</a>
+            <a class="nav-icon" href="#" aria-label="Community Forum" data-tooltip="Community Forum">
+                <i class="fa-regular fa-comments"></i>
+            </a>
+
+            <a class="nav-icon" href="/gallery" aria-label="Image Gallery" data-tooltip="Image Gallery">
+                <i class="fa-regular fa-image"></i>
+            </a>
 
             {if $is_logged_in}
-            <a href="/moderation/dashboard">Image Moderation</a>
-            <a href="/profile/overview">My Profile</a>
-            <a href="/user/logout">Logout</a>
+            <a class="nav-icon" href="#" aria-label="Admin Control Panel" data-tooltip="Admin Control Panel">
+                <i class="fa-solid fa-screwdriver-wrench"></i>
+            </a>
+
+            <a class="nav-icon" href="/moderation/dashboard" aria-label="Moderation Dashboard" data-tooltip="Moderation Dashboard">
+                <i class="fa-solid fa-shield-halved"></i>
+            </a>
+
+            <a class="nav-icon" href="#" aria-label="Notifications" data-tooltip="Notifications">
+                <i class="fa-regular fa-bell"></i>
+            </a>
+            
+             <a class="nav-icon" href="/profile/overview" aria-label="My Profile" data-tooltip="My Profile">
+                <i class="fa-regular fa-user"></i>
+            </a>
+            
+            <a class="nav-icon" href="/user/logout" aria-label="Logout" data-tooltip="Logout">
+                <i class="fa-solid fa-right-from-bracket"></i>
+            </a>
             {else}
-            <a href="/user/login">Login</a>
-            <a href="/user/register">Register</a>
+            <a class="nav-icon" href="/user/login" aria-label="Login" data-tooltip="Login">
+                <i class="fa-solid fa-right-to-bracket"></i>
+            </a>
+
+            <a class="nav-icon" href="/user/register" aria-label="Register" data-tooltip="Register">
+                <i class="fa-solid fa-user-plus"></i>
+            </a>
             {/if}
         </nav>
     </header>

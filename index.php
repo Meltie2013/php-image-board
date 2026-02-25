@@ -13,34 +13,16 @@ header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
 header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
 
-// -------------------------
-// Error reporting (based on config)
-// -------------------------
-if (!empty($config['debugging']['allow_error_outputs']) || $config['debugging']['allow_error_outputs'] === true)
+// Ensure logs directory exists
+$logDir = __DIR__ . '/logs';
+if (!is_dir($logDir))
 {
-    // Development mode - show errors
-    ini_set('display_errors', '1');
-    ini_set('display_startup_errors', '1');
-    error_reporting(E_ALL);
+    mkdir($logDir, 0755, true);
 }
-else
-{
-    // Production mode - hide errors but log them
-    ini_set('display_errors', '0');
-    ini_set('display_startup_errors', '0');
-    error_reporting(E_ALL);
 
-    // Ensure logs directory exists
-    $logDir = __DIR__ . '/logs';
-    if (!is_dir($logDir))
-    {
-        mkdir($logDir, 0755, true);
-    }
-
-    // Log all errors to file
-    ini_set('log_errors', '1');
-    ini_set('error_log', $logDir . '/logs/errors.log');
-}
+// Log all errors to file
+ini_set('log_errors', '1');
+ini_set('error_log', $logDir . '/logs/errors.log');
 
 // -------------------------
 // Autoloader for core classes
@@ -70,6 +52,29 @@ spl_autoload_register(function ($class)
 // Database
 Database::init($config['db']);
 
+// Settings (DB overrides)
+SettingsManager::init($config);
+$config = SettingsManager::getConfig();
+
+// -------------------------
+// Error reporting (based on merged config)
+// -------------------------
+if (!empty($config['debugging']) && !empty($config['debugging']['allow_error_outputs']))
+{
+    // Development mode - show errors
+    ini_set('display_errors', '1');
+    ini_set('display_startup_errors', '1');
+    error_reporting(E_ALL);
+}
+else
+{
+    // The full config tree may be completed after SettingsManager merges defaults + DB overrides.
+    // Until then, fail closed and do not expose errors to the client.
+    ini_set('display_errors', '0');
+    ini_set('display_startup_errors', '0');
+    error_reporting(E_ALL);
+}
+
 // Session
 SessionManager::init($config['session']);
 SessionManager::cleanExpired();
@@ -94,7 +99,9 @@ $router->setDefault(function ()
 // 404 page
 $router->setNotFound(function ()
 {
-    $config = require __DIR__ . '/config/config.php';
+    $config = (class_exists('SettingsManager') && SettingsManager::isInitialized())
+        ? SettingsManager::getConfig()
+        : (require __DIR__ . '/config/config.php');
     $template = new TemplateEngine(__DIR__ . '/templates', __DIR__ . '/cache/templates', $config);
     if (!empty($config['template']['disable_cache']))
     {
@@ -111,87 +118,41 @@ $router->setNotFound(function ()
 // Explicit route registrations
 // -------------------------
 
-// Gallery index (new route)
-$router->add('/gallery', [GalleryController::class, 'index'], ['GET']);
+$HASH = '([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})';
+$router->add([
+    ['/gallery', [GalleryController::class, 'index'], ['GET']],
+    ['/gallery/upload-image', [UploadController::class, 'upload'], ['GET', 'POST']],
+    ['/gallery/page/(\d+)', [GalleryController::class, 'index'], ['GET']],
+    ["/gallery/$HASH", [GalleryController::class, 'view'], ['GET']],
+    ["/gallery/original/$HASH", function ($hash) { GalleryController::serveImage($hash); }, ['GET']],
 
-// Gallery upload routes
-$router->add('/gallery/upload-image', [UploadController::class, 'upload'], ['GET', 'POST']);
+    ['/user/login', [AuthController::class, 'login'], ['GET', 'POST']],
+    ['/user/register', [AuthController::class, 'register'], ['GET', 'POST']],
+    ['/user/logout', [AuthController::class, 'logout'], ['GET']],
 
-// Gallery main routes
-$router->add('/gallery/page/(\d+)', [GalleryController::class, 'index'], ['GET']);
+    ['/profile/overview', [ProfileController::class, 'index'], ['GET']],
+    ['/profile/avatar', [ProfileController::class, 'avatar'], ['GET', 'POST']],
+    ['/profile/email', [ProfileController::class, 'email'], ['GET', 'POST']],
+    ['/profile/dob', [ProfileController::class, 'dob'], ['GET', 'POST']],
+    ['/profile/change-password', [ProfileController::class, 'change_password'], ['GET', 'POST']],
 
-// Gallery image routes
-$router->add('/gallery/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
-    [GalleryController::class, 'view'], ['GET']
-);
+    ['/moderation/dashboard', [ModerationController::class, 'dashboard'], ['GET']],
+    ['/moderation/image-comparison', [ModerationController::class, 'comparison'], ['GET', 'POST']],
+    ['/moderation/image-rehash', [ModerationController::class, 'rehash'], ['GET', 'POST']],
 
-// Gallery image direct serving (display original)
-$router->add('/gallery/original/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
-    function ($hash) { GalleryController::serveImage($hash); }, ['GET']
-);
+    ["/moderation/image-pending/approve/$HASH", function ($hash) { ModerationController::approveImage($hash); }, ['POST']],
+    ["/moderation/image-pending/approve/sensitive/$HASH", function ($hash) { ModerationController::approveImageSensitive($hash); }, ['POST']],
+    ["/moderation/image-pending/reject/$HASH", function ($hash) { ModerationController::rejectImage($hash); }, ['POST']],
 
-// Session routes
-$router->add('/user/login', [AuthController::class, 'login'], ['GET', 'POST']);
-$router->add('/user/register', [AuthController::class, 'register'], ['GET', 'POST']);
-$router->add('/user/logout', [AuthController::class, 'logout'], ['GET']);
+    ['/moderation/image-pending', [ModerationController::class, 'pending'], ['GET']],
+    ['/moderation/image-pending/page/(\d+)', [ModerationController::class, 'pending'], ['GET']],
+    ["/moderation/image-pending/$HASH", function ($hash) { ModerationController::servePendingImage($hash); }, ['GET']],
 
-// Profile routes
-$router->add('/profile/overview', [ProfileController::class, 'index'], ['GET']);
-$router->add('/profile/avatar', [ProfileController::class, 'avatar'], ['GET', 'POST']);
-$router->add('/profile/email', [ProfileController::class, 'email'], ['GET', 'POST']);
-$router->add('/profile/dob', [ProfileController::class, 'dob'], ['GET', 'POST']);
-$router->add('/profile/change-password', [ProfileController::class, 'change_password'], ['GET', 'POST']);
-
-// Moderation routes
-$router->add('/moderation/dashboard', [ModerationController::class, 'dashboard'], ['GET']);
-$router->add('/moderation/image-comparison', [ModerationController::class, 'comparison'], ['GET', 'POST']);
-$router->add('/moderation/image-rehash', [ModerationController::class, 'rehash'], ['GET', 'POST']);
-
-$router->add(
-    '/moderation/image-pending/approve/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
-    function ($hash) { ModerationController::approveImage($hash); }, ['POST']
-);
-
-$router->add(
-    '/moderation/image-pending/approve/sensitive/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
-    function ($hash) { ModerationController::approveImageSensitive($hash); }, ['POST']
-);
-
-$router->add(
-    '/moderation/image-pending/reject/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
-    function ($hash) { ModerationController::rejectImage($hash); }, ['POST']
-);
-
-// Pending images moderation page with optional page number
-$router->add('/moderation/image-pending', [ModerationController::class, 'pending'], ['GET']);
-$router->add('/moderation/image-pending/page/(\d+)', [ModerationController::class, 'pending'], ['GET']);
-$router->add('/moderation/image-pending/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})',
-    function ($hash) { ModerationController::servePendingImage($hash); }, ['GET']
-);
-
-// Edit image
-$router->add(
-    '/gallery/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/edit',
-    function ($hash) { GalleryController::edit($hash); }, ['POST']
-);
-
-// Image Upvote route (POST only)
-$router->add(
-    '/gallery/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/upvote',
-    function ($hash) { GalleryController::upvote($hash); }, ['POST']
-);
-
-// Favorite image route (POST only)
-$router->add(
-    '/gallery/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/favorite',
-    function ($hash) { GalleryController::favorite($hash); }, ['POST']
-);
-
-// Comment on image
-$router->add(
-    '/gallery/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/comment',
-    function ($hash) { GalleryController::comment($hash); }, ['POST']
-);
+    ["/gallery/$HASH/edit", function ($hash) { GalleryController::edit($hash); }, ['POST']],
+    ["/gallery/$HASH/upvote", function ($hash) { GalleryController::upvote($hash); }, ['POST']],
+    ["/gallery/$HASH/favorite", function ($hash) { GalleryController::favorite($hash); }, ['POST']],
+    ["/gallery/$HASH/comment", function ($hash) { GalleryController::comment($hash); }, ['POST']],
+]);
 
 // -------------------------
 // Dispatch request

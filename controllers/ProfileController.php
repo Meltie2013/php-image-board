@@ -18,7 +18,7 @@ class ProfileController
     {
         if (empty(self::$config))
         {
-            self::$config = require __DIR__ . '/../config/config.php';
+            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require __DIR__ . '/../config/config.php');
         }
 
         return self::$config;
@@ -57,7 +57,7 @@ class ProfileController
         RoleHelper::requireLogin();
     
         // Fetch current user data from database
-        $userId = SessionManager::get('user_id');
+        $userId = TypeHelper::toInt(SessionManager::get('user_id'));
         $user = Database::fetch(
             "SELECT
                 u.id,
@@ -176,7 +176,12 @@ class ProfileController
         $config = self::getConfig();
 
         // Fetch user record
-        $userId = SessionManager::get('user_id');
+        $userId = TypeHelper::toInt(SessionManager::get('user_id'));
+        if (!$userId)
+        {
+            $errors[] = "User not found.";
+        }
+
         $user = Database::fetch("SELECT id, username, display_name, email, avatar_path, date_of_birth, password_hash, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
             ['id' => $userId]
         );

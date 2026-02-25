@@ -12,6 +12,9 @@ RewriteEngine On
 # Block direct web access to sensitive directories
 RewriteRule ^(core|helpers|templates|config|logs)/ - [F,L]
 
+# Block direct web access to stored originals (must be served via PHP/controller)
+RewriteRule ^images/original/ - [F,L]
+
 # Deny direct access to config.php specifically
 <Files "config.php">
     Require all denied

@@ -1,0 +1,780 @@
+/*
+ * Installer / Updater Portal Styles
+ *
+ * This stylesheet is intentionally standalone and scoped to the installer.
+ * The installer does NOT load the main site's CSS to prevent rule bleed.
+ */
+
+/* =========================================================
+   THEME VARIABLES (mirrors the app's look without imports)
+========================================================= */
+:root {
+    --color-bg: radial-gradient(circle at top, #3a3d40 0, #151719 45%, #0c0d0f 100%);
+    --color-surface: rgba(34, 36, 38, 0.92);
+    --color-border-subtle: rgba(255, 255, 255, 0.06);
+    --color-border-strong: rgba(255, 255, 255, 0.14);
+
+    --color-text-main: #f2f2f2;
+    --color-text-muted: #a7a9b4;
+
+    --color-primary: #6f74ff;
+    --color-primary-strong: #9a63ff;
+
+    --color-success: #3ddc97;
+    --color-danger: #ff5c5c;
+
+    --radius-md: 10px;
+    --radius-lg: 16px;
+
+    --shadow-soft: 0 10px 20px rgba(0, 0, 0, 0.55);
+    --shadow-strong: 0 20px 40px rgba(0, 0, 0, 0.6);
+
+    --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, Helvetica, sans-serif;
+}
+
+/* =========================================================
+   RESET / BASE
+========================================================= */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+}
+
+body.installer-page {
+    min-height: 100vh;
+    font-family: var(--font-main);
+    color: var(--color-text-main);
+
+    background-image: var(--color-bg);
+    background-color: #0c0d0f;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    background-size: cover;
+
+    display: flex;
+    flex-direction: column;
+}
+
+/* =========================================================
+   TYPOGRAPHY
+========================================================= */
+body.installer-page h1,
+body.installer-page h2,
+body.installer-page h3 {
+    margin: 0 0 12px 0;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+body.installer-page h2,
+body.installer-page h3 {
+    letter-spacing: 0.04em;
+    text-transform: none;
+}
+
+body.installer-page p {
+    margin: 0 0 12px 0;
+    line-height: 1.55;
+    color: var(--color-text-main);
+}
+
+body.installer-page a {
+    color: #b0b4ff;
+    text-decoration: none;
+}
+
+body.installer-page a:hover {
+    color: #d0d2ff;
+}
+
+/* =========================================================
+   HEADER / NAV
+========================================================= */
+body.installer-page header {
+    background: rgba(10, 11, 14, 0.9);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+
+    position: sticky;
+    top: 0;
+    z-index: 50;
+
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+body.installer-page header .logo {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+body.installer-page header nav {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    line-height: 1;
+}
+
+body.installer-page header nav a.nav-icon {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    color: var(--color-text-muted);
+    position: relative;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.08s ease;
+}
+
+body.installer-page header nav a.nav-icon i {
+    font-size: 16px;
+    line-height: 1;
+    display: block;
+}
+
+body.installer-page header nav a.nav-icon:hover,
+body.installer-page header nav a.nav-icon:focus-visible {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--color-text-main);
+    transform: translateY(-1px);
+    outline: none;
+}
+
+body.installer-page header nav a.nav-icon::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 10px);
+    transform: translateX(-50%);
+
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #ffffff;
+    background: rgba(18, 19, 24, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: var(--shadow-soft);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+body.installer-page header nav a.nav-icon:hover::after,
+body.installer-page header nav a.nav-icon:focus-visible::after {
+    opacity: 1;
+}
+
+/* =========================================================
+   LAYOUT
+========================================================= */
+body.installer-page main {
+    /*
+     * Default container sizing for the portal.
+     *
+     * IMPORTANT:
+     * - The login/setup experience should be more compact.
+     * - The authenticated installer/updater pages should have more room.
+     */
+    margin: 0 auto;
+    padding: 18px;
+    width: 100%;
+}
+
+/* Authenticated pages get a wider working area */
+body.installer-page main.installer-authenticated {
+    max-width: 1100px;
+
+    /* Match the main site's container look (surface card + top accent) */
+    margin: clamp(18px, 4vh, 44px) auto 34px;
+    padding: 28px 26px 26px;
+
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-strong), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+
+    position: relative;
+}
+
+body.installer-page main.installer-authenticated::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border-top: 3px solid rgba(114, 119, 255, 0.9);
+    pointer-events: none;
+}
+
+/* Tighten headings inside the container so they feel like the app */
+body.installer-page main.installer-authenticated h1 {
+    font-size: 28px;
+    margin: 2px 0 10px;
+}
+
+/* =========================================================
+   AUTH-LIKE CONTAINER (LOGIN / SETUP)
+
+   Match the main site's auth container styling so the installer
+   login feels identical to /user/login (without register links).
+========================================================= */
+body.installer-page main:not(.installer-authenticated) {
+    width: 100%;
+    max-width: 460px;
+    margin: clamp(28px, 7vh, 70px) auto 0;
+    padding: 32px 28px 26px;
+
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-strong), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+
+    position: relative;
+}
+
+body.installer-page main:not(.installer-authenticated)::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border-top: 3px solid rgba(114, 119, 255, 0.9);
+    pointer-events: none;
+}
+
+body.installer-page main:not(.installer-authenticated) > h1 {
+    text-align: center;
+    font-size: 26px;
+    margin: 0 0 22px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+body.installer-page main:not(.installer-authenticated) > p {
+    text-align: left;
+    color: var(--color-text-muted);
+    font-size: 13px;
+}
+
+body.installer-page main:not(.installer-authenticated) form {
+    gap: 8px;
+}
+
+body.installer-page main:not(.installer-authenticated) form button {
+    width: 100%;
+    margin-top: 6px;
+    margin-bottom: 10px;
+}
+
+
+/* =========================================================
+   FORMS
+========================================================= */
+body.installer-page label {
+    font-size: 0.95rem;
+}
+
+body.installer-page .installer-input,
+body.installer-page textarea,
+body.installer-page select {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+body.installer-page .installer-input,
+body.installer-page select {
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border-strong);
+    background: rgba(0, 0, 0, 0.20);
+    color: var(--color-text-main);
+    outline: none;
+}
+
+body.installer-page textarea {
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border-strong);
+    background: rgba(0, 0, 0, 0.20);
+    color: var(--color-text-main);
+    outline: none;
+}
+
+body.installer-page .installer-input:focus,
+body.installer-page select:focus,
+body.installer-page textarea:focus {
+    border-color: rgba(125, 104, 255, 0.75);
+    box-shadow: 0 0 0 3px rgba(125, 104, 255, 0.18);
+}
+
+body.installer-page input[type="checkbox"] {
+    transform: translateY(1px);
+}
+
+/* =========================================================
+   BUTTONS
+========================================================= */
+body.installer-page button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-strong));
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+
+    transition: transform 0.12s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+body.installer-page button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.6);
+    filter: brightness(1.04);
+}
+
+body.installer-page button:active {
+    transform: translateY(0);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6);
+    filter: brightness(0.97);
+}
+
+body.installer-page button:disabled {
+    opacity: 0.6;
+    cursor: default;
+    box-shadow: none;
+    transform: none;
+}
+
+/* When multiple buttons appear on one line, keep them usable */
+body.installer-page .installer-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+body.installer-page .installer-actions button {
+    width: auto;
+}
+
+/* =========================================================
+   ALERTS (standalone copy of premium alert look)
+========================================================= */
+body.installer-page .alert {
+    position: relative;
+    padding: 0.8rem 1.2rem;
+    margin: 10px 0;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(27, 31, 38, 0.92);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--color-text-main);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+}
+
+body.installer-page .alert::before {
+    content: "";
+    width: 3px;
+    border-radius: 999px;
+    align-self: stretch;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+body.installer-page .alert-success {
+    border-color: rgba(76, 175, 80, 0.5);
+    background: linear-gradient(135deg, rgba(46, 139, 87, 0.55), rgba(15, 76, 50, 0.9));
+    color: #e4ffe9;
+}
+
+body.installer-page .alert-success::before {
+    background: rgba(76, 175, 80, 0.9);
+}
+
+body.installer-page .alert-danger {
+    border-color: rgba(244, 67, 54, 0.55);
+    background: linear-gradient(135deg, rgba(183, 28, 28, 0.65), rgba(121, 18, 18, 0.95));
+    color: #ffe6e6;
+}
+
+body.installer-page .alert-danger::before {
+    background: rgba(244, 67, 54, 0.95);
+}
+
+body.installer-page .alert-warning {
+    border-color: rgba(255, 193, 7, 0.6);
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.5), rgba(133, 94, 0, 0.95));
+    color: #fff4d2;
+}
+
+body.installer-page .alert-warning::before {
+    background: rgba(255, 193, 7, 0.95);
+}
+
+body.installer-page .alert-info {
+    border-color: rgba(0, 168, 255, 0.65);
+    background: linear-gradient(135deg, rgba(0, 168, 255, 0.55), rgba(5, 60, 94, 0.98));
+    color: #e0f7ff;
+}
+
+body.installer-page .alert-info::before {
+    background: rgba(0, 168, 255, 0.95);
+}
+
+/* Security reminder shown at the top of authenticated pages */
+body.installer-page .installer-security-reminder {
+    margin-top: 12px;
+    margin-bottom: 18px;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+@media (max-width: 640px) {
+    body.installer-page header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    body.installer-page header nav {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
+/* =========================================================
+   NAVIGATION (MULTI-PAGE)
+========================================================= */
+body.installer-page .installer-topnav {
+    display: flex;
+    gap: 10px;
+    margin: 10px 0 12px 0;
+    flex-wrap: wrap;
+}
+
+body.installer-page .installer-topnav__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: var(--color-text-main);
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+}
+
+body.installer-page .installer-topnav__item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.10);
+    transform: translateY(-1px);
+}
+
+body.installer-page .installer-topnav__item.is-active {
+    background: linear-gradient(90deg, rgba(111, 116, 255, 0.35), rgba(154, 99, 255, 0.35));
+    border-color: rgba(154, 99, 255, 0.35);
+}
+
+body.installer-page .installer-subnav {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 0 0 18px 0;
+}
+
+body.installer-page .installer-subnav__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: var(--color-text-muted);
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+body.installer-page .installer-subnav__item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.10);
+    color: var(--color-text-main);
+}
+
+body.installer-page .installer-subnav__item.is-active {
+    background: rgba(111, 116, 255, 0.20);
+    border-color: rgba(111, 116, 255, 0.35);
+    color: #ffffff;
+}
+
+/* =========================================================
+   CARDS / GRID
+========================================================= */
+body.installer-page .installer-card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+@media (max-width: 820px) {
+    body.installer-page .installer-card-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+body.installer-page .installer-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    box-shadow: var(--shadow-soft);
+}
+
+body.installer-page .installer-card h2 {
+    margin-bottom: 10px;
+}
+
+/* =========================================================
+   TABLES / LISTS
+========================================================= */
+body.installer-page .installer-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+body.installer-page .installer-table th,
+body.installer-page .installer-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    vertical-align: top;
+    font-size: 14px;
+}
+
+body.installer-page .installer-table th {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+body.installer-page .installer-table tr:last-child td {
+    border-bottom: 0;
+}
+
+body.installer-page .installer-list {
+    margin: 10px 0 0 0;
+    padding-left: 18px;
+}
+
+body.installer-page .installer-list li {
+    margin: 6px 0;
+    color: var(--color-text-main);
+    list-style-type: none;
+}
+
+body.installer-page .installer-list li.is-ok {
+    color: var(--color-success);
+}
+
+body.installer-page .installer-list li.is-bad {
+    color: var(--color-danger);
+}
+
+body.installer-page .installer-list li i {
+    margin-right: 6px;
+}
+
+/* =========================================================
+   BUTTON ROWS + CODE TEXTAREAS
+========================================================= */
+body.installer-page .installer-button-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+body.installer-page .installer-button-row button {
+    flex: 1;
+    min-width: 220px;
+}
+
+@media (max-width: 640px) {
+    body.installer-page .installer-button-row {
+        flex-direction: column;
+    }
+
+    body.installer-page .installer-button-row button {
+        min-width: 0;
+    }
+}
+
+/* Secondary button variant (works for both anchors and buttons) */
+body.installer-page button.installer-button--secondary {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+body.installer-page button.installer-button--secondary:hover {
+    filter: brightness(1.06);
+}
+
+/* =========================================================
+   CONFIGURATION PAGE LAYOUT
+========================================================= */
+body.installer-page .installer-config-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+}
+
+@media (max-width: 980px) {
+    body.installer-page .installer-config-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+body.installer-page .installer-card--padded {
+    padding: 18px;
+}
+
+body.installer-page .installer-card-title {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+body.installer-page .installer-config-subheading {
+    margin: 16px 0 10px 0;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    color: #ffffff;
+}
+
+body.installer-page .installer-config-subheading:first-child {
+    margin-top: 0;
+}
+
+body.installer-page .installer-config-subgroup {
+    padding-left: 10px;
+    border-left: 2px solid rgba(255, 255, 255, 0.06);
+}
+
+body.installer-page .installer-field {
+    margin: 10px 0;
+}
+
+body.installer-page .installer-label {
+    display: block;
+    margin-bottom: 6px;
+    color: #ffffff;
+}
+
+body.installer-page .installer-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--color-text-muted);
+    user-select: none;
+}
+
+body.installer-page .installer-textarea-code {
+    width: 100%;
+    height: 260px;
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: rgba(0, 0, 0, 0.35);
+    color: #ffffff;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+/* =========================================================
+   ANCHOR BUTTONS
+========================================================= */
+body.installer-page .installer-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: rgba(255, 255, 255, 0.05);
+    color: #ffffff;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+}
+
+body.installer-page .installer-button:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.14);
+    transform: translateY(-1px);
+}
+
+body.installer-page .installer-button--secondary {
+    background: rgba(0, 0, 0, 0.18);
+}
+
+
+/* Key list used by Config Merge page */
+.installer-key-list {
+    margin: 10px 0 0 0;
+    padding-left: 18px;
+}
+
+.installer-key-list li {
+    margin: 6px 0;
+}
+
+.installer-key-list code {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(0,0,0,0.25);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 12px;
+}

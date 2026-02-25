@@ -27,19 +27,62 @@ class Router
     /**
      * Register a route pattern and its handler.
      *
+     * Supports two modes:
+     * 1) Single route:
+     *      add('/login', [AuthController::class, 'login'], ['GET', 'POST'])
+     *
+     * 2) Route table (bulk registration):
+     *      add([
+     *          ['/login', [AuthController::class, 'login'], ['GET', 'POST']],
+     *          ['/logout', [AuthController::class, 'logout'], ['GET']],
+     *      ])
+     *
      * The $path may include simple placeholders in the form "{name}". Each placeholder
      * becomes a single regex capture group matching any non-slash segment. Captured
      * values are passed to the callback in placeholder order.
      *
-     * Example:
-     *  add('/image/{id}', fn($id) => ...)
-     *
-     * @param string $path URL path pattern (supports {param} placeholders)
-     * @param callable $callback Handler to execute when the route matches
+     * @param mixed $path URL path pattern string, or an array route table
+     * @param callable|null $callback Handler to execute when the route matches
      * @param array $methods Allowed HTTP methods for this route (default: ['GET'])
      */
-    public function add(string $path, callable $callback, array $methods = ['GET']): void
+    public function add($path, $callback = null, array $methods = ['GET']): void
     {
+        // Bulk registration: add([ [path, callback, methods], ... ])
+        if (is_array($path) && $callback === null)
+        {
+            foreach ($path as $route)
+            {
+                if (!is_array($route))
+                {
+                    continue;
+                }
+
+                $routePath = $route[0] ?? null;
+                $routeCallback = $route[1] ?? null;
+                $routeMethods = $route[2] ?? ['GET'];
+
+                if (!is_string($routePath) || !is_callable($routeCallback))
+                {
+                    continue;
+                }
+
+                if (!is_array($routeMethods) || empty($routeMethods))
+                {
+                    $routeMethods = ['GET'];
+                }
+
+                $this->add($routePath, $routeCallback, $routeMethods);
+            }
+
+            return;
+        }
+
+        // Single route registration
+        if (!is_string($path) || !is_callable($callback))
+        {
+            return;
+        }
+
         // Convert placeholders {param} into regex capture groups
         $pattern = preg_replace('#\{([a-zA-Z0-9_]+)\}#', '([^/]+)', $path);
 
