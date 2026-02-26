@@ -33,6 +33,9 @@ return [
     'session' => [
         'name'            => 'cms_session', // Custom session name (prevents conflicts with other apps)
         'timeout_minutes' => 15,            // Auto-logout after inactivity (minutes)
+
+        // Stable per-browser id cookie (used to improve guest tracking + rate limits)
+        'device_cookie_name' => 'pg_device',
     ],
 
     // --------------------------
@@ -46,6 +49,52 @@ return [
             'memory_cost' => 1 << 17, // 128MB memory usage per hash (brute-force protection)
             'time_cost'   => 4,       // Iterations (higher = more secure, slower)
             'threads'     => 2,       // CPU parallelism factor
+        ],
+
+        // --------------------------
+        // Request Guard / Rate Limits
+        // --------------------------
+        // These limits apply to both guests and members.
+        // Enforcement is backed by database counters (app_rate_counters) and
+        // temporary deny decisions (app_block_list).
+        'request_guard' => [
+
+            // Optional global limiter for very abusive clients (all endpoints)
+            'global' => [
+                'enabled' => 0,
+                'window_seconds' => 60,
+                'limit' => 300,
+                'cooldown_seconds' => 300,
+            ],
+
+            // Image delivery endpoint limiter (/gallery/original/{hash})
+            'images' => [
+                'enabled' => 1,
+                'window_seconds' => 60,
+                'limit_per_fingerprint' => 120,
+                'limit_per_fingerprint_bot' => 40,
+                'limit_per_fingerprint_search_bot' => 120,
+                'cooldown_seconds' => 600,
+
+                // If a single IP starts producing many fingerprints, tighten limits on IP.
+                'ip_escalation_window_seconds' => 300,
+                'ip_escalation_fingerprints' => 10,
+                'ip_limit_when_escalated' => 200,
+            ],
+
+            // Auth endpoint limiter (login/register)
+            'auth' => [
+                'enabled' => 1,
+                'window_seconds' => 600,
+                'limit_per_fingerprint' => 12,
+                'limit_per_ip' => 30,
+                'cooldown_seconds' => 600,
+
+                // Additional jail trigger based on repeated failures
+                'failure_window_seconds' => 600,
+                'failure_threshold' => 10,
+                'failure_cooldown_seconds' => 900,
+            ],
         ],
     ],
 ];

@@ -31,7 +31,6 @@ class TemplateEngine
     private array $allowedFunctions = [];
     private string $configHashPath = '';
 
-
     /**
      * Create a new TemplateEngine instance and prepare cache + automatic globals.
      *
@@ -116,7 +115,6 @@ class TemplateEngine
         }
 
         @file_put_contents($this->configHashPath, $currentHash);
-
 
         // Disable cache if config set
         $this->disableCache = !empty($config['template']['disable_cache']);

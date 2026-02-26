@@ -246,32 +246,59 @@ CREATE TABLE `app_users` (
 
 -- --------------------------------------------------------
 
+-- --------------------------------------------------------
+
 --
--- Table structure for table `security_events`
+-- Table structure for table `app_rate_counters`
 --
 
-CREATE TABLE `security_events` (
+CREATE TABLE `app_rate_counters` (
   `id` bigint(20) NOT NULL,
-  `ua` text DEFAULT NULL,
-  `fingerprints` int(11) DEFAULT NULL,
-  `first_seen` datetime DEFAULT NULL,
-  `last_seen` datetime DEFAULT NULL,
-  `flagged_at` datetime DEFAULT NULL,
-  `notes` text DEFAULT NULL
+  `scope` varchar(64) NOT NULL,
+  `key_hash` char(64) NOT NULL,
+  `window_start` datetime NOT NULL,
+  `hits` int(11) NOT NULL DEFAULT 0,
+  `expires_at` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
 --
--- Table structure for table `user_security_events`
+-- Table structure for table `app_block_list`
 --
 
-CREATE TABLE `user_security_events` (
+CREATE TABLE `app_block_list` (
   `id` bigint(20) NOT NULL,
+  `scope` enum('ip','fingerprint','ua','user_id') NOT NULL,
+  `value_hash` char(64) NOT NULL,
   `user_id` bigint(20) UNSIGNED DEFAULT NULL,
   `ip` varbinary(16) DEFAULT NULL,
-  `event_type` varchar(64) NOT NULL,
-  `blocked_until` datetime NOT NULL
+  `ua` varchar(255) DEFAULT NULL,
+  `fingerprint` char(64) DEFAULT NULL,
+  `status` enum('blocked','banned','rate_limited','jailed') NOT NULL DEFAULT 'blocked',
+  `reason` varchar(255) DEFAULT NULL,
+  `created_at` datetime NOT NULL,
+  `last_seen` datetime NOT NULL,
+  `expires_at` datetime DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `app_security_logs`
+--
+
+CREATE TABLE `app_security_logs` (
+  `id` bigint(20) NOT NULL,
+  `user_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `session_id` varchar(128) DEFAULT NULL,
+  `ip` varbinary(16) DEFAULT NULL,
+  `ua` varchar(255) DEFAULT NULL,
+  `fingerprint` char(64) DEFAULT NULL,
+  `category` varchar(64) NOT NULL,
+  `message` varchar(255) NOT NULL,
+  `created_at` datetime NOT NULL,
+  `expires_at` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -365,16 +392,32 @@ ALTER TABLE `app_users`
   ADD KEY `fk_users_role` (`role_id`);
 
 --
--- Indexes for table `security_events`
+-- Indexes for table `app_rate_counters`
 --
-ALTER TABLE `security_events`
-  ADD PRIMARY KEY (`id`);
+ALTER TABLE `app_rate_counters`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uniq_scope_key_window` (`scope`,`key_hash`,`window_start`),
+  ADD KEY `idx_expires_at` (`expires_at`);
 
 --
--- Indexes for table `user_security_events`
+-- Indexes for table `app_block_list`
 --
-ALTER TABLE `user_security_events`
-  ADD PRIMARY KEY (`id`);
+ALTER TABLE `app_block_list`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uniq_scope_hash` (`scope`,`value_hash`),
+  ADD KEY `idx_expires_at` (`expires_at`),
+  ADD KEY `idx_user_id` (`user_id`),
+  ADD KEY `idx_ip` (`ip`),
+  ADD KEY `idx_fingerprint` (`fingerprint`);
+
+--
+-- Indexes for table `app_security_logs`
+--
+ALTER TABLE `app_security_logs`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_user_id` (`user_id`),
+  ADD KEY `idx_created_at` (`created_at`),
+  ADD KEY `idx_category` (`category`);
 
 --
 -- AUTO_INCREMENT for dumped tables
@@ -429,15 +472,21 @@ ALTER TABLE `app_users`
   MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
--- AUTO_INCREMENT for table `security_events`
+-- AUTO_INCREMENT for table `app_rate_counters`
 --
-ALTER TABLE `security_events`
+ALTER TABLE `app_rate_counters`
   MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
 
 --
--- AUTO_INCREMENT for table `user_security_events`
+-- AUTO_INCREMENT for table `app_block_list`
 --
-ALTER TABLE `user_security_events`
+ALTER TABLE `app_block_list`
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `app_security_logs`
+--
+ALTER TABLE `app_security_logs`
   MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
 
 --

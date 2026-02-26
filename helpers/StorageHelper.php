@@ -218,7 +218,7 @@ class StorageHelper
     public static function getMaxStorageReadable(): string
     {
         $config = self::getConfig();
-        $max = (int)($config['gallery']['upload_max_storage'] ?? 0);
+        $max = TypeHelper::toInt($config['gallery']['upload_max_storage'] ?? 0);
         return self::formatFileSize($max);
     }
 

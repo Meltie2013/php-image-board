@@ -98,6 +98,9 @@ class AuthController
         // Handle login form submission
         if ($_SERVER['REQUEST_METHOD'] === 'POST')
         {
+            // Jail / rate-limit auth attempts (guest + member)
+            RequestGuard::enforceAuthAttempt('login');
+
             // Sanitize and retrieve submitted form fields
             $email  = Security::sanitizeEmail($_POST['email'] ?? '');
             $password  = Security::sanitizeString($_POST['password'] ?? '');
@@ -132,11 +135,7 @@ class AuthController
                 }
 
                 // Check if the user is currently jailed (temporary block)
-                $blocked = Database::fetch("SELECT blocked_until FROM user_security_events WHERE user_id = :uid ORDER BY blocked_until DESC LIMIT 1",
-                    ['uid' => $userIdToCheck]
-                );
-
-                if ($blocked && strtotime($blocked['blocked_until']) > time())
+                if (RequestGuard::hasActiveUserDecision($userIdToCheck))
                 {
                     $errors[] = "Try again later.";
                 }
@@ -155,6 +154,15 @@ class AuthController
             // If no errors so far, attempt password validation
             if (empty($errors))
             {
+                // If the user does not exist, avoid touching user-specific counters.
+                // Still track the attempt for guest jail logic.
+                if (!$user)
+                {
+                    RequestGuard::recordAuthFailure('login', 'unknown_account');
+                    $errors[] = "Invalid email and/or password.";
+                }
+                else
+                {
                 if ($user && Security::verifyPassword($password, $user['password_hash']))
                 {
                     // Successful login: reset failed login counter
@@ -177,6 +185,9 @@ class AuthController
                 }
                 else
                 {
+                    // Track brute force attempts (including when the email exists)
+                    RequestGuard::recordAuthFailure('login', 'invalid_credentials');
+
                     // Failed login: calculate attempt count
                     $failedLogins = TypeHelper::toInt($user['failed_logins'] ?? null) ?? 0;
                     $lastFailed = strtotime($user['last_failed_login'] ?? '0');
@@ -201,16 +212,8 @@ class AuthController
                     // Jail user if threshold reached
                     if ($failedLogins >= $threshold)
                     {
-                        $blockedUntil = date('Y-m-d H:i:s', $now + $resetWindow); // 10 min jail
-                        Database::query("INSERT INTO user_security_events (user_id, ip, event_type, blocked_until) VALUES (:uid, :ip, :event, :blocked)",
-                            [
-                                'uid' => $userIdToCheck,
-                                'ip' => inet_pton($_SERVER['REMOTE_ADDR'] ?? ''),
-                                'event' => 'failed_login_threshold',
-                                'blocked' => $blockedUntil
-                            ]
-                        );
-
+                        // Jail the account (unified RequestGuard system)
+                        RequestGuard::jailUser($userIdToCheck, 'failed_login_threshold', $resetWindow);
                         $errors[] = "Too many attempts. Wait 10 min.";
                     }
                     else
@@ -218,6 +221,7 @@ class AuthController
                         // Generic message avoids confirming whether the email exists
                         $errors[] = "Invalid email and/or password.";
                     }
+                }
                 }
             }
         }
@@ -267,6 +271,9 @@ class AuthController
         // Handle registration form submission
         if ($_SERVER['REQUEST_METHOD'] === 'POST')
         {
+            // Jail / rate-limit auth attempts (guest + member)
+            RequestGuard::enforceAuthAttempt('register');
+
             // Sanitize inputs
             $username    = Security::sanitizeString($_POST['username'] ?? '');
             $email       = Security::sanitizeEmail($_POST['email'] ?? '');
@@ -321,6 +328,8 @@ class AuthController
 
                 if ($exists)
                 {
+                    // Common brute-force pattern: try to register on existing emails/usernames.
+                    RequestGuard::recordAuthFailure('register', 'duplicate');
                     $errors[] = "That username or email is already in use.";
                 }
             }

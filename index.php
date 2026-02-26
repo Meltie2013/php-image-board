@@ -82,6 +82,9 @@ SessionManager::cleanExpired();
 // Security
 Security::init($config['security']);
 
+// Request guard (rate limits, jail / block decisions)
+RequestGuard::init($config);
+
 // Set timezone globally
 DateHelper::init($config['timezone']);
 

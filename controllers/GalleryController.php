@@ -963,6 +963,9 @@ class GalleryController
             return;
         }
 
+        // Rate limit and bot heuristics (guests + members)
+        RequestGuard::enforceImageRequest($hash);
+
         // Fetch current user data for age-sensitive checks
         if ($userId > 0)
         {

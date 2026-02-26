@@ -39,6 +39,8 @@ class SessionManager
     {
         self::$config = $config;
 
+        $isHttps = self::isHttps();
+
         if (session_status() === PHP_SESSION_NONE)
         {
             session_name($config['name'] ?? 'cms_session');
@@ -47,13 +49,19 @@ class SessionManager
                 'lifetime' => 0,
                 'path' => '/',
                 'domain' => '',
-                'secure' => !empty($_SERVER['HTTPS']),
+                // Only set Secure cookies when HTTPS is actually active.
+                // Some servers set HTTPS="off" which would incorrectly trip !empty().
+                'secure' => $isHttps,
                 'httponly' => true,
                 'samesite' => 'Strict',
             ]);
 
             session_start();
         }
+
+        // Ensure a stable per-browser device identifier cookie exists (guest + member).
+        // This is a safer and more reliable signal than pure UA/IP fingerprinting.
+        self::ensureDeviceCookie();
 
         // Verify or set fingerprint
         $fingerprint = self::generateFingerprint();
@@ -95,7 +103,71 @@ class SessionManager
         $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
         $normalizedIp = self::normalizeIp($ip);
 
-        return hash('sha256', $ua . '|' . $normalizedIp);
+        // Stable per-browser id (cookie) to reduce false positives and improve guest tracking.
+        $deviceId = self::getDeviceId();
+
+        return hash('sha256', $deviceId . '|' . $ua . '|' . $normalizedIp);
+    }
+
+    /**
+     * Ensure a stable device cookie exists.
+     *
+     * This cookie is NOT used to uniquely identify a person; it is used only
+     * to stabilize rate limits and guest session monitoring per browser.
+     */
+    private static function ensureDeviceCookie(): void
+    {
+        $cookieName = self::$config['device_cookie_name'] ?? 'pg_device';
+
+        $isHttps = self::isHttps();
+
+        if (!isset($_COOKIE[$cookieName]) || !is_string($_COOKIE[$cookieName]) || strlen($_COOKIE[$cookieName]) < 32)
+        {
+            try
+            {
+                $device = bin2hex(random_bytes(32));
+            }
+            catch (Throwable $e)
+            {
+                $device = hash('sha256', uniqid('', true));
+            }
+
+            // One-year cookie
+            setcookie($cookieName, $device, [
+                'expires' => time() + 31536000,
+                'path' => '/',
+                'domain' => '',
+                // Only set Secure cookies when HTTPS is actually active.
+                // Some servers set HTTPS="off" which would incorrectly trip !empty().
+                'secure' => $isHttps,
+                'httponly' => true,
+                'samesite' => 'Lax',
+            ]);
+
+            $_COOKIE[$cookieName] = $device;
+        }
+    }
+
+    /**
+     * Get device cookie value (or an empty string when not available).
+     */
+    private static function getDeviceId(): string
+    {
+        $cookieName = self::$config['device_cookie_name'] ?? 'pg_device';
+        $val = $_COOKIE[$cookieName] ?? '';
+
+        if (!is_string($val))
+        {
+            return '';
+        }
+
+        $val = trim($val);
+        if ($val === '' || strlen($val) > 256)
+        {
+            return '';
+        }
+
+        return $val;
     }
 
     /**
@@ -124,10 +196,37 @@ class SessionManager
     }
 
     /**
+     * Determine whether the current request is being served over HTTPS.
+     *
+     * Notes:
+     * - $_SERVER['HTTPS'] may be set to "on" or "off" depending on the server.
+     * - When behind a proxy, X-Forwarded-Proto may be present.
+     */
+    private static function isHttps(): bool
+    {
+        if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        {
+            return true;
+        }
+
+        if (!empty($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443)
+        {
+            return true;
+        }
+
+        // Proxy-aware (best effort)
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower((string)$_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Record suspicious behavior for auditing and potential temporary jail logic.
      *
-     * Inserts a record into user_security_events with a time window indicating
-     * when the activity should be considered blocked (if your app enforces it).
+     * Uses RequestGuard (new unified system) to record/jail suspicious activity.
      *
      * @param int|null $userId User ID when known; null for anonymous sessions
      * @param string $eventType Short event key describing the incident
@@ -135,15 +234,21 @@ class SessionManager
      */
     private static function logSuspiciousActivity(?int $userId, string $eventType, int $blockMinutes = 10): void
     {
-        $blockedUntil = date('Y-m-d H:i:s', time() + ($blockMinutes * 60));
-        Database::query("INSERT INTO user_security_events (user_id, ip, event_type, blocked_until) VALUES (:uid, :ip, :event, :blocked)",
-            [
-                'uid' => $userId,
-                'ip' => inet_pton($_SERVER['REMOTE_ADDR'] ?? ''),
-                'event' => $eventType,
-                'blocked' => $blockedUntil
-            ]
-        );
+        $seconds = $blockMinutes * 60;
+
+        if (class_exists('RequestGuard'))
+        {
+            if ($userId)
+            {
+                RequestGuard::jailUser($userId, $eventType, $seconds);
+            }
+            else
+            {
+                RequestGuard::jailClient($eventType, $seconds);
+            }
+
+            RequestGuard::log('session', $eventType, $userId);
+        }
     }
 
     /**
@@ -174,21 +279,10 @@ class SessionManager
 
         if ($count >= $threshold)
         {
-            // Insert or update security_events table
-            Database::query("INSERT INTO security_events (ua, fingerprints, first_seen, last_seen, flagged_at, notes)
-                 VALUES (:ua, :fingerprints, :first_seen, :last_seen, :flagged_at, :notes)
-                 ON DUPLICATE KEY UPDATE fingerprints = :fingerprints_upd, last_seen = :last_seen_upd",
-                [
-                    'ua' => $ua,
-                    'fingerprints' => $count,
-                    'first_seen' => $now,
-                    'last_seen' => $now,
-                    'flagged_at' => $now,
-                    'notes' => 'High fingerprint diversity – Possible Bot or DDoS/DoS Pattern',
-                    'fingerprints_upd' => $count,
-                    'last_seen_upd' => $now
-                ]
-            );
+            if (class_exists('RequestGuard'))
+            {
+                RequestGuard::log('ua_fingerprint_diversity', 'High fingerprint diversity (' . $count . ') – Possible Bot or DDoS/DoS Pattern');
+            }
         }
     }
 
@@ -396,9 +490,32 @@ class SessionManager
     public static function cleanExpired(): void
     {
         $now = date('Y-m-d H:i:s');
-        Database::query("DELETE FROM app_sessions WHERE expires_at IS NOT NULL AND expires_at < :now",
+
+        Database::query(
+            "DELETE FROM app_sessions WHERE expires_at IS NOT NULL AND expires_at < :now",
             ['now' => $now]
         );
+
+        $tables = [
+            'app_rate_counters',
+            'app_block_list',
+            'app_security_logs',
+        ];
+
+        foreach ($tables as $table)
+        {
+            try
+            {
+                Database::query(
+                    "DELETE FROM {$table} WHERE expires_at IS NOT NULL AND expires_at < :now",
+                    ['now' => $now]
+                );
+            }
+            catch (Throwable $e)
+            {
+                // ignore
+            }
+        }
     }
 
     /**
