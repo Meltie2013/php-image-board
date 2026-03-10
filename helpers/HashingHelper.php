@@ -28,6 +28,61 @@
 class HashingHelper
 {
     /**
+     * Safely load a supported image resource from disk.
+     *
+     * This guards the hashing helpers from processing extremely large images or
+     * malformed content that would be expensive to decode.
+     *
+     * @param string $filePath Path to the source image
+     * @return GdImage|resource|false
+     */
+    private static function loadImageResourceSafely(string $filePath)
+    {
+        if (!is_file($filePath) || !is_readable($filePath))
+        {
+            return false;
+        }
+
+        $info = @getimagesize($filePath);
+        if ($info === false)
+        {
+            return false;
+        }
+
+        $width = (int)($info[0] ?? 0);
+        $height = (int)($info[1] ?? 0);
+        $mime = (string)($info['mime'] ?? '');
+
+        if ($width < 1 || $height < 1)
+        {
+            return false;
+        }
+
+        if ($width > 8000 || $height > 8000 || ($width * $height) > 40000000)
+        {
+            return false;
+        }
+
+        switch ($mime)
+        {
+            case 'image/jpeg':
+                return @imagecreatefromjpeg($filePath);
+
+            case 'image/png':
+                return @imagecreatefrompng($filePath);
+
+            case 'image/gif':
+                return @imagecreatefromgif($filePath);
+
+            case 'image/webp':
+                return function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($filePath) : false;
+
+            default:
+                return false;
+        }
+    }
+
+    /**
      * Perform a 2D Discrete Cosine Transform (DCT-II) on a square matrix.
      * Used in pHash to extract low-frequency image features.
      *
@@ -171,10 +226,15 @@ class HashingHelper
      */
     public static function aHash($filePath, $size = 16): string
     {
-        $img = imagecreatefromstring(file_get_contents($filePath)); // Load image
+        $img = self::loadImageResourceSafely($filePath); // Load image safely
+        if (!$img)
+        {
+            return str_repeat('0', 64);
+        }
+
         $resized = imagecreatetruecolor($size, $size);               // Create resized canvas
         imagecopyresampled($resized, $img, 0, 0, 0, 0, $size, $size, imagesx($img), imagesy($img));
-        unset($img); // Free memory
+        imagedestroy($img); // Free memory
 
         $grayValues = [];
         // Convert image into grayscale array
@@ -191,7 +251,7 @@ class HashingHelper
             }
         }
 
-        unset($resized);
+        imagedestroy($resized);
 
         // Compute average grayscale brightness
         $avg = array_sum($grayValues) / count($grayValues);
@@ -226,10 +286,15 @@ class HashingHelper
      */
     public static function dHash($filePath, $width = 17, $height = 16): string
     {
-        $img = imagecreatefromstring(file_get_contents($filePath)); // Load image
+        $img = self::loadImageResourceSafely($filePath); // Load image safely
+        if (!$img)
+        {
+            return str_repeat('0', 64);
+        }
+
         $resized = imagecreatetruecolor($width, $height);            // Create resized canvas
         imagecopyresampled($resized, $img, 0, 0, 0, 0, $width, $height, imagesx($img), imagesy($img));
-        unset($img); // Free memory
+        imagedestroy($img); // Free memory
 
         $bits = '';
         // Compare each pixel with the one immediately to its right
@@ -276,10 +341,15 @@ class HashingHelper
      */
     public static function pHash($filePath, $size = 32, $smallSize = 16): string
     {
-        $img = imagecreatefromstring(file_get_contents($filePath)); // Load image
+        $img = self::loadImageResourceSafely($filePath); // Load image safely
+        if (!$img)
+        {
+            return str_repeat('0', 64);
+        }
+
         $resized = imagecreatetruecolor($size, $size);               // Create resized canvas
         imagecopyresampled($resized, $img, 0, 0, 0, 0, $size, $size, imagesx($img), imagesy($img));
-        unset($img); // Free memory
+        imagedestroy($img); // Free memory
 
         $matrix = [];
         // Convert image into grayscale matrix
@@ -343,7 +413,12 @@ class HashingHelper
      */
     public static function blockPHash($filePath, $blocks = 4, $size = 32, $smallSize = 16): array
     {
-        $img = imagecreatefromstring(file_get_contents($filePath)); // Load image
+        $img = self::loadImageResourceSafely($filePath); // Load image safely
+        if (!$img)
+        {
+            return [];
+        }
+
         $width = imagesx($img);
         $height = imagesy($img);
 

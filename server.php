@@ -99,7 +99,7 @@ MaintenanceServer::writeHeartbeat($config, $state);
 $controlServer = MaintenanceServer::openControlSocket($config);
 if (MaintenanceServer::controlEnabled($config) && $controlServer === false)
 {
-    fwrite(STDERR, '[' . gmdate('Y-m-d H:i:s') . "] Failed to bind maintenance control socket.\n");
+    fwrite(STDERR, '[' . gmdate('Y-m-d H:i:s') . "] Failed to bind maintenance control socket.");
 }
 
 $running = true;
@@ -112,7 +112,7 @@ if (function_exists('pcntl_async_signals'))
         $running = false;
         $timestamp = gmdate('Y-m-d H:i:s');
         MaintenanceServer::clearHeartbeat($config);
-        fwrite(STDOUT, "[{$timestamp}] Received signal {$signal}; shutting down.\n");
+        fwrite(STDOUT, "[{$timestamp}] Received signal {$signal}; shutting down.");
     };
 
     pcntl_signal(SIGINT, $stop);

@@ -53,6 +53,13 @@ define('INSTALL_SQL_FILE', __DIR__ . '/base_database.sql');
 define('UPDATES_DIR', APP_ROOT .  '/updates');
 
 define('INSTALLER_CSS', '/assets/css/installer.css');
+define('INSTALLER_LOCK_FILE', __DIR__ . '/installer.lock');
+
+if (is_file(CONFIG_FILE) && is_file(INSTALLER_LOCK_FILE))
+{
+    http_response_code(403);
+    exit('Installer is locked.');
+}
 
 // -------------------------------------------------
 // Minimal security helpers (standalone)
@@ -109,6 +116,69 @@ function installer_redirect(string $to): void
 {
     header('Location: ' . $to);
     exit;
+}
+
+/**
+ * Build the current installer login rate-limit session key.
+ *
+ * @return string
+ */
+function installer_rate_limit_key(): string
+{
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    return 'installer_login_' . hash('sha256', $ip);
+}
+
+/**
+ * Determine whether the installer login form is currently rate limited.
+ *
+ * @return bool
+ */
+function installer_is_rate_limited(): bool
+{
+    $key = installer_rate_limit_key();
+
+    if (!isset($_SESSION[$key]))
+    {
+        $_SESSION[$key] = [
+            'count' => 0,
+            'first' => time(),
+        ];
+    }
+
+    $window = 900;
+    $maxAttempts = 5;
+    $now = time();
+
+    if (($now - (int)$_SESSION[$key]['first']) > $window)
+    {
+        $_SESSION[$key] = [
+            'count' => 0,
+            'first' => $now,
+        ];
+    }
+
+    return (int)$_SESSION[$key]['count'] >= $maxAttempts;
+}
+
+/**
+ * Record a failed installer login attempt.
+ *
+ * @return void
+ */
+function installer_record_failed_login(): void
+{
+    $key = installer_rate_limit_key();
+
+    if (!isset($_SESSION[$key]))
+    {
+        $_SESSION[$key] = [
+            'count' => 0,
+            'first' => time(),
+        ];
+    }
+
+    $_SESSION[$key]['count'] = (int)$_SESSION[$key]['count'] + 1;
 }
 
 
@@ -697,6 +767,11 @@ if ($action === 'login') {
         installer_redirect('index.php');
     }
 
+    if (installer_is_rate_limited()) {
+        installer_flash_add('danger', 'Too many login attempts. Please wait and try again.');
+        installer_redirect('index.php');
+    }
+
     $username = (string) ($_POST['username'] ?? '');
     $password = (string) ($_POST['password'] ?? '');
 
@@ -708,15 +783,18 @@ if ($action === 'login') {
     }
 
     if (!hash_equals((string) $authConfig['username'], trim($username))) {
+        installer_record_failed_login();
         installer_flash_add('danger', 'Invalid credentials.');
         installer_redirect('index.php');
     }
 
     if (!InstallerSecurity::verifyPassword($password, (string) $authConfig['password_hash'])) {
+        installer_record_failed_login();
         installer_flash_add('danger', 'Invalid credentials.');
         installer_redirect('index.php');
     }
 
+    unset($_SESSION[installer_rate_limit_key()]);
     $_SESSION['installer_authed'] = true;
 
     // Regenerate session id to reduce fixation risk

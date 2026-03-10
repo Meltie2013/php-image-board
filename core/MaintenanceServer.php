@@ -444,7 +444,19 @@ class MaintenanceServer
             return false;
         }
 
+        $expectedToken = self::controlAuthToken($config);
+        if ($expectedToken === '' || $expectedToken === 'change-this-to-a-long-random-token')
+        {
+            return false;
+        }
+
         $address = self::controlBindAddress($config);
+        $allowRemoteControl = !empty($config['maintenance_server']['control']['allow_remote_control']);
+        if (!$allowRemoteControl && !in_array($address, ['127.0.0.1', '::1'], true))
+        {
+            return false;
+        }
+
         $port = self::controlPort($config);
         $endpoint = 'tcp://' . $address . ':' . $port;
         $errno = 0;

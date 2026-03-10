@@ -91,6 +91,112 @@ class UploadController
     ];
 
     /**
+     * Convert a PHP ini size string into bytes.
+     *
+     * @param string $value PHP size string (for example: 128M, 2G)
+     * @return int Size in bytes
+     */
+    private static function convertPhpSizeToBytes(string $value): int
+    {
+        $value = trim($value);
+        if ($value === '')
+        {
+            return 0;
+        }
+
+        $unit = strtolower(substr($value, -1));
+        $bytes = (int)$value;
+
+        switch ($unit)
+        {
+            case 'g':
+                $bytes *= 1024;
+            case 'm':
+                $bytes *= 1024;
+            case 'k':
+                $bytes *= 1024;
+                break;
+        }
+
+        return max(0, $bytes);
+    }
+
+    /**
+     * Estimate whether processing an image is likely to exceed available memory.
+     *
+     * Uses a conservative multiplier because upload validation, resizing, and
+     * hashing may allocate multiple image buffers during one request.
+     *
+     * @param int $width Source image width
+     * @param int $height Source image height
+     * @param int $multiplier Safety multiplier for temporary image buffers
+     * @return bool True when the image is likely too expensive to process safely
+     */
+    private static function wouldImageLikelyExceedMemory(int $width, int $height, int $multiplier = 8): bool
+    {
+        if ($width < 1 || $height < 1)
+        {
+            return true;
+        }
+
+        $memoryLimit = ini_get('memory_limit');
+        if ($memoryLimit === false || $memoryLimit === '' || $memoryLimit === '-1')
+        {
+            return false;
+        }
+
+        $limitBytes = self::convertPhpSizeToBytes($memoryLimit);
+        if ($limitBytes <= 0)
+        {
+            return false;
+        }
+
+        $estimatedBytes = $width * $height * 4 * $multiplier;
+        $currentUsage = memory_get_usage(true);
+
+        return ($currentUsage + $estimatedBytes) >= (int)($limitBytes * 0.85);
+    }
+
+    /**
+     * Validate uploaded image dimensions before expensive processing occurs.
+     *
+     * @param array $imageInfo Result from getimagesize()
+     * @param array $config Application configuration
+     * @return string|null Validation error message or null when valid
+     */
+    private static function validateUploadedImageDimensions(array $imageInfo, array $config): ?string
+    {
+        $width = (int)($imageInfo[0] ?? 0);
+        $height = (int)($imageInfo[1] ?? 0);
+
+        $maxWidth = (int)($config['gallery']['max_width'] ?? 8000);
+        $maxHeight = (int)($config['gallery']['max_height'] ?? 8000);
+        $maxPixels = (int)($config['gallery']['max_pixels'] ?? 40000000);
+
+        if ($width < 1 || $height < 1)
+        {
+            return 'Invalid image dimensions.';
+        }
+
+        if ($width > $maxWidth || $height > $maxHeight)
+        {
+            return "Image dimensions exceed the maximum allowed size of {$maxWidth}x{$maxHeight}.";
+        }
+
+        if (($width * $height) > $maxPixels)
+        {
+            return 'Image resolution is too large to process safely.';
+        }
+
+        if (self::wouldImageLikelyExceedMemory($width, $height))
+        {
+            return 'Image is too large to process safely on this server.';
+        }
+
+        return null;
+    }
+
+    /**
      * Log details of an upload attempt into the database.
      *
      * Captures:
@@ -254,9 +360,10 @@ class UploadController
 
                 // Some modified/optimized images may be detected as octet-stream or fail finfo detection.
                 // Fall back to getimagesize() (image parser) which usually returns a reliable image MIME.
+                $imgInfo = @getimagesize($file['tmp_name']);
+
                 if (empty($mimeType) || $mimeType === 'application/octet-stream')
                 {
-                    $imgInfo = @getimagesize($file['tmp_name']);
                     if (!empty($imgInfo['mime']))
                     {
                         $mimeType = $imgInfo['mime'];
@@ -302,6 +409,23 @@ class UploadController
                 if (empty($errors) && !self::hasValidImageSignature($file['tmp_name'], $mimeType))
                 {
                     $errors[] = "The file is not a valid image.";
+                }
+
+                // Validate image dimensions and processing cost before moving or hashing the file
+                if (empty($errors))
+                {
+                    if (!$imgInfo)
+                    {
+                        $errors[] = "The file is not a valid image.";
+                    }
+                    else
+                    {
+                        $dimensionError = self::validateUploadedImageDimensions($imgInfo, $config);
+                        if ($dimensionError !== null)
+                        {
+                            $errors[] = $dimensionError;
+                        }
+                    }
                 }
             }
 

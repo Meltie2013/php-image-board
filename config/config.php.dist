@@ -193,6 +193,9 @@ return [
             'enabled' => 1,
             // Enables the local maintenance control socket.
 
+            'allow_remote_control' => 0,
+            // When disabled, the control socket may only bind to loopback addresses.
+
             'bind_address' => '127.0.0.1',
             // Bind to localhost by default so the control interface is not
             // exposed publicly unless you intentionally change it.

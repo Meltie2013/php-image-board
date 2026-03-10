@@ -58,6 +58,78 @@ class ProfileController
     }
 
     /**
+     * Validate uploaded avatar dimensions and processing cost before decoding.
+     *
+     * @param array $imageInfo Result from getimagesize()
+     * @param array $config Application configuration
+     * @return string|null Validation error message or null when valid
+     */
+    private static function validateAvatarImage(array $imageInfo, array $config): ?string
+    {
+        $width = (int)($imageInfo[0] ?? 0);
+        $height = (int)($imageInfo[1] ?? 0);
+        $maxPixels = (int)($config['profile']['avatar_max_pixels'] ?? 16000000);
+
+        if ($width < 1 || $height < 1)
+        {
+            return 'Invalid avatar dimensions.';
+        }
+
+        if ($width !== $height)
+        {
+            return 'Avatar must be a square image (width and height must match).';
+        }
+
+        if (($width * $height) > $maxPixels)
+        {
+            return 'Avatar resolution is too large to process safely.';
+        }
+
+        return null;
+    }
+
+    /**
+     * Validate the uploaded payload signature for common avatar image types.
+     *
+     * @param string $tmpPath Temporary uploaded file path
+     * @param string $mimeType Detected MIME type
+     * @return bool True when the signature matches the expected container
+     */
+    private static function hasValidAvatarSignature(string $tmpPath, string $mimeType): bool
+    {
+        $handle = @fopen($tmpPath, 'rb');
+        if (!$handle)
+        {
+            return false;
+        }
+
+        $header = fread($handle, 12);
+        fclose($handle);
+
+        if (!is_string($header) || $header === '')
+        {
+            return false;
+        }
+
+        switch ($mimeType)
+        {
+            case 'image/jpeg':
+                return strncmp($header, "ÿØÿ", 3) === 0;
+
+            case 'image/png':
+                return strncmp($header, "PNG
+
+", 8) === 0;
+
+            case 'image/gif':
+                return strncmp($header, 'GIF87a', 6) === 0 || strncmp($header, 'GIF89a', 6) === 0;
+
+            default:
+                return false;
+        }
+    }
+
+    /**
      * Main profile overview page.
      *
      * Ensures the user is logged in, fetches profile details from the database,
@@ -271,6 +343,8 @@ class ProfileController
                         {
                             $ext = strtolower(pathinfo($avatar['name'], PATHINFO_EXTENSION));
                             $allowed = ['jpg','jpeg','png','gif'];
+                            $maxAvatarMb = (int)($config['profile']['avatar_max_upload_size_mb'] ?? 5);
+                            $maxAvatarBytes = $maxAvatarMb * 1024 * 1024;
 
                             $finfo = finfo_open(FILEINFO_MIME_TYPE);
                             $mimeType = $finfo ? finfo_file($finfo, $avatar['tmp_name']) : '';
@@ -289,124 +363,150 @@ class ProfileController
                             {
                                 $errors[] = "Invalid file type. Only JPG, PNG, GIF allowed.";
                             }
-                            else
+
+                            if (($avatar['size'] ?? 0) > $maxAvatarBytes)
                             {
-                                $size = getimagesize($avatar['tmp_name']);
+                                $errors[] = "Avatar exceeds maximum allowed size of {$maxAvatarMb} MB.";
+                            }
+
+                            if (empty($errors) && !self::hasValidAvatarSignature($avatar['tmp_name'], $mimeType))
+                            {
+                                $errors[] = "Uploaded file signature does not match the detected image type.";
+                            }
+
+                            $size = null;
+                            if (empty($errors))
+                            {
+                                $size = @getimagesize($avatar['tmp_name']);
                                 if (!$size)
                                 {
                                     $errors[] = "Uploaded file is not a valid image.";
                                 }
-                                else if ($size[0] !== $size[1])
+                                else
                                 {
-                                    $errors[] = "Avatar must be a square image (width and height must match).";
+                                    $avatarValidationError = self::validateAvatarImage($size, $config);
+                                    if ($avatarValidationError !== null)
+                                    {
+                                        $errors[] = $avatarValidationError;
+                                    }
+                                }
+                            }
+
+                            if (empty($errors) && is_array($size))
+                            {
+                                $avatar_size = $config['profile']['avatar_size'];
+                                $resized = false;
+
+                                // Resize if uploaded image is not the correct size
+                                if ($size[0] != $avatar_size)
+                                {
+                                    $resized = true;
+
+                                    // Create image resource based on extension
+                                    switch ($ext)
+                                    {
+                                        case 'jpg':
+                                        case 'jpeg':
+                                            $srcImg = @imagecreatefromjpeg($avatar['tmp_name']);
+                                            break;
+
+                                        case 'png':
+                                            $srcImg = @imagecreatefrompng($avatar['tmp_name']);
+                                            break;
+
+                                        case 'gif':
+                                            $srcImg = @imagecreatefromgif($avatar['tmp_name']);
+                                            break;
+
+                                        default:
+                                            $srcImg = false;
+                                            break;
+                                    }
+
+                                    if (!$srcImg)
+                                    {
+                                        $errors[] = "Failed to process uploaded image.";
+                                        break;
+                                    }
+
+                                    $dstImg = imagecreatetruecolor($avatar_size, $avatar_size);
+
+                                    // Preserve transparency for PNG and GIF
+                                    if ($ext === 'png' || $ext === 'gif')
+                                    {
+                                        imagecolortransparent($dstImg, imagecolorallocatealpha($dstImg, 0, 0, 0, 127));
+                                        imagealphablending($dstImg, false);
+                                        imagesavealpha($dstImg, true);
+                                    }
+
+                                    // Resample image to desired size
+                                    imagecopyresampled($dstImg, $srcImg, 0, 0, 0, 0, $avatar_size, $avatar_size, $size[0], $size[1]);
+
+                                    // Save temporary resized image
+                                    $tmpPath = sys_get_temp_dir() . '/' . uniqid('avatar_') . '.' . $ext;
+                                    switch ($ext)
+                                    {
+                                        case 'jpg':
+                                        case 'jpeg':
+                                            imagejpeg($dstImg, $tmpPath, 90);
+                                            break;
+
+                                        case 'png':
+                                            imagepng($dstImg, $tmpPath);
+                                            break;
+
+                                        case 'gif':
+                                            imagegif($dstImg, $tmpPath);
+                                            break;
+                                    }
+
+                                    // Free memory
+                                    imagedestroy($srcImg);
+                                    imagedestroy($dstImg);
+
+                                    // Replace tmp_name with resized file
+                                    $avatar['tmp_name'] = $tmpPath;
+                                }
+
+                                // Save avatar to permanent location
+                                $filename = uniqid('avatar_') . '.' . $ext;
+                                $dest = __DIR__ . '/../uploads/avatars/' . $filename;
+                                if (!is_dir(__DIR__ . '/../uploads/avatars/'))
+                                {
+                                    mkdir(__DIR__ . '/../uploads/avatars/', 0750, true);
+                                }
+
+                                // Copy resized image or move original upload
+                                if ($resized)
+                                {
+                                    if (!copy($avatar['tmp_name'], $dest) || !@unlink($avatar['tmp_name']))
+                                    {
+                                        $errors[] = "Failed to upload avatar.";
+                                    }
                                 }
                                 else
                                 {
-                                    $avatar_size = $config['profile']['avatar_size'];
-                                    $resized = false;
-
-                                    // Resize if uploaded image is not the correct size
-                                    if ($size[0] != $avatar_size)
+                                    if (!move_uploaded_file($avatar['tmp_name'], $dest))
                                     {
-                                        $resized = true;
-
-                                        // Create image resource based on extension
-                                        switch ($ext)
-                                        {
-                                            case 'jpg':
-                                            case 'jpeg':
-                                                $srcImg = @imagecreatefromjpeg($avatar['tmp_name']);
-                                                break;
-
-                                            case 'png':
-                                                $srcImg = @imagecreatefrompng($avatar['tmp_name']);
-                                                break;
-
-                                            case 'gif':
-                                                $srcImg = @imagecreatefromgif($avatar['tmp_name']);
-                                                break;
-                                        }
-
-                                        if (!$srcImg)
-                                        {
-                                            $errors[] = "Failed to process uploaded image.";
-                                            break;
-                                        }
-
-                                        $dstImg = imagecreatetruecolor($avatar_size, $avatar_size);
-
-                                        // Preserve transparency for PNG and GIF
-                                        if ($ext === 'png' || $ext === 'gif')
-                                        {
-                                            imagecolortransparent($dstImg, imagecolorallocatealpha($dstImg, 0, 0, 0, 127));
-                                            imagealphablending($dstImg, false);
-                                            imagesavealpha($dstImg, true);
-                                        }
-
-                                        // Resample image to desired size
-                                        imagecopyresampled($dstImg, $srcImg, 0, 0, 0, 0, $avatar_size, $avatar_size, $size[0], $size[1]);
-
-                                        // Save temporary resized image
-                                        $tmpPath = sys_get_temp_dir() . '/' . uniqid('avatar_') . '.' . $ext;
-                                        switch ($ext)
-                                        {
-                                            case 'jpg':
-                                            case 'jpeg':
-                                                imagejpeg($dstImg, $tmpPath, 90);
-                                                break;
-                                            case 'png':
-                                                imagepng($dstImg, $tmpPath);
-                                                break;
-                                            case 'gif':
-                                                imagegif($dstImg, $tmpPath);
-                                                break;
-                                        }
-
-                                        // Free memory
-                                        imagedestroy($srcImg);
-                                        imagedestroy($dstImg);
-
-                                        // Replace tmp_name with resized file
-                                        $avatar['tmp_name'] = $tmpPath;
+                                        $errors[] = "Failed to upload avatar.";
                                     }
+                                }
 
-                                    // Save avatar to permanent location
-                                    $filename = uniqid('avatar_') . '.' . $ext;
-                                    $dest = __DIR__ . '/../uploads/avatars/' . $filename;
-                                    if (!is_dir(__DIR__ . '/../uploads/avatars/'))
-                                    {
-                                        mkdir(__DIR__ . '/../uploads/avatars/', 0750, true);
-                                    }
-
-                                    // Copy resized image or move original upload
-                                    if ($resized)
-                                    {
-                                        if (!copy($avatar['tmp_name'], $dest) || !@unlink($avatar['tmp_name']))
-                                        {
-                                            $errors[] = "Failed to upload avatar.";
-                                        }
-                                    }
-                                    else
-                                    {
-                                        if (!move_uploaded_file($avatar['tmp_name'], $dest))
-                                        {
-                                            $errors[] = "Failed to upload avatar.";
-                                        }
-                                    }
-
+                                if (empty($errors))
+                                {
                                     // Remove old avatar if it exists
-                                    if (empty($errors) && !empty($user['avatar_path'])
+                                    if (!empty($user['avatar_path'])
                                         && strpos($user['avatar_path'], '/uploads/avatars/') === 0)
                                     {
                                         $oldAvatar = __DIR__ . '/../' . ltrim($user['avatar_path'], '/');
-                                        if (file_exists($oldAvatar))
+                                        if (file_exists($oldAvatar) && !@unlink($oldAvatar))
                                         {
-                                            if (!@unlink($oldAvatar))
-                                            {
-                                                $errors[] = "Warning: failed to remove old avatar.";
-                                            }
+                                            $errors[] = "Warning: failed to remove old avatar.";
                                         }
+                                    }
 
+                                    if (empty($errors))
+                                    {
                                         // Update DB with new avatar path
                                         Database::query(
                                             "UPDATE app_users SET avatar_path = :path WHERE id = :id",

@@ -112,9 +112,6 @@ class Security
         // Strip any HTML tags
         $clean = strip_tags($clean);
 
-        // Encode special HTML characters to prevent XSS when content is re-rendered
-        $clean = htmlspecialchars($clean, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-
         return $clean;
     }
 

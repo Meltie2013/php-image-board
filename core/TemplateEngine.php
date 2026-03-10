@@ -215,7 +215,11 @@ class TemplateEngine
                 '\{raw\s+\$([a-zA-Z0-9_]+)\}/s', // {raw $var}
                 function($m) use ($allowedFunctions)
                 {
-                    if (!empty($m[1])) return '<?= strip_tags((string)($' . $m[1] . ' ?? ""), "<b><i><u><strong><em>") ?>';
+                    if (!empty($m[1]))
+                    {
+                        return '<?= self::sanitizeAllowedInlineHtml((string)($' . $m[1] . ' ?? "")) ?>';
+                    }
+
                     if (!empty($m[2]))
                     {
                         $fn = $m[2];
@@ -228,6 +232,7 @@ class TemplateEngine
 
                         return '<?= (function_exists("' . $fn . '") ? htmlspecialchars(' . $fn . '(' . $args . '), ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8") : "") ?>';
                     }
+
                     if (!empty($m[4])) return "\n<?php if (" . str_replace('||', ' || ', trim($m[4])) . "): ?>";
                     if (!empty($m[5])) return "\n<?php elseif (" . trim($m[5]) . "): ?>";
                     if (isset($m[0]) && $m[0] === '{else}') return "\n<?php else: ?>";
@@ -266,6 +271,43 @@ class TemplateEngine
         }
 
         return $compiledPath;
+    }
+
+    /**
+     * Sanitize inline HTML
+     *
+     * Allows only a tiny fixed set of simple inline tags with no attributes:
+     * <b>, <i>, <u>, <strong>, <em>
+     *
+     * @param string $html Raw input
+     * @return string Safe inline HTML
+     */
+    private static function sanitizeAllowedInlineHtml(string $html): string
+    {
+        $html = trim($html);
+
+        if ($html === '')
+        {
+            return '';
+        }
+
+        $placeholders = [
+            '<b>' => '%%TAG_B_OPEN%%',
+            '</b>' => '%%TAG_B_CLOSE%%',
+            '<i>' => '%%TAG_I_OPEN%%',
+            '</i>' => '%%TAG_I_CLOSE%%',
+            '<u>' => '%%TAG_U_OPEN%%',
+            '</u>' => '%%TAG_U_CLOSE%%',
+            '<strong>' => '%%TAG_STRONG_OPEN%%',
+            '</strong>' => '%%TAG_STRONG_CLOSE%%',
+            '<em>' => '%%TAG_EM_OPEN%%',
+            '</em>' => '%%TAG_EM_CLOSE%%',
+        ];
+
+        $protected = strtr($html, $placeholders);
+        $escaped = htmlspecialchars($protected, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        return strtr($escaped, array_flip($placeholders));
     }
 
     /**

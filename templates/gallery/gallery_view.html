@@ -124,7 +124,7 @@
             <div class="gallery-image-wrapper">
                 {if $img_age_sensitive || $img_reject_reason}
                 <div class="alert {$alert_color}">
-                    <b>{$alert_tag}</b> {$alert_message} <a href="#">Learn more</a>
+                    {$alert_tag} {$alert_message} <a href="#">Learn more</a>
                 </div>
                 {/if}
                 <img src="/gallery/original/{$img_hash}" class="gallery-image-view">
