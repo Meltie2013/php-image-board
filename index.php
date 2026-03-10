@@ -11,13 +11,17 @@ $config = require __DIR__ . '/config/config.php';
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
+header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
 header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
 
 // Ensure logs directory exists
 $logDir = __DIR__ . '/logs';
 if (!is_dir($logDir))
 {
-    mkdir($logDir, 0755, true);
+    if (!mkdir($logDir, 0755, true) && !is_dir($logDir))
+    {
+        throw new RuntimeException('Unable to create logs directory: ' . $logDir);
+    }
 }
 
 // Log all errors to file
@@ -49,13 +53,6 @@ spl_autoload_register(function ($class)
 // Initialize Core Systems
 // -------------------------
 
-// Database
-Database::init($config['db']);
-
-// Settings (DB overrides)
-SettingsManager::init($config);
-$config = SettingsManager::getConfig();
-
 // -------------------------
 // Error reporting (based on merged config)
 // -------------------------
@@ -75,18 +72,71 @@ else
     error_reporting(E_ALL);
 }
 
+// Set timezone globally
+DateHelper::init($config['timezone']);
+
+// Database
+Database::init($config['db']);
+
+// Settings (DB overrides)
+SettingsManager::init($config);
+$config = SettingsManager::getConfig();
+
+$maintenanceServerRequired = MaintenanceServer::isRequired($config);
+$maintenanceServerAlive = MaintenanceServer::isAlive($config);
+$heartbeatState = MaintenanceServer::readHeartbeat($config);
+$runtimeState = MaintenanceServer::loadRuntimeState($config);
+
+$maintenanceModeEnabled = false;
+if ($maintenanceServerAlive)
+{
+    $maintenanceModeEnabled = !empty($heartbeatState['maintenance_mode']);
+}
+else
+{
+    $maintenanceModeEnabled = !empty($runtimeState['maintenance_mode']);
+}
+
+$siteOffline = $maintenanceServerRequired && !$maintenanceServerAlive;
+
+if ($siteOffline || $maintenanceModeEnabled)
+{
+    $template = new TemplateEngine(__DIR__ . '/templates', __DIR__ . '/cache/templates', $config);
+    if (!empty($config['template']['disable_cache']))
+    {
+        $template->clearCache();
+    }
+
+    http_response_code(503);
+    header('Retry-After: 10');
+
+    if ($siteOffline)
+    {
+        $template->assign('title', 'Site Offline');
+        $template->assign('message', 'Oops, looks like our site is having some issues.');
+        $template->assign('submessage', 'Please try again in a moment.');
+        $template->assign('mode', 'offline');
+    }
+    else
+    {
+        $template->assign('title', 'Maintenance In Progress');
+        $template->assign('message', 'The site is currently in maintenance mode. Please try again in a moment.');
+        $template->assign('submessage', 'An administrator has temporarily placed the site into maintenance mode.');
+        $template->assign('mode', 'maintenance');
+    }
+
+    echo $template->render('errors/maintenance.html');
+    exit;
+}
+
 // Session
 SessionManager::init($config['session']);
-SessionManager::cleanExpired();
 
 // Security
 Security::init($config['security']);
 
 // Request guard (rate limits, jail / block decisions)
 RequestGuard::init($config);
-
-// Set timezone globally
-DateHelper::init($config['timezone']);
 
 // -------------------------
 // Initialize Router
@@ -121,13 +171,13 @@ $router->setNotFound(function ()
 // Explicit route registrations
 // -------------------------
 
-$HASH = '([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})';
+$image_hash = '([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})';
 $router->add([
     ['/gallery', [GalleryController::class, 'index'], ['GET']],
     ['/gallery/upload-image', [UploadController::class, 'upload'], ['GET', 'POST']],
     ['/gallery/page/(\d+)', [GalleryController::class, 'index'], ['GET']],
-    ["/gallery/$HASH", [GalleryController::class, 'view'], ['GET']],
-    ["/gallery/original/$HASH", function ($hash) { GalleryController::serveImage($hash); }, ['GET']],
+    ["/gallery/$image_hash", [GalleryController::class, 'view'], ['GET']],
+    ["/gallery/original/$image_hash", function ($hash) { GalleryController::serveImage($hash); }, ['GET']],
 
     ['/user/login', [AuthController::class, 'login'], ['GET', 'POST']],
     ['/user/register', [AuthController::class, 'register'], ['GET', 'POST']],
@@ -143,18 +193,35 @@ $router->add([
     ['/moderation/image-comparison', [ModerationController::class, 'comparison'], ['GET', 'POST']],
     ['/moderation/image-rehash', [ModerationController::class, 'rehash'], ['GET', 'POST']],
 
-    ["/moderation/image-pending/approve/$HASH", function ($hash) { ModerationController::approveImage($hash); }, ['POST']],
-    ["/moderation/image-pending/approve/sensitive/$HASH", function ($hash) { ModerationController::approveImageSensitive($hash); }, ['POST']],
-    ["/moderation/image-pending/reject/$HASH", function ($hash) { ModerationController::rejectImage($hash); }, ['POST']],
+    ['/admin', [AdminController::class, 'dashboard'], ['GET']],
+    ['/admin/dashboard', [AdminController::class, 'dashboard'], ['GET']],
+    ['/admin/users', [AdminController::class, 'users'], ['GET']],
+    ['/admin/users/create', [AdminController::class, 'userCreate'], ['GET', 'POST']],
+    ['/admin/users/edit/(\d+)', function ($id) { AdminController::userEdit((int)$id); }, ['GET', 'POST']],
+
+    ['/admin/settings', [AdminController::class, 'settings'], ['GET']],
+    ['/admin/settings/save', [AdminController::class, 'settingsSave'], ['POST']],
+
+    ['/admin/security/logs', [AdminController::class, 'securityLogs'], ['GET']],
+    ['/admin/security/logs/view', [AdminController::class, 'securityLogView'], ['GET']],
+    ['/admin/security/blocks', [AdminController::class, 'blockList'], ['GET']],
+    ['/admin/security/blocks/create', [AdminController::class, 'blockCreate'], ['POST']],
+    ['/admin/security/blocks/edit/(\d+)', function ($id) { AdminController::blockEdit((int)$id); }, ['GET', 'POST']],
+    ['/admin/security/blocks/remove/(\d+)', function ($id) { AdminController::blockRemove((int)$id); }, ['POST']],
+    ['/admin/security/blocks/remove-match', [AdminController::class, 'blockRemoveMatch'], ['POST']],
+
+    ["/moderation/image-pending/approve/$image_hash", function ($hash) { ModerationController::approveImage($hash); }, ['POST']],
+    ["/moderation/image-pending/approve/sensitive/$image_hash", function ($hash) { ModerationController::approveImageSensitive($hash); }, ['POST']],
+    ["/moderation/image-pending/reject/$image_hash", function ($hash) { ModerationController::rejectImage($hash); }, ['POST']],
 
     ['/moderation/image-pending', [ModerationController::class, 'pending'], ['GET']],
     ['/moderation/image-pending/page/(\d+)', [ModerationController::class, 'pending'], ['GET']],
-    ["/moderation/image-pending/$HASH", function ($hash) { ModerationController::servePendingImage($hash); }, ['GET']],
+    ["/moderation/image-pending/$image_hash", function ($hash) { ModerationController::servePendingImage($hash); }, ['GET']],
 
-    ["/gallery/$HASH/edit", function ($hash) { GalleryController::edit($hash); }, ['POST']],
-    ["/gallery/$HASH/upvote", function ($hash) { GalleryController::upvote($hash); }, ['POST']],
-    ["/gallery/$HASH/favorite", function ($hash) { GalleryController::favorite($hash); }, ['POST']],
-    ["/gallery/$HASH/comment", function ($hash) { GalleryController::comment($hash); }, ['POST']],
+    ["/gallery/$image_hash/edit", function ($hash) { GalleryController::edit($hash); }, ['POST']],
+    ["/gallery/$image_hash/upvote", function ($hash) { GalleryController::upvote($hash); }, ['POST']],
+    ["/gallery/$image_hash/favorite", function ($hash) { GalleryController::favorite($hash); }, ['POST']],
+    ["/gallery/$image_hash/comment", function ($hash) { GalleryController::comment($hash); }, ['POST']],
 ]);
 
 // -------------------------

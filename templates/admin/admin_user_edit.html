@@ -1,0 +1,62 @@
+{include file="global/header.html"}
+
+    <main class="gallery-container-view">
+        <div class="gallery-item-view admin-layout">
+            <div class="gallery-left-side">
+                <div class="gallery-details-view admin-menu">
+                    {include file="admin/admin_menu.html"}
+                </div>
+            </div>
+
+            <div class="gallery-image-wrapper admin-dashboard">
+                <h2>Edit User: {ucfirst($user_username)} (#{$user_id})</h2>
+
+                {if !empty($success)}
+                    <p class="success">{$success}</p>
+                {/if}
+
+                {if !empty($error)}
+                    <div class="error-box">
+                        {foreach $error as $e}
+                            <p>{$e}</p>
+                        {/foreach}
+                    </div>
+                {/if}
+
+                <form method="POST" action="/admin/users/edit/{$user_id}">
+                    <input type="hidden" name="csrf_token" value="{$csrf_token}">
+
+                    <label>Username</label>
+                    <input type="text" name="username" value="{$user_username}" required>
+
+                    <label>Display Name</label>
+                    <input type="text" name="display_name" value="{$user_display_name}">
+
+                    <label>Email</label>
+                    <input type="email" name="email" value="{$user_email}" required>
+
+                    <label>New Password (optional)</label>
+                    <input type="password" name="password">
+
+                    <label>Role</label>
+                    <select name="role_id">
+                        {foreach $roles as list($r_id, $r_name)}
+                            <option value="{$r_id}" {if $r_id == $user_role_id}selected{/if}>{$r_name}</option>
+                        {/foreach}
+                    </select>
+
+                    <label>Status</label>
+                    <select name="status">
+                        <option value="active" {if $user_status == 'active'}selected{/if}>active</option>
+                        <option value="pending" {if $user_status == 'pending'}selected{/if}>pending</option>
+                        <option value="suspended" {if $user_status == 'suspended'}selected{/if}>suspended</option>
+                        <option value="deleted" {if $user_status == 'deleted'}selected{/if}>deleted</option>
+                    </select>
+
+                    <button type="submit">Save</button>
+                </form>
+            </div>
+        </div>
+    </main>
+
+{include file="global/footer.html"}

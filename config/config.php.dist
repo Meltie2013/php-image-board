@@ -10,9 +10,22 @@ return [
     // General Application Config
     // --------------------------
 
-    'timezone' => 'America/Chicago', 
+    'timezone' => 'America/Chicago',
     // Default timezone for PHP functions like date() and logs.
     // Ensure this matches your server or community preference.
+
+    // --------------------------
+    // Site / Build Info
+    // --------------------------
+
+    'site' => [
+        'name' => 'PHP Image Gallery',
+        // Display name used throughout templates.
+
+        'version' => 'dev',
+        // Build/version string shown in the footer/header.
+        // You can replace this with a git hash or release number.
+    ],
 
     // --------------------------
     // Database Configuration
@@ -39,6 +52,70 @@ return [
     ],
 
     // --------------------------
+    // Debug / Development Flags
+    // --------------------------
+
+    'debugging' => [
+        'allow_error_outputs' => 0,
+        // When enabled, PHP errors are displayed in browser (not recommended for production).
+
+        'allow_approve_uploads' => 0,
+        // When enabled, uploads can be auto-approved (useful for development).
+    ],
+
+    // --------------------------
+    // Template Engine
+    // --------------------------
+
+    'template' => [
+        'disable_cache' => 0,
+        // Disable compiled template caching (useful during development).
+
+        'allowed_functions' => [
+            // Whitelist of template functions (TemplateEngine filters these).
+            // Example:
+            // 'htmlspecialchars',
+            // 'number_format',
+        ],
+    ],
+
+    // --------------------------
+    // User Profile / Age Gating
+    // --------------------------
+
+    'profile' => [
+        'years' => 18,
+        // Minimum age required to view sensitive content (age gate).
+
+        'avatar_size' => 160,
+        // Default avatar display size (px).
+    ],
+
+    // --------------------------
+    // Gallery / Upload Limits
+    // --------------------------
+
+    'gallery' => [
+        'images_displayed' => 24,
+        // Number of images shown per page.
+
+        'pagination_range' => 2,
+        // Pagination page range on either side of current page.
+
+        'comments_per_page' => 10,
+        // Comments per page on image detail view.
+
+        'upload_max_image_size' => 10,
+        // Max upload size in MB (UploadController uses this).
+
+        'upload_max_storage' => '500mb',
+        // Max storage across all images. Can be shorthand like "100GB".
+        // StorageHelper normalizes this into bytes.
+
+        // Optional: you can add more defaults here as your features expand.
+    ],
+
+    // --------------------------
     // Security Policies
     // --------------------------
 
@@ -51,50 +128,144 @@ return [
             'threads'     => 2,       // CPU parallelism factor
         ],
 
-        // --------------------------
-        // Request Guard / Rate Limits
-        // --------------------------
-        // These limits apply to both guests and members.
-        // Enforcement is backed by database counters (app_rate_counters) and
-        // temporary deny decisions (app_block_list).
-        'request_guard' => [
+        // Used to derive a stable, non-reversible device fingerprint from the
+        // per-browser device cookie.
+        // - Set this to a long random secret unique to your deployment.
+        // - Changing this will invalidate all historical device fingerprints.
+        'device_fingerprint_secret' => '',
 
-            // Optional global limiter for very abusive clients (all endpoints)
-            'global' => [
-                'enabled' => 0,
-                'window_seconds' => 60,
-                'limit' => 300,
-                'cooldown_seconds' => 300,
-            ],
+        // Number of days to retain security log rows before background cleanup removes them.
+        'log_retention_days' => 30,
 
-            // Image delivery endpoint limiter (/gallery/original/{hash})
-            'images' => [
-                'enabled' => 1,
-                'window_seconds' => 60,
-                'limit_per_fingerprint' => 120,
-                'limit_per_fingerprint_bot' => 40,
-                'limit_per_fingerprint_search_bot' => 120,
-                'cooldown_seconds' => 600,
+        // Optional enforcement for "multiple account" rules per device fingerprint.
+        // This is intentionally OFF by default to avoid false positives on shared devices.
+        'device_policy' => [
+            'enabled' => 0,
+            'max_accounts_per_device' => 1,
 
-                // If a single IP starts producing many fingerprints, tighten limits on IP.
-                'ip_escalation_window_seconds' => 300,
-                'ip_escalation_fingerprints' => 10,
-                'ip_limit_when_escalated' => 200,
-            ],
+            // Enforce on: 'login', 'register', or 'both'
+            'enforce_on' => 'both',
 
-            // Auth endpoint limiter (login/register)
-            'auth' => [
-                'enabled' => 1,
-                'window_seconds' => 600,
-                'limit_per_fingerprint' => 12,
-                'limit_per_ip' => 30,
-                'cooldown_seconds' => 600,
+            // Action: 'deny' (default), 'jail', 'ban'
+            'action' => 'deny',
 
-                // Additional jail trigger based on repeated failures
-                'failure_window_seconds' => 600,
-                'failure_threshold' => 10,
-                'failure_cooldown_seconds' => 900,
-            ],
+            // Only used when action == 'jail'
+            'jail_seconds' => 900,
+        ],
+    ],
+
+    // --------------------------
+    // Background Maintenance Server
+    // --------------------------
+
+    'maintenance_server' => [
+        'required' => 1,
+        // When enabled, the public site enters maintenance mode unless the
+        // background server heartbeat is fresh.
+
+        'heartbeat_file' => 'cache/maintenance_server_heartbeat.json',
+        // Relative path used to store the server heartbeat file.
+
+        'state_file' => 'cache/maintenance_server_state.json',
+        // Relative path used to store the live runtime state file.
+
+        'heartbeat_timeout_seconds' => 5,
+        // Maximum allowed age of the heartbeat before the site shows the
+        // maintenance page.
+
+        'tick_interval_seconds' => 1,
+        // Default background loop interval. This can be changed live through
+        // the control socket without restarting server.php.
+
+        'verbose_logging' => 0,
+        // When enabled, successful control socket commands are written to the
+        // server console. Cleanup passes still only print when rows/files were removed.
+
+        'jobs' => [
+            'sessions' => 1,
+            'request_guard' => 1,
+            'security_logs' => 1,
+            'image_cache' => 1,
+        ],
+        // Runtime-togglable maintenance jobs owned by server.php.
+
+        'control' => [
+            'enabled' => 1,
+            // Enables the local maintenance control socket.
+
+            'bind_address' => '127.0.0.1',
+            // Bind to localhost by default so the control interface is not
+            // exposed publicly unless you intentionally change it.
+
+            'port' => 37991,
+            // Local TCP port used for runtime control commands.
+
+            'allowed_ips' => ['127.0.0.1', '::1'],
+            // Whitelisted remote IP addresses allowed to issue control commands.
+
+            'auth_token' => 'change-this-to-a-long-random-token',
+            // Shared secret required by every control command. Replace this in
+            // config.php before using the control socket.
+        ],
+    ],
+
+    // --------------------------
+    // Request Guard / Rate Limits
+    // --------------------------
+    // These limits apply to both guests and members.
+    // Enforcement is backed by database counters (app_rate_counters) and
+    // temporary deny decisions (app_block_list).
+    'request_guard' => [
+
+        // Optional global limiter for very abusive clients (all endpoints)
+        'global' => [
+            'enabled' => 0,
+            'window_seconds' => 60,
+            'limit' => 300,
+            'cooldown_seconds' => 300,
+        ],
+
+        // Image delivery endpoint limiter (/gallery/original/{hash})
+        'images' => [
+            'enabled' => 1,
+            'window_seconds' => 60,
+            'limit_per_fingerprint' => 120,
+            'limit_per_user' => 180,
+            'limit_per_guest' => 90,
+            'limit_per_fingerprint_bot' => 40,
+            'limit_per_fingerprint_tool' => 25,
+            'limit_per_fingerprint_search_bot' => 120,
+            'cooldown_seconds' => 600,
+
+            // If the same stable device fingerprint appears across many IPs,
+            // assume aggressive tooling / proxy rotation and temporarily jail it.
+            'device_multi_ip_window_seconds' => 600,
+            'device_multi_ip_threshold' => 5,
+
+            // If a single IP starts producing many fingerprints, tighten limits on IP.
+            'ip_escalation_window_seconds' => 300,
+            'ip_escalation_fingerprints' => 10,
+            'ip_limit_when_escalated' => 200,
+        ],
+
+        // Auth endpoint limiter (login/register)
+        'auth' => [
+            'enabled' => 1,
+            'window_seconds' => 600,
+            'limit_per_fingerprint' => 12,
+            'limit_per_user' => 16,
+            'limit_per_guest' => 10,
+            'limit_per_ip' => 30,
+            'limit_per_tool' => 5,
+            'single_ip_flood_threshold' => 35,
+            'device_multi_ip_window_seconds' => 900,
+            'device_multi_ip_threshold' => 4,
+            'cooldown_seconds' => 600,
+
+            // Additional jail trigger based on repeated failures
+            'failure_window_seconds' => 600,
+            'failure_threshold' => 10,
+            'failure_cooldown_seconds' => 900,
         ],
     ],
 ];

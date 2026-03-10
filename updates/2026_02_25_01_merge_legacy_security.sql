@@ -26,12 +26,13 @@ CREATE TABLE IF NOT EXISTS `app_rate_counters` (
 
 CREATE TABLE IF NOT EXISTS `app_block_list` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
-  `scope` enum('ip','fingerprint','ua','user_id') NOT NULL,
+  `scope` enum('ip','fingerprint','device_fingerprint','ua','user_id') NOT NULL,
   `value_hash` char(64) NOT NULL,
   `user_id` bigint(20) UNSIGNED DEFAULT NULL,
   `ip` varbinary(16) DEFAULT NULL,
   `ua` varchar(255) DEFAULT NULL,
   `fingerprint` char(64) DEFAULT NULL,
+  `device_fingerprint` char(64) DEFAULT NULL,
   `status` enum('blocked','banned','rate_limited','jailed') NOT NULL DEFAULT 'blocked',
   `reason` varchar(255) DEFAULT NULL,
   `created_at` datetime NOT NULL,
@@ -42,7 +43,8 @@ CREATE TABLE IF NOT EXISTS `app_block_list` (
   KEY `idx_expires_at` (`expires_at`),
   KEY `idx_user_id` (`user_id`),
   KEY `idx_ip` (`ip`),
-  KEY `idx_fingerprint` (`fingerprint`)
+  KEY `idx_fingerprint` (`fingerprint`),
+  KEY `idx_device_fingerprint` (`device_fingerprint`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `app_security_logs` (
@@ -52,10 +54,10 @@ CREATE TABLE IF NOT EXISTS `app_security_logs` (
   `ip` varbinary(16) DEFAULT NULL,
   `ua` varchar(255) DEFAULT NULL,
   `fingerprint` char(64) DEFAULT NULL,
+  `device_fingerprint` char(64) DEFAULT NULL,
   `category` varchar(64) NOT NULL,
   `message` varchar(255) NOT NULL,
   `created_at` datetime NOT NULL,
-  `expires_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_user_id` (`user_id`),
   KEY `idx_created_at` (`created_at`),
@@ -73,13 +75,18 @@ SET @has_security_events := (SELECT COUNT(*) FROM information_schema.tables WHER
 
 -- Use a prepared statement so the migration is safe even if the table is missing.
 SET @sql := IF(@has_security_events > 0,
-    "INSERT INTO app_security_logs (user_id, session_id, ip, ua, fingerprint, category, message, created_at, expires_at)\n\
-     SELECT NULL, NULL, NULL, LEFT(COALESCE(ua, ''), 255), NULL,\n\
-            'legacy_security_events',\n\
-            LEFT(COALESCE(notes, 'UA fingerprint diversity flagged'), 255),\n\
-            COALESCE(flagged_at, last_seen, first_seen, NOW()),\n\
-            NULL\n\
-     FROM security_events\n\
+    "INSERT INTO app_security_logs (user_id, session_id, ip, ua, fingerprint, device_fingerprint, category, message, created_at)
+\
+     SELECT NULL, NULL, NULL, LEFT(COALESCE(ua, ''), 255), NULL, NULL,
+\
+            'legacy_security_events',
+\
+            LEFT(COALESCE(notes, 'UA fingerprint diversity flagged'), 255),
+\
+            COALESCE(flagged_at, last_seen, first_seen, NOW())
+\
+     FROM security_events
+\
      WHERE (SELECT COUNT(*) FROM app_security_logs WHERE category = 'legacy_security_events') = 0;",
     "SELECT 1;"
 );
@@ -94,25 +101,46 @@ DEALLOCATE PREPARE stmt;
 SET @has_user_security_events := (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'user_security_events');
 
 SET @sql := IF(@has_user_security_events > 0,
-    "INSERT INTO app_block_list (scope, value_hash, user_id, ip, ua, fingerprint, status, reason, created_at, last_seen, expires_at)\n\
-     SELECT 'user_id',\n\
-            SHA2(CONCAT('user|', COALESCE(user_id, 0)), 256),\n\
-            user_id,\n\
-            ip,\n\
-            NULL,\n\
-            NULL,\n\
-            'jailed',\n\
-            LEFT(event_type, 255),\n\
-            NOW(),\n\
-            NOW(),\n\
-            blocked_until\n\
-     FROM user_security_events\n\
-     WHERE user_id IS NOT NULL\n\
-       AND blocked_until > NOW()\n\
-       AND NOT EXISTS (\n\
-            SELECT 1 FROM app_block_list bl\n\
-             WHERE bl.scope='user_id' AND bl.user_id = user_security_events.user_id\n\
-               AND bl.status='jailed' AND bl.expires_at = user_security_events.blocked_until\n\
+    "INSERT INTO app_block_list (scope, value_hash, user_id, ip, ua, fingerprint, device_fingerprint, status, reason, created_at, last_seen, expires_at)
+\
+     SELECT 'user_id',
+\
+            SHA2(CONCAT('user|', COALESCE(user_id, 0)), 256),
+\
+            user_id,
+\
+            ip,
+\
+            NULL,
+\
+            NULL,
+\
+            NULL,
+\
+            'jailed',
+\
+            LEFT(event_type, 255),
+\
+            NOW(),
+\
+            NOW(),
+\
+            blocked_until
+\
+     FROM user_security_events
+\
+     WHERE user_id IS NOT NULL
+\
+       AND blocked_until > NOW()
+\
+       AND NOT EXISTS (
+\
+            SELECT 1 FROM app_block_list bl
+\
+             WHERE bl.scope='user_id' AND bl.user_id = user_security_events.user_id
+\
+               AND bl.status='jailed' AND bl.expires_at = user_security_events.blocked_until
+\
        );",
     "SELECT 1;"
 );
@@ -121,13 +149,18 @@ EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 SET @sql := IF(@has_user_security_events > 0,
-    "INSERT INTO app_security_logs (user_id, session_id, ip, ua, fingerprint, category, message, created_at, expires_at)\n\
-     SELECT user_id, NULL, ip, NULL, NULL,\n\
-            'legacy_user_security_events',\n\
-            LEFT(event_type, 255),\n\
-            NOW(),\n\
-            blocked_until\n\
-     FROM user_security_events\n\
+    "INSERT INTO app_security_logs (user_id, session_id, ip, ua, fingerprint, device_fingerprint, category, message, created_at)
+\
+     SELECT user_id, NULL, ip, NULL, NULL, NULL,
+\
+            'legacy_user_security_events',
+\
+            LEFT(event_type, 255),
+\
+            NOW()
+\
+     FROM user_security_events
+\
      WHERE (SELECT COUNT(*) FROM app_security_logs WHERE category = 'legacy_user_security_events') = 0;",
     "SELECT 1;"
 );

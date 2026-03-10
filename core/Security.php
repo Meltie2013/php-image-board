@@ -257,6 +257,27 @@ class Security
         return htmlspecialchars($input, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
+    /**
+     * Delete old security logs using the configured retention policy.
+     *
+     * Intended for periodic housekeeping driven by the background maintenance
+     * server so normal page requests do not perform cleanup work.
+     *
+     * @param int $retentionDays Number of days of logs to retain
+     * @return int Number of log rows removed
+     */
+    public static function cleanExpired(int $retentionDays): int
+    {
+        if ($retentionDays <= 0)
+        {
+            return 0;
+        }
+
+        return Database::execute("DELETE FROM app_security_logs WHERE created_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL :days DAY)",
+            ['days' => $retentionDays]
+        );
+    }
+
     // =====================
     // Password Hashing
     // =====================

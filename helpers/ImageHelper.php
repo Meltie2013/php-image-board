@@ -1,7 +1,5 @@
 <?php
 
-use \Imagick;
-use \ImagickException;
 
 /**
 * A helper class for resizing images using Imagick while preserving

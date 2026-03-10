@@ -163,28 +163,41 @@ class AuthController
                 }
                 else
                 {
-                if ($user && Security::verifyPassword($password, $user['password_hash']))
-                {
-                    // Successful login: reset failed login counter
-                    Database::query("UPDATE app_users SET failed_logins = 0, last_failed_login = NULL, last_login = NOW() WHERE id = :id",
-                        ['id' => $userIdToCheck]
-                    );
+                    if ($user && Security::verifyPassword($password, $user['password_hash']))
+                    {
+                        // Enforce per-device account policy (optional)
+                        $policyError = DevicePolicy::enforceLogin($userIdToCheck);
+                        if ($policyError)
+                        {
+                            $errors[] = $policyError;
+                        }
 
-                    // Regenerate session ID to prevent session fixation
-                    SessionManager::regenerate();
+                        if (empty($errors))
+                        {
+                            // Successful login: reset failed login counter
+                            Database::query("UPDATE app_users SET failed_logins = 0, last_failed_login = NULL, last_login = NOW() WHERE id = :id",
+                                ['id' => $userIdToCheck]
+                            );
 
-                    // Store important user details in session
-                    SessionManager::set('user_id', $userIdToCheck);
-                    SessionManager::set('user_role', $user['role_name']);
-                    SessionManager::set('username', $user['username']);
-                    SessionManager::set('user_avatar', $user['avatar_path']);
+                            // Regenerate session ID to prevent session fixation
+                            SessionManager::regenerate();
 
-                    // Redirect user to profile overview
-                    header('Location: /profile/overview');
-                    exit();
-                }
-                else
-                {
+                            // Store important user details in session
+                            SessionManager::set('user_id', $userIdToCheck);
+                            SessionManager::set('user_role', $user['role_name']);
+                            SessionManager::set('username', $user['username']);
+                            SessionManager::set('user_avatar', $user['avatar_path']);
+
+                            // Record device fingerprint for this account
+                            DevicePolicy::recordForUser($userIdToCheck);
+
+                            // Redirect user to profile overview
+                            header('Location: /profile/overview');
+                            exit();
+                        }
+                    }
+                    else
+                    {
                     // Track brute force attempts (including when the email exists)
                     RequestGuard::recordAuthFailure('login', 'invalid_credentials');
 
@@ -192,8 +205,12 @@ class AuthController
                     $failedLogins = TypeHelper::toInt($user['failed_logins'] ?? null) ?? 0;
                     $lastFailed = strtotime($user['last_failed_login'] ?? '0');
                     $now = time();
-                    $resetWindow = 600; // 10 minutes
-                    $threshold = 3;     // attempts before temporary jail
+                    $config = self::getConfig();
+                    $authCfg = $config['request_guard']['auth'] ?? [];
+
+                    $resetWindow = TypeHelper::toInt($authCfg['failure_window_seconds'] ?? 600);
+                    $threshold = TypeHelper::toInt($authCfg['failure_threshold'] ?? 10);
+                    $cooldownSeconds = TypeHelper::toInt($authCfg['failure_cooldown_seconds'] ?? 900);
 
                     if (($now - $lastFailed) > $resetWindow)
                     {
@@ -213,15 +230,17 @@ class AuthController
                     if ($failedLogins >= $threshold)
                     {
                         // Jail the account (unified RequestGuard system)
-                        RequestGuard::jailUser($userIdToCheck, 'failed_login_threshold', $resetWindow);
-                        $errors[] = "Too many attempts. Wait 10 min.";
+                        RequestGuard::jailUser($userIdToCheck, 'failed_login_threshold', $cooldownSeconds);
+
+                        $mins = TypeHelper::toFloat(ceil($cooldownSeconds / 60));
+                        $errors[] = "Too many attempts. Wait {$mins} min.";
                     }
                     else
                     {
                         // Generic message avoids confirming whether the email exists
                         $errors[] = "Invalid email and/or password.";
                     }
-                }
+                    }
                 }
             }
         }
@@ -337,9 +356,19 @@ class AuthController
             // --- Register user ---
             if (empty($errors))
             {
+                // Enforce per-device account policy (optional)
+                $policyError = DevicePolicy::enforceRegister();
+                if ($policyError)
+                {
+                    $errors[] = $policyError;
+                }
+            }
+
+            if (empty($errors))
+            {
                 $hashedPassword = Security::hashPassword($password);
 
-                Database::insert("INSERT INTO app_users (username, email, password_hash, role_id, status, created_at) VALUES (:username, :email, :password_hash, :role_id, :status, NOW())",
+                $newId = Database::insert("INSERT INTO app_users (username, email, password_hash, role_id, status, created_at) VALUES (:username, :email, :password_hash, :role_id, :status, NOW())",
                     [
                         'username'      => $username,
                         'email'         => $email,
@@ -348,6 +377,12 @@ class AuthController
                         'status'        => 'pending'
                     ]
                 );
+
+                if ($newId > 0)
+                {
+                    // Record device fingerprint for this account
+                    DevicePolicy::recordForUser($newId);
+                }
 
                 $success = "Registration successful! Account pending approval.";
             }

@@ -174,7 +174,7 @@ class HashingHelper
         $img = imagecreatefromstring(file_get_contents($filePath)); // Load image
         $resized = imagecreatetruecolor($size, $size);               // Create resized canvas
         imagecopyresampled($resized, $img, 0, 0, 0, 0, $size, $size, imagesx($img), imagesy($img));
-        imagedestroy($img); // Free memory
+        unset($img); // Free memory
 
         $grayValues = [];
         // Convert image into grayscale array
@@ -191,7 +191,7 @@ class HashingHelper
             }
         }
 
-        imagedestroy($resized);
+        unset($resized);
 
         // Compute average grayscale brightness
         $avg = array_sum($grayValues) / count($grayValues);
@@ -229,7 +229,7 @@ class HashingHelper
         $img = imagecreatefromstring(file_get_contents($filePath)); // Load image
         $resized = imagecreatetruecolor($width, $height);            // Create resized canvas
         imagecopyresampled($resized, $img, 0, 0, 0, 0, $width, $height, imagesx($img), imagesy($img));
-        imagedestroy($img); // Free memory
+        unset($img); // Free memory
 
         $bits = '';
         // Compare each pixel with the one immediately to its right
@@ -279,7 +279,7 @@ class HashingHelper
         $img = imagecreatefromstring(file_get_contents($filePath)); // Load image
         $resized = imagecreatetruecolor($size, $size);               // Create resized canvas
         imagecopyresampled($resized, $img, 0, 0, 0, 0, $size, $size, imagesx($img), imagesy($img));
-        imagedestroy($img); // Free memory
+        unset($img); // Free memory
 
         $matrix = [];
         // Convert image into grayscale matrix
@@ -390,7 +390,7 @@ class HashingHelper
                     }
                 }
 
-                imagedestroy($block);
+                unset($block);
 
                 // Apply 2D DCT to block
                 $dct = self::dct2($matrix);
@@ -425,7 +425,7 @@ class HashingHelper
             }
         }
 
-        imagedestroy($img);
+        unset($img);
 
         return $blockHashes;
     }

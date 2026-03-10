@@ -60,6 +60,7 @@ class GalleryController
             $template->clearCache();
         }
 
+        $template->assign('is_gallery_page', 1);
         $template->assign('csrf_token', Security::generateCsrfToken());
         return $template;
     }

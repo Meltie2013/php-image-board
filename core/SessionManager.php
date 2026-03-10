@@ -44,6 +44,8 @@ class SessionManager
         if (session_status() === PHP_SESSION_NONE)
         {
             session_name($config['name'] ?? 'cms_session');
+            ini_set('session.use_strict_mode', '1');
+            ini_set('session.use_only_cookies', '1');
 
             session_set_cookie_params([
                 'lifetime' => 0,
@@ -63,6 +65,20 @@ class SessionManager
         // This is a safer and more reliable signal than pure UA/IP fingerprinting.
         self::ensureDeviceCookie();
 
+        // Store a stable device fingerprint (derived from the device cookie + server secret).
+        // This is intentionally independent of IP so it remains stable across IP churn.
+        $deviceFingerprint = self::generateDeviceFingerprint();
+        if (!isset($_SESSION['device_fingerprint']))
+        {
+            $_SESSION['device_fingerprint'] = $deviceFingerprint;
+        }
+        else if ($_SESSION['device_fingerprint'] !== $deviceFingerprint)
+        {
+            // Device cookie changed unexpectedly – log for review.
+            self::logSuspiciousActivity($_SESSION['user_id'] ?? null, 'device_fingerprint_changed');
+            $_SESSION['device_fingerprint'] = $deviceFingerprint;
+        }
+
         // Verify or set fingerprint
         $fingerprint = self::generateFingerprint();
         if (!isset($_SESSION['fingerprint']))
@@ -74,7 +90,7 @@ class SessionManager
             // Possible hijack attempt – log/jail and destroy session
             self::logSuspiciousActivity($_SESSION['user_id'] ?? null, 'fingerprint_mismatch');
             self::destroy();
-            header("Location: /login?security=invalid_session");
+            header("Location: /user/login?security=invalid_session");
             exit();
         }
 
@@ -91,7 +107,10 @@ class SessionManager
      * Generate a lenient fingerprint hash for the current request.
      *
      * Fingerprint inputs:
+     * - Stable device cookie identifier
      * - User-Agent (stable per browser/device)
+     * - Accept-Language (lightweight browser trait)
+     * - Optional client hints when available
      * - Normalized IP (reduced precision to tolerate common IP churn)
      *
      * This is not meant to be "perfect identity"—only a best-effort signal to
@@ -101,12 +120,53 @@ class SessionManager
     {
         $ip = $_SERVER['REMOTE_ADDR'] ?? '';
         $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $acceptLanguage = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
+        $platformHint = $_SERVER['HTTP_SEC_CH_UA_PLATFORM'] ?? '';
+        $mobileHint = $_SERVER['HTTP_SEC_CH_UA_MOBILE'] ?? '';
         $normalizedIp = self::normalizeIp($ip);
 
         // Stable per-browser id (cookie) to reduce false positives and improve guest tracking.
         $deviceId = self::getDeviceId();
 
-        return hash('sha256', $deviceId . '|' . $ua . '|' . $normalizedIp);
+        return hash('sha256', $deviceId . '|' . $ua . '|' . $acceptLanguage . '|' . $platformHint . '|' . $mobileHint . '|' . $normalizedIp);
+    }
+
+    /**
+     * Generate a stable device fingerprint.
+     *
+     * This is derived from the per-browser device cookie and an optional server-side secret.
+     * It intentionally does NOT include IP so it remains stable across IP changes.
+     */
+    private static function generateDeviceFingerprint(): string
+    {
+        $deviceId = self::getDeviceId();
+        $secret = '';
+
+        try
+        {
+            $cfg = SettingsManager::isInitialized() ? SettingsManager::getConfig() : [];
+            $secret = TypeHelper::toString($cfg['security']['device_fingerprint_secret'] ?? '');
+        }
+        catch (Throwable $e)
+        {
+            $secret = '';
+        }
+
+        return hash('sha256', $deviceId . '|' . $secret);
+    }
+
+    /**
+     * Get the current request's stable device fingerprint.
+     */
+    public static function getDeviceFingerprint(): string
+    {
+        $val = $_SESSION['device_fingerprint'] ?? '';
+        if (is_string($val) && $val !== '')
+        {
+            return $val;
+        }
+
+        return self::generateDeviceFingerprint();
     }
 
     /**
@@ -256,16 +316,17 @@ class SessionManager
      *
      * Detection only – this method does not block requests.
      * It flags cases where the same User-Agent string is associated with many
-     * distinct fingerprints in a short time window (a common bot/attack signal).
+     * distinct device/request fingerprints in a short time window (a common bot/attack signal).
      */
     private static function monitorFingerprintPatterns(): void
     {
         $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
         $fingerprint = $_SESSION['fingerprint'] ?? self::generateFingerprint();
-        $now = date('Y-m-d H:i:s');
+        $deviceFingerprint = self::getDeviceFingerprint();
+        $now = gmdate('Y-m-d H:i:s');
 
-        // Count distinct fingerprints using this UA in the last 5 minutes
-        $row = Database::fetch("SELECT COUNT(DISTINCT fingerprint) AS total FROM app_sessions WHERE ua = :ua AND last_activity > DATE_SUB(:now, INTERVAL 5 MINUTE)",
+        // Count distinct device/request fingerprints using this UA in the last 5 minutes.
+        $row = Database::fetch("SELECT COUNT(DISTINCT COALESCE(device_fingerprint, fingerprint)) AS total FROM app_sessions WHERE ua = :ua AND last_activity > DATE_SUB(:now, INTERVAL 5 MINUTE)",
             [
                 'ua' => $ua,
                 'now' => $now
@@ -281,7 +342,8 @@ class SessionManager
         {
             if (class_exists('RequestGuard'))
             {
-                RequestGuard::log('ua_fingerprint_diversity', 'High fingerprint diversity (' . $count . ') – Possible Bot or DDoS/DoS Pattern');
+                $label = $deviceFingerprint !== '' ? $deviceFingerprint : $fingerprint;
+                RequestGuard::log('ua_fingerprint_diversity', 'High fingerprint diversity (' . $count . ') for client ' . mb_substr($label, 0, 16) . ' – Possible Bot or DDoS/DoS Pattern');
             }
         }
     }
@@ -332,10 +394,11 @@ class SessionManager
         $ip = inet_pton($_SERVER['REMOTE_ADDR'] ?? '');
         $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
         $fingerprint = $_SESSION['fingerprint'] ?? self::generateFingerprint();
+        $deviceFingerprint = self::getDeviceFingerprint();
         $firstIp = $_SESSION['first_ip'] ?? $ip;
-        $lastActivity = date('Y-m-d H:i:s');
+        $lastActivity = gmdate('Y-m-d H:i:s');
         $expiresAt = isset(self::$config['timeout_minutes'])
-            ? date('Y-m-d H:i:s', time() + (self::$config['timeout_minutes'] * 60))
+            ? gmdate('Y-m-d H:i:s', time() + (self::$config['timeout_minutes'] * 60))
             : null;
 
         $_SESSION['first_ip'] = $firstIp;
@@ -348,42 +411,140 @@ class SessionManager
             ['sid' => $sessionId]
         );
 
-        if ($exists)
+        try
         {
-            Database::query("UPDATE app_sessions SET user_id = :uid, ip = :ip, first_ip = :first_ip, ua = :ua, fingerprint = :fp,
-                     last_activity = :last, expires_at = :expires, data = :data WHERE session_id = :sid",
-                [
-                    'uid' => $userId,
-                    'ip' => $ip,
-                    'first_ip' => $firstIp,
-                    'ua' => $ua,
-                    'fp' => $fingerprint,
-                    'last' => $lastActivity,
-                    'expires' => $expiresAt,
-                    'data' => $data,
-                    'sid' => $sessionId
-                ]
-            );
+            if ($exists)
+            {
+                Database::query("UPDATE app_sessions SET user_id = :uid, ip = :ip, first_ip = :first_ip, ua = :ua, fingerprint = :fp, device_fingerprint = :dfp,
+                         last_activity = :last, expires_at = :expires, data = :data WHERE session_id = :sid",
+                    [
+                        'uid' => $userId,
+                        'ip' => $ip,
+                        'first_ip' => $firstIp,
+                        'ua' => $ua,
+                        'fp' => $fingerprint,
+                        'dfp' => $deviceFingerprint,
+                        'last' => $lastActivity,
+                        'expires' => $expiresAt,
+                        'data' => $data,
+                        'sid' => $sessionId
+                    ]
+                );
+            }
+            else
+            {
+                Database::query("INSERT INTO app_sessions (session_id, user_id, ip, first_ip, ua, fingerprint, device_fingerprint, last_activity, expires_at, data)
+                     VALUES (:sid, :uid, :ip, :first_ip, :ua, :fp, :dfp, :last, :expires, :data)",
+                    [
+                        'sid' => $sessionId,
+                        'uid' => $userId,
+                        'ip' => $ip,
+                        'first_ip' => $firstIp,
+                        'ua' => $ua,
+                        'fp' => $fingerprint,
+                        'dfp' => $deviceFingerprint,
+                        'last' => $lastActivity,
+                        'expires' => $expiresAt,
+                        'data' => $data
+                    ]
+                );
+            }
         }
-        else
+        catch (Throwable $e)
         {
-            Database::query("INSERT INTO app_sessions (session_id, user_id, ip, first_ip, ua, fingerprint, last_activity, expires_at, data)
-                 VALUES (:sid, :uid, :ip, :first_ip, :ua, :fp, :last, :expires, :data)",
-                [
-                    'sid' => $sessionId,
-                    'uid' => $userId,
-                    'ip' => $ip,
-                    'first_ip' => $firstIp,
-                    'ua' => $ua,
-                    'fp' => $fingerprint,
-                    'last' => $lastActivity,
-                    'expires' => $expiresAt,
-                    'data' => $data
-                ]
-            );
+            // Backwards compatible fallback when device_fingerprint column is not present.
+            if ($exists)
+            {
+                Database::query("UPDATE app_sessions SET user_id = :uid, ip = :ip, first_ip = :first_ip, ua = :ua, fingerprint = :fp,
+                         last_activity = :last, expires_at = :expires, data = :data WHERE session_id = :sid",
+                    [
+                        'uid' => $userId,
+                        'ip' => $ip,
+                        'first_ip' => $firstIp,
+                        'ua' => $ua,
+                        'fp' => $fingerprint,
+                        'last' => $lastActivity,
+                        'expires' => $expiresAt,
+                        'data' => $data,
+                        'sid' => $sessionId
+                    ]
+                );
+            }
+            else
+            {
+                Database::query("INSERT INTO app_sessions (session_id, user_id, ip, first_ip, ua, fingerprint, last_activity, expires_at, data)
+                     VALUES (:sid, :uid, :ip, :first_ip, :ua, :fp, :last, :expires, :data)",
+                    [
+                        'sid' => $sessionId,
+                        'uid' => $userId,
+                        'ip' => $ip,
+                        'first_ip' => $firstIp,
+                        'ua' => $ua,
+                        'fp' => $fingerprint,
+                        'last' => $lastActivity,
+                        'expires' => $expiresAt,
+                        'data' => $data
+                    ]
+                );
+            }
         }
 
         self::$dbSessionId = $sessionId;
+
+        // Persist user's device fingerprint
+        self::persistUserDevice();
+    }
+
+    /**
+     * Persist the current user's device fingerprint.
+     *
+     * This allows auditing and optional enforcement of "multiple accounts per device" rules.
+     * Runs only for authenticated sessions.
+     */
+    private static function persistUserDevice(): void
+    {
+        $userId = TypeHelper::toInt($_SESSION['user_id'] ?? null);
+        if (!$userId)
+        {
+            return;
+        }
+
+        $dfp = self::getDeviceFingerprint();
+        if ($dfp === '')
+        {
+            return;
+        }
+
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $ipBin = inet_pton($ip);
+        $uaHash = hash('sha256', $ua);
+
+        // Best-effort: if table isn't present yet, do not break requests.
+        try
+        {
+            Database::query(
+                "INSERT INTO app_user_devices (user_id, device_fingerprint, first_seen_at, last_seen_at, first_ip, last_ip, user_agent_hash)
+                VALUES (:uid, :dfp, NOW(), NOW(), :first_ip, :last_ip, :ua_hash)
+                ON DUPLICATE KEY UPDATE
+                    last_seen_at = NOW(),
+                    last_ip = :last_ip_u,
+                    user_agent_hash = :ua_hash_u",
+                [
+                    'uid' => $userId,
+                    'dfp' => $dfp,
+                    'first_ip' => $ipBin,
+                    'last_ip' => $ipBin,
+                    'ua_hash' => $uaHash,
+                    'last_ip_u' => $ipBin,
+                    'ua_hash_u' => $uaHash,
+                ]
+            );
+        }
+        catch (Throwable $e)
+        {
+            // ignore
+        }
     }
 
     /**
@@ -485,37 +646,18 @@ class SessionManager
     /**
      * Delete expired sessions from the database.
      *
-     * Intended for periodic housekeeping (cron job or occasional on-request cleanup).
+     * Intended for periodic housekeeping driven by the background maintenance
+     * server so normal page requests do not perform cleanup work.
+     *
+     * @return int Number of expired sessions removed
      */
-    public static function cleanExpired(): void
+    public static function cleanExpired(): int
     {
-        $now = date('Y-m-d H:i:s');
+        $now = gmdate('Y-m-d H:i:s');
 
-        Database::query(
-            "DELETE FROM app_sessions WHERE expires_at IS NOT NULL AND expires_at < :now",
+        return Database::execute("DELETE FROM app_sessions WHERE expires_at IS NOT NULL AND expires_at < :now",
             ['now' => $now]
         );
-
-        $tables = [
-            'app_rate_counters',
-            'app_block_list',
-            'app_security_logs',
-        ];
-
-        foreach ($tables as $table)
-        {
-            try
-            {
-                Database::query(
-                    "DELETE FROM {$table} WHERE expires_at IS NOT NULL AND expires_at < :now",
-                    ['now' => $now]
-                );
-            }
-            catch (Throwable $e)
-            {
-                // ignore
-            }
-        }
     }
 
     /**

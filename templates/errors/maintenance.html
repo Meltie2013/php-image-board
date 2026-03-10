@@ -1,0 +1,14 @@
+{include file="global/header.html"}
+
+    <div class="error-container">
+        <h1>{$title}</h1>
+        <p>{$message}</p>
+        {if !empty($submessage)}
+            <p>{$submessage}</p>
+        {/if}
+        <div class="error-actions">
+            <a href="/" class="btn btn-primary">Try Again</a>
+        </div>
+    </div>
+
+{include file="global/footer.html"}

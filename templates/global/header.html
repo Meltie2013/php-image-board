@@ -6,6 +6,10 @@
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="/assets/css/style.css">
+    <link rel="stylesheet" href="/assets/css/default/gallery.css">
+    <link rel="stylesheet" href="/assets/css/default/profile.css">
+    <link rel="stylesheet" href="/assets/css/default/moderation.css">
+    <link rel="stylesheet" href="/assets/css/default/admin.css">
 </head>
 <body>
     <header>
@@ -21,22 +25,28 @@
             </a>
 
             {if $is_logged_in}
-            <a class="nav-icon" href="#" aria-label="Admin Control Panel" data-tooltip="Admin Control Panel">
+            {if $site_user_role == 'Administrator'}
+            <a class="nav-icon" href="/admin/dashboard" aria-label="Admin Control Panel" data-tooltip="Admin Control Panel">
                 <i class="fa-solid fa-screwdriver-wrench"></i>
             </a>
 
             <a class="nav-icon" href="/moderation/dashboard" aria-label="Moderation Dashboard" data-tooltip="Moderation Dashboard">
                 <i class="fa-solid fa-shield-halved"></i>
             </a>
+            {else if $site_user_role == 'Moderator'}
+            <a class="nav-icon" href="/moderation/dashboard" aria-label="Moderation Dashboard" data-tooltip="Moderation Dashboard">
+                <i class="fa-solid fa-shield-halved"></i>
+            </a>
+            {/if}
 
             <a class="nav-icon" href="#" aria-label="Notifications" data-tooltip="Notifications">
                 <i class="fa-regular fa-bell"></i>
             </a>
-            
-             <a class="nav-icon" href="/profile/overview" aria-label="My Profile" data-tooltip="My Profile">
+
+            <a class="nav-icon" href="/profile/overview" aria-label="My Profile" data-tooltip="My Profile">
                 <i class="fa-regular fa-user"></i>
             </a>
-            
+
             <a class="nav-icon" href="/user/logout" aria-label="Logout" data-tooltip="Logout">
                 <i class="fa-solid fa-right-from-bracket"></i>
             </a>

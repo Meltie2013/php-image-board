@@ -1,0 +1,460 @@
+/*
+ * Premium Theme (Admin)
+ *
+ * Targets existing admin templates and class names.
+ *
+ * Notes:
+ * - This file intentionally mirrors select layout/table styles used by the
+ *   moderation panel so the admin control panel does not depend on
+ *   moderation.css being loaded.
+ */
+
+.admin-dashboard {
+    margin-bottom: 20px;
+}
+
+.admin-dashboard > h2 {
+    margin: 0 0 18px;
+    font-size: 20px;
+    letter-spacing: 0.04em;
+}
+
+/* =========================================================
+   ADMIN LAYOUT OVERRIDES
+========================================================= */
+.gallery-item-view.admin-layout {
+    grid-template-columns: 280px 1fr;
+    gap: 18px;
+}
+
+/* =========================================================
+   SIDEBAR
+========================================================= */
+.admin-menu {
+    position: sticky;
+    top: 84px; /* below header */
+}
+
+.admin-sidebar {
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.admin-sidebar::before {
+    display: none;
+}
+
+.admin-sidebar h3 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #cfd1dc;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-sidebar ul {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.admin-sidebar ul li a {
+    display: block;
+    border-radius: 10px;
+    color: var(--color-text-muted);
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    text-decoration: none;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.admin-sidebar ul li a:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+/* Force sidebar links to render as plain links inside the gallery left panel */
+.gallery-left-side .admin-sidebar ul li a {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    text-decoration: none;
+}
+
+.admin-sidebar .spacer {
+    height: 10px;
+}
+
+/* =========================================================
+   DASHBOARD LABELS / WRAPPERS
+========================================================= */
+.admin-dashboard .dashboard-cards-wrapper {
+    flex: 1;
+}
+
+.admin-dashboard .dashboard-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    padding-left: 60px;
+    margin-bottom: 25px !important;
+}
+
+.admin-dashboard .dashboard-card {
+    flex: 1 1 220px;
+    max-width: 320px;
+    padding: 18px 16px;
+    border-radius: var(--radius-md);
+    background: rgba(10, 11, 14, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 14px 26px rgba(0, 0, 0, 0.55);
+    text-align: center;
+}
+
+.admin-dashboard .dashboard-card.small {
+    flex: 0 1 175px;
+    max-width: 175px;
+    padding: 16px 14px;
+}
+
+.admin-dashboard .dashboard-card h3 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #cfd1dc;
+}
+
+.admin-dashboard .dashboard-card p {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.admin-dashboard .dashboard-card .approved { color: #a8f5c2; }
+.admin-dashboard .dashboard-card .pending  { color: #ffd9a1; }
+.admin-dashboard .dashboard-card .removed  { color: #f5a8a8; }
+.admin-dashboard .dashboard-card .total,
+.admin-dashboard .dashboard-card .storage  { color: #c7c9ff; }
+
+.admin-dashboard .dashboard-label {
+    margin: 0 0 8px;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #cfd1dc;
+}
+
+.admin-dashboard .dashboard-comparison-wrapper,
+.admin-dashboard .dashboard-rehash-wrapper {
+    padding: 14px 14px;
+
+    background: rgba(10, 11, 14, 0.35);
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.compare-dropdowns .selects-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.compare-dropdowns .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* =========================================================
+   FORMS (ADMIN INPUTS / BUTTONS)
+========================================================= */
+.admin-dashboard input[type="text"],
+.admin-dashboard input[type="email"],
+.admin-dashboard input[type="password"],
+.admin-dashboard input[type="number"],
+.admin-dashboard select,
+.admin-dashboard textarea {
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    outline: none;
+}
+
+.admin-dashboard input[type="text"]::placeholder,
+.admin-dashboard input[type="email"]::placeholder,
+.admin-dashboard input[type="password"]::placeholder,
+.admin-dashboard textarea::placeholder {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.admin-dashboard select {
+    cursor: pointer;
+}
+
+.admin-dashboard input:focus,
+.admin-dashboard select:focus,
+.admin-dashboard textarea:focus {
+    border-color: rgba(126, 111, 255, 0.75);
+    box-shadow: 0 0 0 3px rgba(126, 111, 255, 0.15);
+}
+
+.admin-btn,
+.admin-dashboard button,
+.admin-dashboard .compare-button,
+.admin-dashboard .rehash-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 0;
+    background: rgba(126, 111, 255, 0.95);
+    color: #ffffff;
+    cursor: pointer;
+    transition: filter var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast);
+    text-decoration: none;
+    line-height: 1;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.admin-btn:hover,
+.admin-dashboard button:hover,
+.admin-dashboard .compare-button:hover,
+.admin-dashboard .rehash-button:hover {
+    filter: brightness(1.05);
+}
+
+.admin-btn:active,
+.admin-dashboard button:active,
+.admin-dashboard .compare-button:active,
+.admin-dashboard .rehash-button:active {
+    transform: translateY(1px);
+}
+
+.admin-btn[disabled],
+.admin-dashboard button[disabled] {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.admin-btn-primary {
+    background: rgba(126, 111, 255, 0.95);
+}
+
+.admin-btn-secondary {
+    background: rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.admin-btn-link {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    min-height: auto;
+    border-radius: 0;
+    font-weight: 500;
+    color: var(--color-text-muted);
+}
+
+.admin-btn-link:hover {
+    color: #ffffff;
+    text-decoration: underline;
+}
+
+.admin-inline-editor {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* App Settings (table inline editor) */
+.admin-cell-edit {
+    white-space: normal !important;
+    vertical-align: top;
+}
+
+.admin-settings-editor {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) 110px auto;
+    gap: 10px;
+    align-items: center;
+}
+
+@media (max-width: 980px) {
+    .admin-settings-editor {
+        grid-template-columns: 1fr;
+    }
+}
+
+.admin-inline-editor .admin-input {
+    flex: 1 1 220px;
+    min-width: 180px;
+}
+
+.admin-inline-editor .admin-select {
+    width: 110px;
+    min-width: 110px;
+}
+
+.admin-inline-editor-wide .admin-input:first-of-type {
+    flex: 0 0 260px;
+}
+
+.admin-inline-editor-wide .admin-input:nth-of-type(2) {
+    flex: 1 1 360px;
+}
+
+.admin-action-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.compare-dropdowns .compare-button,
+.rehash-button {
+    margin-top: 14px;
+    align-self: flex-start;
+}
+
+/* =========================================================
+   TABLES (ADMIN LISTS)
+========================================================= */
+.pending-images-wrapper {
+    overflow-x: visible;
+}
+
+.pending-images-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 10px;
+    font-size: 14px;
+}
+
+.pending-images-table thead th {
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #cfd1dc;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.pending-images-table tbody tr {
+    background: rgba(10, 11, 14, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.pending-images-table tbody td {
+    padding: 12px 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.pending-images-table tbody td:first-child {
+    border-left: 1px solid rgba(255, 255, 255, 0.05);
+    border-top-left-radius: var(--radius-md);
+    border-bottom-left-radius: var(--radius-md);
+}
+
+.pending-images-table tbody td:last-child {
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    border-top-right-radius: var(--radius-md);
+    border-bottom-right-radius: var(--radius-md);
+}
+
+.pending-images-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+@media (max-width: 980px) {
+    .admin-menu {
+        position: relative;
+        top: auto;
+    }
+
+    .compare-dropdowns .selects-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* =========================================================
+   SECURITY LOG DETAILS
+   ========================================================= */
+.security-log-details-table tbody td.security-log-details-label {
+    width: 180px;
+    font-weight: 600;
+    color: #cfd1dc;
+}
+
+.security-log-details-table tbody td {
+    white-space: normal;
+}
+
+/* =========================================================
+   ADMIN SETTINGS
+   ========================================================= */
+.admin-dashboard .admin-form-grid-settings-add {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+@media (min-width: 900px) {
+    .admin-dashboard .admin-form-grid-settings-add {
+        grid-template-columns: 1.2fr 2fr 160px 120px;
+        align-items: end;
+    }
+}
+
+.admin-dashboard .admin-form-grid-settings-add .admin-input,
+.admin-dashboard .admin-form-grid-settings-add .admin-select {
+    width: 100%;
+}
+
+.admin-dashboard .admin-form-grid-settings-add .admin-btn {
+    justify-self: start;
+}
+
+/* Settings table inline editor */
+.admin-dashboard .admin-settings-editor {
+    display: grid;
+    grid-template-columns: 1fr 110px 90px;
+    gap: 10px;
+    align-items: center;
+    min-width: 420px;
+}
+
+.admin-dashboard td.admin-cell-edit {
+    white-space: normal;
+}
+
+.admin-dashboard .admin-settings-editor input[type="text"] {
+    width: 100%;
+}
+
+.admin-dashboard .admin-settings-editor input[type="text"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

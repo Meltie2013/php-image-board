@@ -1,5 +1,18 @@
 <?php
 
+/**
+ * Controller responsible for rendering and updating authenticated user profile pages.
+ *
+ * Responsibilities:
+ * - Render profile overview data
+ * - Update avatar, email address, and date of birth
+ * - Handle password changes with current-password verification
+ *
+ * Security considerations:
+ * - Login required for all actions
+ * - CSRF protection for state-changing form submissions
+ * - Uploaded avatars are validated before storage
+ */
 class ProfileController
 {
     /**
@@ -39,6 +52,7 @@ class ProfileController
         }
 
 
+        $template->assign('is_profile_page', 1);
         $template->assign('csrf_token', Security::generateCsrfToken());
         return $template;
     }

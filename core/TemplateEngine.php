@@ -67,6 +67,7 @@ class TemplateEngine
             'site_user' => SessionManager::get('username', ''),
             'displayed_comments' => $config['gallery']['comments_per_page'],
             'site_user_role' => SessionManager::get('user_role'),
+            'site_user_avatar' => SessionManager::get('user_avatar', ''),
         ];
 
         // Allowed template functions (whitelisted)

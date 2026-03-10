@@ -38,7 +38,10 @@ class ModerationController
         if (!empty($config['template']['disable_cache']))
         {
             $template->clearCache();
-        }
+        }        // Mark this request as a moderation panel page so the header can include
+        // moderation-specific styling.
+        $template->assign('is_gallery_page', 1);
+        $template->assign('is_moderation_panel', 1);
 
 
         $template->assign('csrf_token', Security::generateCsrfToken());

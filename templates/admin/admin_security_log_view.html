@@ -1,0 +1,56 @@
+{include file="global/header.html"}
+
+    <main class="gallery-container-view">
+        <div class="gallery-item-view admin-layout">
+            <div class="gallery-left-side">
+                <div class="gallery-details-view admin-menu">
+                    {include file="admin/admin_menu.html"}
+                </div>
+            </div>
+
+            <div class="gallery-image-wrapper admin-dashboard">
+                <h2>Security Log Details</h2>
+
+                <div style="margin-bottom: 16px;">
+                    <a href="/admin/security/logs">← Back to Security Logs</a>
+                </div>
+
+                <div class="pending-images-wrapper">
+                    <table class="pending-images-table security-log-details-table">
+                        <tbody>
+                            <tr>
+                                <td class="security-log-details-label">Time</td>
+                                <td>{$log_created_at}</td>
+                            </tr>
+                            <tr>
+                                <td class="security-log-details-label">Category</td>
+                                <td>{$log_category}</td>
+                            </tr>
+                            <tr>
+                                <td class="security-log-details-label">User</td>
+                                <td>{$log_user}</td>
+                            </tr>
+                            <tr>
+                                <td class="security-log-details-label">IP</td>
+                                <td>{$log_ip}</td>
+                            </tr>
+                            <tr>
+                                <td class="security-log-details-label">Fingerprint</td>
+                                <td style="word-break: break-all;">{$log_fingerprint}</td>
+                            </tr>
+                            <tr>
+                                <td class="security-log-details-label">User Agent</td>
+                                <td style="white-space: normal; word-break: break-word;">{$log_ua}</td>
+                            </tr>
+                            <tr>
+                                <td class="security-log-details-label">Message</td>
+                                <td style="white-space: normal; word-break: break-word;">{$log_message}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+{include file="global/footer.html"}

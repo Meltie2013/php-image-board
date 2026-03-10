@@ -1,10 +1,12 @@
 /*
  * Main Image Board Style Sheet
+ *
+ * This entry point only loads styles shared across the public site.
+ * Page-specific stylesheets are loaded from the global header so admin,
+ * moderation, gallery, and profile rules remain scoped to the pages
+ * that actually use them.
  */
 
 @import "default/alerts.css";
 @import "default/main.css";
 @import "default/error.css";
-@import "default/gallery.css";
-@import "default/moderation.css";
-@import "default/profile.css";

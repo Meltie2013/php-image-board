@@ -16,6 +16,12 @@
 /tools
 
 # -------------------------
+# cache
+# -------------------------
+/cache/**
+/cache/**/*.json
+
+# -------------------------
 # cache/templates (keep index.html)
 # -------------------------
 /cache/templates/**

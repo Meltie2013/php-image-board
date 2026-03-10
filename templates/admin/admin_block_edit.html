@@ -1,0 +1,65 @@
+{include file="global/header.html"}
+
+    <main class="gallery-container-view">
+        <div class="gallery-item-view admin-layout">
+            <div class="gallery-left-side">
+                <div class="gallery-details-view admin-menu">
+                    {include file="admin/admin_menu.html"}
+                </div>
+            </div>
+
+            <div class="gallery-image-wrapper admin-dashboard">
+                <h2>Edit Block Entry #{$block_id}</h2>
+
+                {if !empty($success)}
+                    <p class="success">{$success}</p>
+                {/if}
+
+                {if !empty($error)}
+                    <div class="error-box">
+                        {foreach $error as $e}
+                            <p>{$e}</p>
+                        {/foreach}
+                    </div>
+                {/if}
+
+                <form method="POST" action="/admin/security/blocks/edit/{$block_id}">
+                    <input type="hidden" name="csrf_token" value="{$csrf_token}">
+
+                    <label>Scope</label>
+                    <input type="text" value="{$block_scope}" disabled>
+
+                    <label>Status</label>
+                    <select name="status">
+                        <option value="blocked" {if $block_status == 'blocked'}selected{/if}>blocked</option>
+                        <option value="banned" {if $block_status == 'banned'}selected{/if}>banned</option>
+                        <option value="jailed" {if $block_status == 'jailed'}selected{/if}>jailed</option>
+                        <option value="rate_limited" {if $block_status == 'rate_limited'}selected{/if}>rate_limited</option>
+                    </select>
+
+                    <label>User ID</label>
+                    <input type="text" value="{$block_user_id}" disabled>
+
+                    <label>IP</label>
+                    <input type="text" value="{$block_ip}" disabled>
+
+                    <label>Fingerprint</label>
+                    <input type="text" value="{$block_fingerprint}" disabled>
+
+                    <label>Reason</label>
+                    <input type="text" name="reason" value="{$block_reason}">
+
+                    <label>Expires At (YYYY-MM-DD HH:MM:SS, blank = permanent)</label>
+                    <input type="text" name="expires_at" value="{$block_expires_at}">
+
+                    <button type="submit">Save</button>
+                </form>
+
+                <div style="margin-top: 14px;">
+                    <a href="/admin/security/blocks">Back to Block List</a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+{include file="global/footer.html"}

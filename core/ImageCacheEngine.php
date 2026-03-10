@@ -15,6 +15,34 @@
  */
 class ImageCacheEngine
 {
+    /**
+     * Cached configuration for controller usage.
+     *
+     * Stored statically so configuration is loaded once per request and reused
+     * across controller actions without repeated disk reads.
+     *
+     * @var array
+     */
+    private static array $config;
+
+    /**
+     * Load and cache config once per request.
+     *
+     * Uses SettingsManager when available/initialized, otherwise falls back to
+     * reading config/config.php from disk.
+     *
+     * @return array
+     */
+    private static function getConfig(): array
+    {
+        if (empty(self::$config))
+        {
+            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require __DIR__ . '/../config/config.php');
+        }
+
+        return self::$config;
+    }
+
     // Cache directory for processed images (must be writable by the web server)
     private static string $cacheDir = __DIR__ . '/../cache/images/';
 
@@ -109,5 +137,45 @@ class ImageCacheEngine
         copy($fullPath, $cachePath);
 
         return $cachePath;
+    }
+
+    /**
+     * Delete expired cache entries from disk.
+     *
+     * This is intended for periodic housekeeping from a cron job or the
+     * long-running CLI maintenance server.
+     *
+     * @return int Number of cache files removed.
+     */
+    public static function cleanExpired(): int
+    {
+        self::ensureCacheDir();
+
+        $deleted = 0;
+        $threshold = time() - self::$cacheLifetime;
+        $files = glob(self::$cacheDir . '*.cache');
+        if (!is_array($files))
+        {
+            return 0;
+        }
+
+        foreach ($files as $file)
+        {
+            if (!is_file($file))
+            {
+                continue;
+            }
+
+            $mtime = @filemtime($file);
+            if ($mtime !== false && $mtime <= $threshold)
+            {
+                if (@unlink($file))
+                {
+                    $deleted++;
+                }
+            }
+        }
+
+        return $deleted;
     }
 }

@@ -26,6 +26,32 @@ class DateHelper
     private static ?\DateTimeZone $appTimezone = null;
 
     /**
+     * Ensures the application timezone has been initialized.
+     *
+     * If init() was not called, fall back to PHP's default timezone.
+     *
+     * @return \DateTimeZone
+     */
+    private static function getTimezone(): \DateTimeZone
+    {
+        if (self::$appTimezone instanceof \DateTimeZone)
+        {
+            return self::$appTimezone;
+        }
+
+        try
+        {
+            self::$appTimezone = new DateTimeZone(date_default_timezone_get());
+        }
+        catch (\Exception $e)
+        {
+            self::$appTimezone = new DateTimeZone('UTC');
+        }
+
+        return self::$appTimezone;
+    }
+
+    /**
      * Initializes the application timezone.
      *
      * @param string $timezone Timezone identifier (e.g., "America/Chicago").
@@ -33,6 +59,9 @@ class DateHelper
     public static function init(string $timezone): void
     {
         self::$appTimezone = new DateTimeZone($timezone);
+
+        // Keep PHP's global default timezone in sync for any code using date() / DateTime defaults.
+        date_default_timezone_set($timezone);
     }
 
     /**
@@ -56,10 +85,10 @@ class DateHelper
         // Convert UTC date into application timezone
         $utc = new DateTimeZone('UTC');
         $datetime = new DateTime($date, $utc);
-        $datetime->setTimezone(self::$appTimezone);
+        $datetime->setTimezone(self::getTimezone());
 
         // Use start-of-day for both the current day and the target date to avoid partial-day issues
-        $todayStart = new DateTime('today', self::$appTimezone);
+        $todayStart = new DateTime('today', self::getTimezone());
         $dateStart = (clone $datetime)->setTime(0, 0, 0);
 
         // Calculate absolute difference in whole days between today and the date
@@ -68,7 +97,7 @@ class DateHelper
         // Same calendar day
         if ($diffDays === 0)
         {
-            $now = new DateTime('now', self::$appTimezone);
+            $now = new DateTime('now', self::getTimezone());
 
             $diffSeconds = (int)abs($now->getTimestamp() - $datetime->getTimestamp());
 
@@ -119,6 +148,31 @@ class DateHelper
     }
 
     /**
+     * Formats a given UTC date into the application's timezone.
+     *
+     * Shows date format without seconds, minutes and hours etc.
+     * 
+     * @param string|null $date   Input date string in UTC (usually from DB).
+     * @param string      $format Output format if not recent.
+     *
+     * @return string
+     */
+    public static function date_only_format(?string $date, string $format = "F jS, Y \\a\\t g:i a"): string
+    {
+        if ($date === null)
+        {
+            return '';
+        }
+
+        // Convert UTC date into application timezone
+        $utc = new DateTimeZone('UTC');
+        $datetime = new DateTime($date, $utc);
+        $datetime->setTimezone(self::getTimezone());
+
+        return $datetime->format($format) ?? '';
+    }
+
+    /**
      * Formats a birthday date into the application's timezone.
      *
      * If the birthday is not set, returns a placeholder string.
@@ -136,7 +190,6 @@ class DateHelper
         }
 
         $datetime = new DateTime($date);
-        $datetime->setTimezone(self::$appTimezone);
 
         return $datetime->format($format) ?? '';
     }

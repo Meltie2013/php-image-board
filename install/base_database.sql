@@ -170,6 +170,7 @@ CREATE TABLE `app_sessions` (
   `first_ip` varbinary(16) DEFAULT NULL,
   `ua` varchar(255) DEFAULT NULL,
   `fingerprint` char(64) DEFAULT NULL,
+  `device_fingerprint` char(64) DEFAULT NULL,
   `last_activity` datetime NOT NULL,
   `expires_at` datetime DEFAULT NULL,
   `data` mediumblob DEFAULT NULL
@@ -244,6 +245,28 @@ CREATE TABLE `app_users` (
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+
+-- --------------------------------------------------------
+-- Table structure for table `app_user_devices`
+-- --------------------------------------------------------
+
+CREATE TABLE `app_user_devices` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` bigint(20) unsigned NOT NULL,
+  `device_fingerprint` char(64) NOT NULL,
+  `first_seen_at` datetime NOT NULL,
+  `last_seen_at` datetime NOT NULL,
+  `first_ip` varbinary(16) DEFAULT NULL,
+  `last_ip` varbinary(16) DEFAULT NULL,
+  `user_agent_hash` char(64) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_user_device` (`user_id`,`device_fingerprint`),
+  KEY `idx_device_fingerprint` (`device_fingerprint`),
+  KEY `idx_user_id` (`user_id`),
+  CONSTRAINT `fk_user_devices_user` FOREIGN KEY (`user_id`) REFERENCES `app_users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
 -- --------------------------------------------------------
 
 -- --------------------------------------------------------
@@ -269,12 +292,13 @@ CREATE TABLE `app_rate_counters` (
 
 CREATE TABLE `app_block_list` (
   `id` bigint(20) NOT NULL,
-  `scope` enum('ip','fingerprint','ua','user_id') NOT NULL,
+  `scope` enum('ip','fingerprint','device_fingerprint','ua','user_id') NOT NULL,
   `value_hash` char(64) NOT NULL,
   `user_id` bigint(20) UNSIGNED DEFAULT NULL,
   `ip` varbinary(16) DEFAULT NULL,
   `ua` varchar(255) DEFAULT NULL,
   `fingerprint` char(64) DEFAULT NULL,
+  `device_fingerprint` char(64) DEFAULT NULL,
   `status` enum('blocked','banned','rate_limited','jailed') NOT NULL DEFAULT 'blocked',
   `reason` varchar(255) DEFAULT NULL,
   `created_at` datetime NOT NULL,
@@ -295,10 +319,10 @@ CREATE TABLE `app_security_logs` (
   `ip` varbinary(16) DEFAULT NULL,
   `ua` varchar(255) DEFAULT NULL,
   `fingerprint` char(64) DEFAULT NULL,
+  `device_fingerprint` char(64) DEFAULT NULL,
   `category` varchar(64) NOT NULL,
   `message` varchar(255) NOT NULL,
-  `created_at` datetime NOT NULL,
-  `expires_at` datetime DEFAULT NULL
+  `created_at` datetime NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -408,7 +432,8 @@ ALTER TABLE `app_block_list`
   ADD KEY `idx_expires_at` (`expires_at`),
   ADD KEY `idx_user_id` (`user_id`),
   ADD KEY `idx_ip` (`ip`),
-  ADD KEY `idx_fingerprint` (`fingerprint`);
+  ADD KEY `idx_fingerprint` (`fingerprint`),
+  ADD KEY `idx_device_fingerprint` (`device_fingerprint`);
 
 --
 -- Indexes for table `app_security_logs`
@@ -417,7 +442,8 @@ ALTER TABLE `app_security_logs`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_user_id` (`user_id`),
   ADD KEY `idx_created_at` (`created_at`),
-  ADD KEY `idx_category` (`category`);
+  ADD KEY `idx_category` (`category`),
+  ADD KEY `idx_device_fingerprint` (`device_fingerprint`);
 
 --
 -- AUTO_INCREMENT for dumped tables
