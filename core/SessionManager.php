@@ -504,7 +504,7 @@ class SessionManager
     private static function persistUserDevice(): void
     {
         $userId = TypeHelper::toInt($_SESSION['user_id'] ?? null);
-        if (!$userId)
+        if ($userId <= 0)
         {
             return;
         }
@@ -515,35 +515,41 @@ class SessionManager
             return;
         }
 
-        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-        $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
-        $ipBin = inet_pton($ip);
+        $ip = TypeHelper::toString($_SERVER['REMOTE_ADDR'] ?? '');
+        $ua = TypeHelper::toString($_SERVER['HTTP_USER_AGENT'] ?? '');
+
+        $ipBin = null;
+        if ($ip !== '')
+        {
+            $packedIp = @inet_pton($ip);
+            if ($packedIp !== false)
+            {
+                $ipBin = $packedIp;
+            }
+        }
+
         $uaHash = hash('sha256', $ua);
 
         // Best-effort: if table isn't present yet, do not break requests.
         try
         {
-            Database::query(
-                "INSERT INTO app_user_devices (user_id, device_fingerprint, first_seen_at, last_seen_at, first_ip, last_ip, user_agent_hash)
-                VALUES (:uid, :dfp, NOW(), NOW(), :first_ip, :last_ip, :ua_hash)
-                ON DUPLICATE KEY UPDATE
-                    last_seen_at = NOW(),
-                    last_ip = :last_ip_u,
-                    user_agent_hash = :ua_hash_u",
-                [
-                    'uid' => $userId,
-                    'dfp' => $dfp,
-                    'first_ip' => $ipBin,
-                    'last_ip' => $ipBin,
-                    'ua_hash' => $uaHash,
-                    'last_ip_u' => $ipBin,
-                    'ua_hash_u' => $uaHash,
-                ]
+            $existing = Database::query("SELECT id FROM app_user_devices WHERE user_id = :uid AND device_fingerprint = :dfp LIMIT 1",
+                ['uid' => $userId, 'dfp' => $dfp])->fetch();
+            if ($existing)
+            {
+                Database::query("UPDATE app_user_devices SET last_seen_at = NOW(), last_ip = :last_ip, user_agent_hash = :ua_hash WHERE id = :id",
+                    ['last_ip' => $ipBin, 'ua_hash' => $uaHash, 'id' => TypeHelper::toInt($existing['id'] ?? 0)]);
+                return;
+            }
+
+            Database::query("INSERT INTO app_user_devices (user_id, device_fingerprint, first_seen_at, last_seen_at, first_ip, last_ip, user_agent_hash)
+                    VALUES (:uid, :dfp, NOW(), NOW(), :first_ip, :last_ip, :ua_hash )",
+                    ['uid' => $userId, 'dfp' => $dfp, 'first_ip' => $ipBin, 'last_ip' => $ipBin, 'ua_hash' => $uaHash]
             );
         }
         catch (Throwable $e)
         {
-            // ignore
+            error_log('persistUserDevice() failed: ' . $e->getMessage());
         }
     }
 
