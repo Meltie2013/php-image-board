@@ -99,7 +99,7 @@ class SettingsManager
      */
     private static function loadDefaultConfig(): array
     {
-        $distPath = __DIR__ . '/../config/config.php.dist';
+        $distPath = CONFIG_PATH . '/config.php.dist';
 
         if (file_exists($distPath))
         {

@@ -5,10 +5,13 @@
 
 # -------------------------
 # ignore configuration file without the .dist
+# keep security placeholder files
 # -------------------------
 /config/**
 !/config/**/
 !/config/**/config.php.dist
+!/config/**/.htaccess
+!/config/**/index.html
 
 # -------------------------
 # ignore tools folder
@@ -16,24 +19,25 @@
 /tools
 
 # -------------------------
-# cache
+# storage/cache
+# keep index.html files
 # -------------------------
-/cache/**
-/cache/**/*.json
+/storage/cache/**
+!/storage/cache/**/
+!/storage/cache/**/index.html
 
 # -------------------------
-# cache/templates (keep index.html)
+# storage/cache/templates runtime metadata
 # -------------------------
-/cache/templates/**
-!/cache/templates/**/
-!/cache/templates/**/index.html
+/storage/cache/templates/.template_config_hash
 
 # -------------------------
-# cache/images (keep index.html)
+# storage/logs
+# keep index.html files
 # -------------------------
-/cache/images/**
-!/cache/images/**/
-!/cache/images/**/index.html
+/storage/logs/**
+!/storage/logs/**/
+!/storage/logs/**/index.html
 
 # -------------------------
 # json (keep index.html)

@@ -42,7 +42,7 @@ class UploadController
     {
         if (empty(self::$config))
         {
-            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require __DIR__ . '/../config/config.php');
+            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require CONFIG_PATH . '/config.php');
         }
 
         return self::$config;
@@ -59,7 +59,7 @@ class UploadController
     private static function initTemplate(): TemplateEngine
     {
         $config = self::getConfig();
-        $template = new TemplateEngine(__DIR__ . '/../templates', __DIR__ . '/../cache/templates', $config);
+        $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
         if (!empty($config['template']['disable_cache']))
         {
             $template->clearCache();
@@ -77,7 +77,7 @@ class UploadController
      * This path is used as the filesystem root for writing resized images and
      * reading stored files for hashing/metadata extraction.
      */
-    private static $uploadDir = __DIR__ . "/../images/";
+    private static $uploadDir = IMAGE_PATH . '/';
 
     /**
      * Disallowed file extensions for uploads (for security).

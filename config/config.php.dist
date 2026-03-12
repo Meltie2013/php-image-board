@@ -164,7 +164,7 @@ return [
         // background server heartbeat is fresh.
 
         'heartbeat_file' => 'json/control_server_heartbeat.json',
-        // Relative path used to store the server heartbeat file.
+        // Relative path used to store the server heartbeat file inside the project root.
 
         'state_file' => 'json/control_server_state.json',
 

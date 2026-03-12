@@ -1,9 +1,11 @@
 <?php
 
+require __DIR__ . '/bootstrap/app.php';
+
 // -------------------------
 // Load configuration
 // -------------------------
-$config = require __DIR__ . '/config/config.php';
+$config = require CONFIG_PATH . '/config.php';
 
 // -------------------------
 // Security headers
@@ -15,7 +17,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-sr
 header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
 
 // Ensure logs directory exists
-$logDir = __DIR__ . '/logs';
+$logDir = LOG_PATH;
 if (!is_dir($logDir))
 {
     if (!mkdir($logDir, 0755, true) && !is_dir($logDir))
@@ -26,28 +28,7 @@ if (!is_dir($logDir))
 
 // Log all errors to file
 ini_set('log_errors', '1');
-ini_set('error_log', $logDir . '/logs/errors.log');
-
-// -------------------------
-// Autoloader for core classes
-// -------------------------
-spl_autoload_register(function ($class)
-{
-    $paths = [
-        __DIR__ . '/core/' . $class . '.php',
-        __DIR__ . '/controllers/' . $class . '.php',
-        __DIR__ . '/helpers/' . $class . '.php',
-    ];
-
-    foreach ($paths as $file)
-    {
-        if (file_exists($file))
-        {
-            require $file;
-            return;
-        }
-    }
-});
+ini_set('error_log', $logDir . '/errors.log');
 
 // -------------------------
 // Initialize Core Systems
@@ -116,7 +97,7 @@ $siteOffline = ($controlServerRequired && !$controlServerAlive) || !$siteOnline 
 
 if ($siteOffline || $maintenanceModeEnabled)
 {
-    $template = new TemplateEngine(__DIR__ . '/templates', __DIR__ . '/cache/templates', $config);
+    $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
     if (!empty($config['template']['disable_cache']))
     {
         $template->clearCache();
@@ -147,7 +128,7 @@ if ($siteOffline || $maintenanceModeEnabled)
 $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 if (str_starts_with($requestPath, '/user/register') && !ControlServer::serviceEnabled($config, 'register', $runtimeState))
 {
-    $template = new TemplateEngine(__DIR__ . '/templates', __DIR__ . '/cache/templates', $config);
+    $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
     if (!empty($config['template']['disable_cache']))
     {
         $template->clearCache();
@@ -179,8 +160,8 @@ $router->setNotFound(function ()
 {
     $config = (class_exists('SettingsManager') && SettingsManager::isInitialized())
         ? SettingsManager::getConfig()
-        : (require __DIR__ . '/config/config.php');
-    $template = new TemplateEngine(__DIR__ . '/templates', __DIR__ . '/cache/templates', $config);
+        : (require CONFIG_PATH . '/config.php');
+    $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
     if (!empty($config['template']['disable_cache']))
     {
         $template->clearCache();

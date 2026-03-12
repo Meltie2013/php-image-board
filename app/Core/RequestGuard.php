@@ -852,9 +852,9 @@ class RequestGuard
     {
         $config = (class_exists('SettingsManager') && SettingsManager::isInitialized())
             ? SettingsManager::getConfig()
-            : (self::$config ?: (require __DIR__ . '/../config/config.php'));
+            : (self::$config ?: (require CONFIG_PATH . '/config.php'));
 
-        $template = new TemplateEngine(dirname(__DIR__) . '/templates', dirname(__DIR__) . '/cache/templates', $config);
+        $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
         if (!empty($config['template']['disable_cache']))
         {
             $template->clearCache();

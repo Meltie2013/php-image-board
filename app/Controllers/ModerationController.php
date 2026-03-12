@@ -21,7 +21,7 @@ class ModerationController
     {
         if (empty(self::$config))
         {
-            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require __DIR__ . '/../config/config.php');
+            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require CONFIG_PATH . '/config.php');
         }
         return self::$config;
     }
@@ -34,7 +34,7 @@ class ModerationController
     private static function initTemplate(): TemplateEngine
     {
         $config = self::getConfig();
-        $template = new TemplateEngine(__DIR__ . '/../templates', __DIR__ . '/../cache/templates', $config);
+        $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
         if (!empty($config['template']['disable_cache']))
         {
             $template->clearCache();
@@ -652,7 +652,7 @@ class ModerationController
             // Recalculate hashes for each selected image
             foreach ($images as $img)
             {
-                $imgPath = __DIR__ . '/../images/' . str_replace("images/", "", $img['original_path']);
+                $imgPath = IMAGE_PATH . '/' . str_replace("images/", "", $img['original_path']);
 
                 if (file_exists($imgPath))
                 {
@@ -772,7 +772,7 @@ class ModerationController
             return;
         }
 
-        $baseDir = realpath(__DIR__ . '/../images/');
+        $baseDir = realpath(IMAGE_PATH);
         $fullPath = realpath($baseDir . '/' . ltrim(str_replace("images/", "", $image['original_path']), '/'));
 
         if (!$fullPath || strpos($fullPath, $baseDir) !== 0 || !file_exists($fullPath))

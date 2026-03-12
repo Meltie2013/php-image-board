@@ -7,12 +7,12 @@ Entry point:
 What it does:
 - Provides a separate login for installation and updates (stored in /config/installer_auth.php)
 - Creates required folders:
-  - /cache/images
-  - /cache/templates
+  - /storage/cache/images
+  - /storage/cache/templates
   - /images/original
 - Writes /config/config.php based on /config/config.php.dist while preserving comments
 - Installs /install/base_database.sql
-- Applies updates found in /updates/*.sql (tracks applied updates in app_updates)
+- Applies updates found in /database/updates/*.sql (tracks applied updates in app_updates)
 
 After install:
 - REMOVE or RESTRICT /install for security.

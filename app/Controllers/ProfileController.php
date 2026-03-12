@@ -31,7 +31,7 @@ class ProfileController
     {
         if (empty(self::$config))
         {
-            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require __DIR__ . '/../config/config.php');
+            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require CONFIG_PATH . '/config.php');
         }
 
         return self::$config;
@@ -45,7 +45,7 @@ class ProfileController
     private static function initTemplate(): TemplateEngine
     {
         $config = self::getConfig();
-        $template = new TemplateEngine(__DIR__ . '/../templates', __DIR__ . '/../cache/templates', $config);
+        $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
         if (!empty($config['template']['disable_cache']))
         {
             $template->clearCache();
@@ -470,10 +470,10 @@ class ProfileController
 
                                 // Save avatar to permanent location
                                 $filename = uniqid('avatar_') . '.' . $ext;
-                                $dest = __DIR__ . '/../uploads/avatars/' . $filename;
-                                if (!is_dir(__DIR__ . '/../uploads/avatars/'))
+                                $dest = UPLOAD_PATH . '/avatars/' . $filename;
+                                if (!is_dir(UPLOAD_PATH . '/avatars/'))
                                 {
-                                    mkdir(__DIR__ . '/../uploads/avatars/', 0750, true);
+                                    mkdir(UPLOAD_PATH . '/avatars/', 0750, true);
                                 }
 
                                 // Copy resized image or move original upload
@@ -498,7 +498,7 @@ class ProfileController
                                     if (!empty($user['avatar_path'])
                                         && strpos($user['avatar_path'], '/uploads/avatars/') === 0)
                                     {
-                                        $oldAvatar = __DIR__ . '/../' . ltrim($user['avatar_path'], '/');
+                                        $oldAvatar = APP_ROOT . '/' . ltrim($user['avatar_path'], '/');
                                         if (file_exists($oldAvatar) && !@unlink($oldAvatar))
                                         {
                                             $errors[] = "Warning: failed to remove old avatar.";

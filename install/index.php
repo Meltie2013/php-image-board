@@ -50,7 +50,7 @@ define('CONFIG_FILE', CONFIG_DIR . '/config.php');
 define('INSTALLER_AUTH_FILE', CONFIG_DIR . '/installer_auth.php');
 
 define('INSTALL_SQL_FILE', __DIR__ . '/base_database.sql');
-define('UPDATES_DIR', APP_ROOT .  '/updates');
+define('UPDATES_DIR', APP_ROOT . '/database/updates');
 
 define('INSTALLER_CSS', '/assets/css/installer.css');
 define('INSTALLER_LOCK_FILE', __DIR__ . '/installer.lock');
@@ -495,8 +495,8 @@ function installer_required_dirs(): array
 {
     return [
         APP_ROOT . '/cache',
-        APP_ROOT . '/cache/images',
-        APP_ROOT . '/cache/templates',
+        APP_ROOT . '/storage/cache/images',
+        APP_ROOT . '/storage/cache/templates',
         APP_ROOT . '/images',
         APP_ROOT . '/images/original',
     ];
@@ -562,8 +562,8 @@ function installer_create_dirs(): array
 
     // Ensure cache subfolders also have an index
     installer_ensure_index_html(APP_ROOT . '/cache');
-    installer_ensure_index_html(APP_ROOT . '/cache/images');
-    installer_ensure_index_html(APP_ROOT . '/cache/templates');
+    installer_ensure_index_html(APP_ROOT . '/storage/cache/images');
+    installer_ensure_index_html(APP_ROOT . '/storage/cache/templates');
 
     return ['created' => $created, 'errors' => $errors];
 }
@@ -1569,7 +1569,7 @@ if ($tab === 'update') {
 
         echo '<div class="installer-card">';
         echo '<h2>Database Updates</h2>';
-        echo '<p>Apply SQL files in <b>/install/updates</b> and track which updates have already been applied.</p>';
+        echo '<p>Apply SQL files in <b>/database/updates</b> and track which updates have already been applied.</p>';
         echo '<a class="installer-button installer-button--secondary" href="index.php?tab=update&page=database">Open Database Updates</a>';
         echo '</div>';
         echo '</div>';
@@ -1638,7 +1638,7 @@ if ($tab === 'update') {
 
     // page === database
     echo '<h1>Database Updates</h1>';
-    echo '<p>Applies missing SQL updates in <b>/install/updates</b>.</p>';
+    echo '<p>Applies missing SQL updates in <b>/database/updates</b>.</p>';
 
     $config = installer_load_config_existing();
     $pdo = $config ? installer_pdo_from_config($config) : null;
@@ -1657,7 +1657,7 @@ if ($tab === 'update') {
         }
 
         if (empty($updates)) {
-            echo '<div class="alert alert-warning">No update files found in /install/updates.</div>';
+            echo '<div class="alert alert-warning">No update files found in /database/updates.</div>';
         } elseif (empty($pending)) {
             echo '<div class="alert alert-success">No pending updates.</div>';
         } else {

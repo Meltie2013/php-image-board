@@ -97,7 +97,7 @@ class ControlServer
             $relativePath = self::DEFAULT_HEARTBEAT_FILE;
         }
 
-        return dirname(__DIR__) . '/' . ltrim($relativePath, '/');
+        return APP_ROOT . '/' . ltrim($relativePath, '/');
     }
 
     /**
@@ -116,7 +116,7 @@ class ControlServer
             $relativePath = self::DEFAULT_STATE_FILE;
         }
 
-        return dirname(__DIR__) . '/' . ltrim($relativePath, '/');
+        return APP_ROOT . '/' . ltrim($relativePath, '/');
     }
 
     /**
@@ -568,7 +568,7 @@ class ControlServer
             $relativePath = self::DEFAULT_LIVE_EVENTS_FILE;
         }
 
-        return dirname(__DIR__) . '/' . ltrim($relativePath, '/');
+        return APP_ROOT . '/' . ltrim($relativePath, '/');
     }
 
     /**

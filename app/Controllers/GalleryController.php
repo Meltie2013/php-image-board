@@ -37,7 +37,7 @@ class GalleryController
     {
         if (empty(self::$config))
         {
-            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require __DIR__ . '/../config/config.php');
+            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require CONFIG_PATH . '/config.php');
         }
 
         return self::$config;
@@ -54,7 +54,7 @@ class GalleryController
     private static function initTemplate(): TemplateEngine
     {
         $config = self::getConfig();
-        $template = new TemplateEngine(__DIR__ . '/../templates', __DIR__ . '/../cache/templates', $config);
+        $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
         if (!empty($config['template']['disable_cache']))
         {
             $template->clearCache();
@@ -1246,7 +1246,7 @@ class GalleryController
         }
 
         // Resolve original file path
-        $baseDir = realpath(__DIR__ . '/../images/');
+        $baseDir = realpath(IMAGE_PATH);
         $originalPath = TypeHelper::toString($image['original_path'] ?? null, allowEmpty: false) ?? '';
         if (!$baseDir || $originalPath === '')
         {

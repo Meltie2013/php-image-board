@@ -1,5 +1,7 @@
 <?php
 
+require __DIR__ . '/../bootstrap/app.php';
+
 /**
  * Background maintenance server and CLI control entry point for the Image Gallery.
  *
@@ -7,7 +9,7 @@
  * - Remove expired application sessions from the database
  * - Remove expired request-guard counters and temporary blocks
  * - Remove old security logs based on retention days
- * - Remove expired image cache files from cache/images
+ * - Remove expired image cache files from storage/cache/images
  * - Keep the required maintenance heartbeat alive for the public site
  * - Accept secure runtime control commands without restarting the process
  *
@@ -32,9 +34,9 @@ if (PHP_SAPI !== 'cli')
     exit(1);
 }
 
-$rootDir = __DIR__;
+$rootDir = APP_ROOT;
 $rawArgs = array_slice($argv, 1);
-$configPath = $rootDir . '/config/config.php';
+$configPath = CONFIG_PATH . '/config.php';
 
 if (!is_file($configPath))
 {
@@ -65,24 +67,6 @@ Create config/config.php from config/config.php.dist before starting server mode
 }
 
 $config = require $configPath;
-
-spl_autoload_register(function (string $class) use ($rootDir): void
-{
-    $paths = [
-        $rootDir . '/core/' . $class . '.php',
-        $rootDir . '/controllers/' . $class . '.php',
-        $rootDir . '/helpers/' . $class . '.php',
-    ];
-
-    foreach ($paths as $file)
-    {
-        if (is_file($file))
-        {
-            require $file;
-            return;
-        }
-    }
-});
 
 DateHelper::init($config['timezone'] ?? 'UTC');
 Database::init($config['db']);

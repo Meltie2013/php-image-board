@@ -36,7 +36,7 @@ class AdminController
     {
         if (empty(self::$config))
         {
-            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require __DIR__ . '/../config/config.php');
+            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require CONFIG_PATH . '/config.php');
         }
 
         return self::$config;
@@ -53,7 +53,7 @@ class AdminController
     private static function initTemplate(): TemplateEngine
     {
         $config = self::getConfig();
-        $template = new TemplateEngine(__DIR__ . '/../templates', __DIR__ . '/../cache/templates', $config);
+        $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
         if (!empty($config['template']['disable_cache']))
         {
             $template->clearCache();

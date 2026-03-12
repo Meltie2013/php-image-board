@@ -37,14 +37,14 @@ class ImageCacheEngine
     {
         if (empty(self::$config))
         {
-            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require __DIR__ . '/../config/config.php');
+            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require CONFIG_PATH . '/config.php');
         }
 
         return self::$config;
     }
 
     // Cache directory for processed images (must be writable by the web server)
-    private static string $cacheDir = __DIR__ . '/../cache/images/';
+    private static string $cacheDir = CACHE_IMAGE_PATH . '/';
 
     // Cache lifetime in seconds (24 hours) for unused entries
     private static int $cacheLifetime = 86400;

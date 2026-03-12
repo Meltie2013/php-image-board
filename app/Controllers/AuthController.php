@@ -38,7 +38,7 @@ class AuthController
     {
         if (empty(self::$config))
         {
-            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require __DIR__ . '/../config/config.php');
+            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require CONFIG_PATH . '/config.php');
         }
 
         return self::$config;
@@ -47,7 +47,7 @@ class AuthController
     /**
      * Initialize template engine with optional cache clearing.
      *
-     * Creates a TemplateEngine instance pointed at the project's templates/cache
+     * Creates a TemplateEngine instance pointed at the project's resources/templates and storage/cache
      * directories. When template caching is disabled in config, the compiled cache
      * is cleared to ensure changes are reflected immediately (development-friendly).
      *
@@ -56,7 +56,7 @@ class AuthController
     private static function initTemplate(): TemplateEngine
     {
         $config = self::getConfig();
-        $template = new TemplateEngine(__DIR__ . '/../templates', __DIR__ . '/../cache/templates', $config);
+        $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
         if (!empty($config['template']['disable_cache']))
         {
             $template->clearCache();

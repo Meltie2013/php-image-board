@@ -47,7 +47,7 @@ class StorageHelper
             }
             else
             {
-                self::$config = require __DIR__ . '/../config/config.php';
+                self::$config = require CONFIG_PATH . '/config.php';
             }
 
             // Ensure gallery section exists with safe defaults
