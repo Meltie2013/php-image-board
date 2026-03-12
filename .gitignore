@@ -36,6 +36,14 @@
 !/cache/images/**/index.html
 
 # -------------------------
+# json (keep index.html)
+# -------------------------
+/json/**
+/json/**/*.json
+!/json/**/
+!/json/**/index.html
+
+# -------------------------
 # uploads/avatars (keep index.html)
 # -------------------------
 /uploads/avatars/**

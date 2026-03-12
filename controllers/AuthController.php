@@ -279,6 +279,19 @@ class AuthController
         $errors = [];
         $success = '';
 
+        $config = self::getConfig();
+        $runtimeState = ControlServer::loadRuntimeState($config);
+        if (!ControlServer::serviceEnabled($config, 'register', $runtimeState))
+        {
+            http_response_code(503);
+            $template = self::initTemplate();
+            $template->assign('title', 'Registration Temporarily Disabled');
+            $template->assign('message', 'New account registration is temporarily unavailable.');
+            $template->assign('submessage', 'Please try again later.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
         // Prevent already logged-in users from registering again
         $userId = TypeHelper::toInt(SessionManager::get('user_id'));
         if ($userId)

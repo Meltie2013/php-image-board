@@ -11,7 +11,7 @@ $config = require __DIR__ . '/config/config.php';
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
-header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
 header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
 
 // Ensure logs directory exists
@@ -82,22 +82,37 @@ Database::init($config['db']);
 SettingsManager::init($config);
 $config = SettingsManager::getConfig();
 
-$maintenanceServerRequired = MaintenanceServer::isRequired($config);
-$maintenanceServerAlive = MaintenanceServer::isAlive($config);
-$heartbeatState = MaintenanceServer::readHeartbeat($config);
-$runtimeState = MaintenanceServer::loadRuntimeState($config);
+// Session
+SessionManager::init($config['session']);
+
+// Security
+Security::init($config['security']);
+
+// Request guard (rate limits, jail / block decisions)
+RequestGuard::init($config);
+
+$controlServerRequired = ControlServer::isRequired($config);
+$controlServerAlive = ControlServer::isAlive($config);
+$heartbeatState = ControlServer::readHeartbeat($config);
+$runtimeState = ControlServer::loadRuntimeState($config);
 
 $maintenanceModeEnabled = false;
-if ($maintenanceServerAlive)
+$siteOnline = !empty($runtimeState['site_online']);
+
+if ($controlServerAlive)
 {
     $maintenanceModeEnabled = !empty($heartbeatState['maintenance_mode']);
+    if (array_key_exists('site_online', $heartbeatState))
+    {
+        $siteOnline = !empty($heartbeatState['site_online']);
+    }
 }
 else
 {
     $maintenanceModeEnabled = !empty($runtimeState['maintenance_mode']);
 }
 
-$siteOffline = $maintenanceServerRequired && !$maintenanceServerAlive;
+$siteOffline = ($controlServerRequired && !$controlServerAlive) || !$siteOnline || !ControlServer::serviceEnabled($config, 'site', $runtimeState);
 
 if ($siteOffline || $maintenanceModeEnabled)
 {
@@ -129,14 +144,24 @@ if ($siteOffline || $maintenanceModeEnabled)
     exit;
 }
 
-// Session
-SessionManager::init($config['session']);
+$requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+if (str_starts_with($requestPath, '/user/register') && !ControlServer::serviceEnabled($config, 'register', $runtimeState))
+{
+    $template = new TemplateEngine(__DIR__ . '/templates', __DIR__ . '/cache/templates', $config);
+    if (!empty($config['template']['disable_cache']))
+    {
+        $template->clearCache();
+    }
 
-// Security
-Security::init($config['security']);
-
-// Request guard (rate limits, jail / block decisions)
-RequestGuard::init($config);
+    http_response_code(503);
+    header('Retry-After: 60');
+    $template->assign('title', 'Registration Temporarily Disabled');
+    $template->assign('message', 'New account registration is temporarily unavailable.');
+    $template->assign('submessage', 'Please try again later.');
+    $template->assign('mode', 'maintenance');
+    echo $template->render('errors/maintenance.html');
+    exit;
+}
 
 // -------------------------
 // Initialize Router
@@ -222,6 +247,7 @@ $router->add([
     ["/gallery/$image_hash/upvote", function ($hash) { GalleryController::upvote($hash); }, ['POST']],
     ["/gallery/$image_hash/favorite", function ($hash) { GalleryController::favorite($hash); }, ['POST']],
     ["/gallery/$image_hash/comment", function ($hash) { GalleryController::comment($hash); }, ['POST']],
+    ["/gallery/$image_hash/live", function ($hash) { GalleryController::live($hash); }, ['GET']],
 ]);
 
 // -------------------------

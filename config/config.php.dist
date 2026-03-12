@@ -155,18 +155,21 @@ return [
     ],
 
     // --------------------------
-    // Background Maintenance Server
+    // Background Control Server
     // --------------------------
 
-    'maintenance_server' => [
+    'control_server' => [
         'required' => 1,
         // When enabled, the public site enters maintenance mode unless the
         // background server heartbeat is fresh.
 
-        'heartbeat_file' => 'cache/maintenance_server_heartbeat.json',
+        'heartbeat_file' => 'json/control_server_heartbeat.json',
         // Relative path used to store the server heartbeat file.
 
-        'state_file' => 'cache/maintenance_server_state.json',
+        'state_file' => 'json/control_server_state.json',
+
+        'live_events_file' => 'json/control_server_events.json',
+        // Relative path used to store the live gallery event tick file.
         // Relative path used to store the live runtime state file.
 
         'heartbeat_timeout_seconds' => 5,
@@ -189,6 +192,35 @@ return [
         ],
         // Runtime-togglable maintenance jobs owned by server.php.
 
+
+        'websocket' => [
+            'enabled' => 1,
+            // Enables the shared WebSocket server used by browser live updates
+            // and CLI/runtime control clients.
+
+            'allow_remote_clients' => 1,
+            // When enabled, the WebSocket listener may bind publicly so browser
+            // sessions can receive live updates in real time.
+
+            'bind_address' => '0.0.0.0',
+            // Bind to all interfaces by default so remote browser sessions can
+            // subscribe to gallery updates.
+
+            'port' => 37992,
+            // TCP port used by the Control Server WebSocket endpoint.
+
+            'public_host' => '',
+            // Optional host name exposed to browsers. Set this when the public
+            // WebSocket host differs from HTTP_HOST or when localhost causes
+            // IPv4/IPv6 resolution issues on local development machines.
+
+            'public_scheme' => '',
+            // Optional override for ws or wss.
+
+            'public_path' => '/gallery-live',
+            // Public browser subscription endpoint path.
+        ],
+
         'control' => [
             'enabled' => 1,
             // Enables the local maintenance control socket.
@@ -207,8 +239,9 @@ return [
             // Whitelisted remote IP addresses allowed to issue control commands.
 
             'auth_token' => 'change-this-to-a-long-random-token',
-            // Shared secret required by every control command. Replace this in
-            // config.php before using the control socket.
+            // Shared secret required by every control command. Generate a
+            // unique random token and keep it at 64 characters or fewer. When
+            // remote control is enabled, use a strong randomly generated token.
         ],
     ],
 

@@ -6,44 +6,44 @@
                 <div class="gallery-details-view">
                     <section>
                         {if $is_logged_in}
-                        <div class="gallery-toolbar">
+                        <div class="gallery-toolbar" data-live-toolbar="1">
                             {if $can_edit_image}
                             <button type="button" class="js-open-edit-image" title="Edit Image">
                                 <i class="fa-solid fa-pen-to-square"></i>
                             </button>
                             {/if}
 
-                            <button title="Image Views">
+                            <button title="Image Views" data-live-views="1">
                                 <i class="fa-solid fa-eye"></i>
-                                {$img_views}
+                                <span data-live-views-count="1">{$img_views}</span>
                             </button>
         
                             {if $img_has_favorited}
-                            <button title="Already Favorited">
+                            <button title="Already Favorited" data-live-favorite-button="1" data-live-active="1">
                                 <i class="fa-solid fa-star"></i>
-                                {$img_favorites}
+                                <span data-live-favorites-count="1">{$img_favorites}</span>
                             </button>
                             {else}
-                            <form method="POST" action="/gallery/{$img_hash}/favorite">
+                            <form method="POST" action="/gallery/{$img_hash}/favorite" data-live-action-form="favorite">
                                 <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                                <button type="submit" title="Add Favorite">
+                                <button type="submit" title="Add Favorite" data-live-favorite-button="1">
                                     <i class="fa-regular fa-star"></i>
-                                    {$img_favorites}
+                                    <span data-live-favorites-count="1">{$img_favorites}</span>
                                 </button>
                             </form>
                             {/if}
 
                             {if $img_has_voted}
-                            <button title="Already Upvoted">
+                            <button title="Already Upvoted" data-live-vote-button="1" data-live-active="1">
                                 <i class="fa-solid fa-thumbs-up"></i>
-                                {$img_votes}
+                                <span data-live-votes-count="1">{$img_votes}</span>
                             </button>
                             {else}
-                            <form method="POST" action="/gallery/{$img_hash}/upvote">
+                            <form method="POST" action="/gallery/{$img_hash}/upvote" data-live-action-form="vote">
                                 <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                                <button type="submit" title="Up Vote">
+                                <button type="submit" title="Up Vote" data-live-vote-button="1">
                                     <i class="fa-regular fa-thumbs-up"></i>
-                                    {$img_votes}
+                                    <span data-live-votes-count="1">{$img_votes}</span>
                                 </button>
                             </form>
                             {/if}
@@ -54,19 +54,19 @@
                         </div>
                         {else}
                         <div class="gallery-toolbar">
-                            <button title="Image Views">
+                            <button title="Image Views" data-live-views="1">
                                 <i class="fa-solid fa-eye"></i>
-                                {$img_views}
+                                <span data-live-views-count="1">{$img_views}</span>
                             </button>
 
-                            <button title="Login to Favorite">
+                            <button title="Login to Favorite" data-live-favorite-button="1">
                                 <i class="fa-regular fa-star"></i>
-                                {$img_favorites}
+                                <span data-live-favorites-count="1">{$img_favorites}</span>
                             </button>
 
-                            <button title="Login to Upvote">
+                            <button title="Login to Upvote" data-live-vote-button="1">
                                 <i class="fa-regular fa-thumbs-up"></i>
-                                {$img_votes}
+                                <span data-live-votes-count="1">{$img_votes}</span>
                             </button>
                         </div>
                         {/if}
@@ -109,7 +109,7 @@
 
                     <section>
                         <h5><a href="/gallery/original/{$img_hash}">View Image</a></h5>
-                        <h5><a href="#" class="js-open-comments">Comments ({$img_comment_count})</a></h5>
+                        <h5><a href="#" class="js-open-comments">Comments (<span data-live-comments-count="1">{$img_comment_count}</span>)</a></h5>
                     </section>
 
                     {if $img_has_tag}
@@ -246,5 +246,10 @@
     </div>
 
     <script src="/assets/js/gallery-modals.js"></script>
+
+    <div id="gallery-live-config" data-hash="{$img_hash}" data-csrf-token="{$csrf_token}" data-poll-url="{$img_live_poll_url}"
+        data-websocket-url="{$img_live_websocket_url}" data-tick="{$img_live_tick}" hidden></div>
+
+    <script src="/assets/js/gallery-view-live.js"></script>
 
 {include file="global/footer.html"}

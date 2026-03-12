@@ -523,11 +523,181 @@ class GalleryController
         $template->assign('img_favorites', NumericalHelper::formatCount($img['favorites']));
         $template->assign('img_views', NumericalHelper::formatCount($img['views']));
         $template->assign('img_has_favorited', $hasFavorited);
+        $controlBlock = $config['control_server'] ?? ($config['maintenance_server'] ?? []);
+        $webSocketConfig = is_array($controlBlock['websocket'] ?? null) ? $controlBlock['websocket'] : [];
+        $webSocketPort = max(1, min(65535, TypeHelper::toInt($webSocketConfig['port'] ?? null) ?? (ControlServer::controlPort($config) + 1)));
+        $requestHost = TypeHelper::toString($_SERVER['HTTP_HOST'] ?? '', allowEmpty: true) ?? '';
+        $requestHost = preg_replace('/:\d+$/', '', $requestHost) ?: '127.0.0.1';
+        $publicHost = TypeHelper::toString($webSocketConfig['public_host'] ?? '', allowEmpty: true) ?? '';
+        $bindAddress = TypeHelper::toString($webSocketConfig['bind_address'] ?? '', allowEmpty: true) ?? '';
+        $webSocketHost = $publicHost !== '' ? $publicHost : $requestHost;
+        if ($webSocketHost === 'localhost' && $bindAddress !== '' && strpos($bindAddress, ':') === false)
+        {
+            $webSocketHost = '127.0.0.1';
+        }
+
+        $publicScheme = TypeHelper::toString($webSocketConfig['public_scheme'] ?? '', allowEmpty: true) ?? '';
+        $webSocketScheme = $publicScheme !== ''
+            ? $publicScheme
+            : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'wss' : 'ws');
+
+        $publicPath = TypeHelper::toString($webSocketConfig['public_path'] ?? '/gallery-live', allowEmpty: true) ?? '/gallery-live';
+        if ($publicPath === '')
+        {
+            $publicPath = '/gallery-live';
+        }
+        elseif ($publicPath[0] !== '/')
+        {
+            $publicPath = '/' . $publicPath;
+        }
+
+        $template->assign('img_live_poll_url', '/gallery/' . $img['image_hash'] . '/live');
+        $template->assign('img_live_websocket_url', $webSocketScheme . '://' . $webSocketHost . ':' . $webSocketPort . $publicPath);
+        $template->assign('img_live_tick', ControlServer::imageLiveTick($config, $img['image_hash']));
 
         $template->assign('can_edit_image', $canEditImage);
         $template->assign('img_has_tag', $image_tags);
 
         $template->render('gallery/gallery_view.html');
+    }
+
+
+    /**
+     * Determine whether the current gallery request expects a JSON response.
+     *
+     * @return bool True when the client requested JSON
+     */
+    private static function wantsJsonResponse(): bool
+    {
+        $requestedWith = strtolower(TypeHelper::toString($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '', allowEmpty: true) ?? '');
+        $accept = strtolower(TypeHelper::toString($_SERVER['HTTP_ACCEPT'] ?? '', allowEmpty: true) ?? '');
+
+        return $requestedWith === 'xmlhttprequest' || str_contains($accept, 'application/json');
+    }
+
+    /**
+     * Build the current live interaction state for one image.
+     *
+     * @param int $imageId Database image ID
+     * @param int $userId Current user ID or 0 when guest
+     * @return array<string, mixed> Live state payload
+     */
+    private static function getLiveInteractionState(int $imageId, int $userId = 0): array
+    {
+        $stats = Database::fetch(
+            "SELECT
+                i.image_hash,
+                i.views,
+                (SELECT COUNT(*) FROM app_image_votes WHERE image_id = i.id) AS votes,
+                (SELECT COUNT(*) FROM app_image_favorites WHERE image_id = i.id) AS favorites,
+                (SELECT COUNT(*) FROM app_image_comments WHERE image_id = i.id AND is_deleted = 0) AS comments
+             FROM app_images i
+             WHERE i.id = :image_id
+             LIMIT 1",
+            [':image_id' => $imageId]
+        );
+
+        if (!$stats)
+        {
+            return [];
+        }
+
+        $hasVoted = false;
+        $hasFavorited = false;
+        if ($userId > 0)
+        {
+            $hasVoted = TypeHelper::rowExists(Database::fetch(
+                "SELECT 1 FROM app_image_votes WHERE user_id = :user_id AND image_id = :image_id LIMIT 1",
+                [':user_id' => $userId, ':image_id' => $imageId]
+            ));
+
+            $hasFavorited = TypeHelper::rowExists(Database::fetch(
+                "SELECT 1 FROM app_image_favorites WHERE user_id = :user_id AND image_id = :image_id LIMIT 1",
+                [':user_id' => $userId, ':image_id' => $imageId]
+            ));
+        }
+
+        $votes = TypeHelper::toInt($stats['votes'] ?? null) ?? 0;
+        $favorites = TypeHelper::toInt($stats['favorites'] ?? null) ?? 0;
+        $views = TypeHelper::toInt($stats['views'] ?? null) ?? 0;
+        $comments = TypeHelper::toInt($stats['comments'] ?? null) ?? 0;
+
+        return [
+            'image_hash' => TypeHelper::toString($stats['image_hash'] ?? '', allowEmpty: true) ?? '',
+            'votes' => $votes,
+            'favorites' => $favorites,
+            'views' => $views,
+            'comments' => $comments,
+            'votes_display' => NumericalHelper::formatCount($votes),
+            'favorites_display' => NumericalHelper::formatCount($favorites),
+            'views_display' => NumericalHelper::formatCount($views),
+            'comments_display' => NumericalHelper::formatCount($comments),
+            'has_voted' => $hasVoted,
+            'has_favorited' => $hasFavorited,
+        ];
+    }
+
+    /**
+     * Emit a JSON response for live gallery actions.
+     *
+     * @param bool $ok Whether the request succeeded
+     * @param string $message Response message
+     * @param array<string, mixed> $payload Additional payload values
+     * @param int $statusCode HTTP status code
+     * @return void
+     */
+    private static function sendJsonResponse(bool $ok, string $message, array $payload = [], int $statusCode = 200): void
+    {
+        http_response_code($statusCode);
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode(array_merge([
+            'ok' => $ok,
+            'message' => $message,
+        ], $payload), JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * Return the current live gallery state for one image.
+     *
+     * @param string $hash Unique hash identifier for the image.
+     * @return void
+     */
+    public static function live(string $hash): void
+    {
+        $hash = TypeHelper::toString($hash);
+        if ($hash === '')
+        {
+            self::sendJsonResponse(false, 'Invalid image request.', [], 404);
+            return;
+        }
+
+        $image = Database::fetch("SELECT id FROM app_images WHERE image_hash = :hash AND status = 'approved' LIMIT 1", [':hash' => $hash]);
+        $imageId = TypeHelper::toInt($image['id'] ?? null) ?? 0;
+        if ($imageId < 1)
+        {
+            self::sendJsonResponse(false, 'Image not found.', [], 404);
+            return;
+        }
+
+        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        $currentTick = ControlServer::imageLiveTick(self::getConfig(), $hash);
+        $sinceTick = max(0, TypeHelper::toInt($_GET['since'] ?? null) ?? 0);
+
+        if ($sinceTick > 0 && $currentTick <= $sinceTick)
+        {
+            self::sendJsonResponse(true, 'No live gallery changes detected.', [
+                'changed' => false,
+                'tick' => $currentTick,
+            ]);
+            return;
+        }
+
+        $state = self::getLiveInteractionState($imageId, $userId);
+        self::sendJsonResponse(true, 'Live gallery state loaded.', [
+            'changed' => true,
+            'tick' => $currentTick,
+            'state' => $state,
+        ]);
     }
 
     /**
@@ -604,6 +774,8 @@ class GalleryController
         Database::execute("UPDATE app_images SET description = :description, updated_at = NOW() WHERE image_hash = :image_hash LIMIT 1",
             [':description' => $description, ':image_hash' => $image]
         );
+
+        ControlServer::bumpImageLiveTick(self::getConfig(), $hash);
 
         header('Location: /gallery/' . $hash);
         exit;
@@ -699,6 +871,14 @@ class GalleryController
 
         if (TypeHelper::rowExists($existing))
         {
+            if (self::wantsJsonResponse())
+            {
+                self::sendJsonResponse(false, 'You have already marked this image as a favorite.', [
+                    'state' => self::getLiveInteractionState($imageId, $userId),
+                ], 409);
+                return;
+            }
+
             $template->assign('title', "Favorite Failed");
             $template->assign('message', "You have already marked this image as a favorite.");
             $template->assign('link', "/gallery/{$hash}");
@@ -711,6 +891,16 @@ class GalleryController
             "INSERT INTO app_image_favorites (user_id, image_id) VALUES (:user_id, :image_id)",
             [':user_id' => $userId, ':image_id' => $imageId]
         );
+
+        ControlServer::bumpImageLiveTick(self::getConfig(), $hash);
+
+        if (self::wantsJsonResponse())
+        {
+            self::sendJsonResponse(true, 'You have successfully marked this image as a favorite.', [
+                'state' => self::getLiveInteractionState($imageId, $userId),
+            ]);
+            return;
+        }
 
         $template->assign('title', 'Successful Favorite!');
         $template->assign('message', "You have successfully marked this image as a favorite.");
@@ -808,6 +998,14 @@ class GalleryController
 
         if (TypeHelper::rowExists($existing))
         {
+            if (self::wantsJsonResponse())
+            {
+                self::sendJsonResponse(false, 'You have already upvoted this image.', [
+                    'state' => self::getLiveInteractionState($imageId, $userId),
+                ], 409);
+                return;
+            }
+
             $template->assign('title', "Upvote Failed");
             $template->assign('message', "You have already upvoted this image.");
             $template->assign('link', "/gallery/{$hash}");
@@ -820,6 +1018,16 @@ class GalleryController
             "INSERT INTO app_image_votes (user_id, image_id) VALUES (:user_id, :image_id)",
             [':user_id' => $userId, ':image_id' => $imageId]
         );
+
+        ControlServer::bumpImageLiveTick(self::getConfig(), $hash);
+
+        if (self::wantsJsonResponse())
+        {
+            self::sendJsonResponse(true, 'You have successfully upvoted this image.', [
+                'state' => self::getLiveInteractionState($imageId, $userId),
+            ]);
+            return;
+        }
 
         $template->assign('title', 'Successful Upvote!');
         $template->assign('message', "You have successfully upvoted this image.");
@@ -929,6 +1137,8 @@ class GalleryController
                 ':comment_body' => $commentBody
             ]
         );
+
+        ControlServer::bumpImageLiveTick(self::getConfig(), $hash);
 
         header('Location: /gallery/' . $hash);
         exit;
