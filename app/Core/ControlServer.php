@@ -82,6 +82,31 @@ class ControlServer
     private const DEFAULT_STATE_FILE = 'json/control_server_state.json';
 
     /**
+     * Maximum accepted control line length for interactive socket clients.
+     */
+    private const MAX_CONTROL_LINE_BYTES = 8192;
+
+    /**
+     * Maximum accepted WebSocket handshake header size.
+     */
+    private const MAX_WEBSOCKET_HEADER_BYTES = 16384;
+
+    /**
+     * Maximum accepted WebSocket frame payload size.
+     */
+    private const MAX_WEBSOCKET_FRAME_BYTES = 65535;
+
+    /**
+     * Maximum accepted image hash length for live subscriptions.
+     */
+    private const MAX_IMAGE_HASH_LENGTH = 128;
+
+    /**
+     * Socket timeout used by one-off CLI control clients.
+     */
+    private const CLIENT_SOCKET_TIMEOUT_SECONDS = 3;
+
+    /**
      * Determine the absolute heartbeat file path.
      *
      * @param array $config Application configuration
@@ -177,7 +202,6 @@ class ControlServer
         return max(1, min(65535, $port));
     }
 
-
     /**
      * Determine whether the WebSocket server is enabled.
      *
@@ -257,10 +281,12 @@ class ControlServer
             }
 
             $value = trim($ip);
-            if ($value !== '')
+            if ($value === '' || filter_var($value, FILTER_VALIDATE_IP) === false)
             {
-                $normalized[] = $value;
+                continue;
             }
+
+            $normalized[] = $value;
         }
 
         if (empty($normalized))
@@ -322,6 +348,382 @@ class ControlServer
         $length = max(16, min(64, $length));
         $bytesNeeded = (int)ceil($length / 2);
         return substr(bin2hex(random_bytes($bytesNeeded)), 0, $length);
+    }
+
+
+    /**
+     * Normalize a client host override for control socket and WebSocket calls.
+     *
+     * Accepts IPv4, IPv6, and standard DNS host names.
+     *
+     * @param string $host Raw host value
+     * @return string|null Normalized host on success; otherwise null
+     */
+    public static function normalizeClientHost(string $host): ?string
+    {
+        $host = trim($host);
+        if ($host === '')
+        {
+            return null;
+        }
+
+        if (str_starts_with($host, '[') && str_ends_with($host, ']'))
+        {
+            $host = substr($host, 1, -1);
+        }
+
+        if ($host === '')
+        {
+            return null;
+        }
+
+        if (filter_var($host, FILTER_VALIDATE_IP) !== false)
+        {
+            return $host;
+        }
+
+        if (preg_match('/^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9\-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9\-]{0,61}[A-Za-z0-9])?))*$/', $host) === 1)
+        {
+            return strtolower($host);
+        }
+
+        return null;
+    }
+
+    /**
+     * Determine the public browser WebSocket path.
+     *
+     * @param array $config Application configuration
+     * @return string Public WebSocket path beginning with /
+     */
+    public static function webSocketPublicPath(array $config): string
+    {
+        $path = TypeHelper::toString(self::configBlock($config)['websocket']['public_path'] ?? '/gallery-live', allowEmpty: true)
+            ?? '/gallery-live';
+
+        if ($path === '')
+        {
+            $path = '/gallery-live';
+        }
+
+        if (!str_starts_with($path, '/'))
+        {
+            $path = '/' . $path;
+        }
+
+        return $path;
+    }
+
+    /**
+     * Forward one wrapper CLI invocation to bin/server.php.
+     *
+     * @param array<int, string> $args CLI arguments excluding the wrapper script name
+     * @param string $serverScriptPath Absolute or relative path to bin/server.php
+     * @return int Process exit code
+     */
+    public static function forwardServerCommand(array $args, string $serverScriptPath): int
+    {
+        $scriptPath = realpath($serverScriptPath) ?: $serverScriptPath;
+        if (!is_file($scriptPath))
+        {
+            fwrite(STDERR, "Unable to locate server.php.\n");
+            return 1;
+        }
+
+        $phpBinary = TypeHelper::toString(PHP_BINARY, allowEmpty: true) ?? 'php';
+        $command = array_merge([$phpBinary, $scriptPath], $args);
+        $pipes = [];
+        $process = proc_open(
+            $command,
+            [
+                0 => STDIN,
+                1 => STDOUT,
+                2 => STDERR,
+            ],
+            $pipes,
+            dirname($scriptPath)
+        );
+
+        if (!is_resource($process))
+        {
+            fwrite(STDERR, "Unable to forward command to server.php.\n");
+            return 1;
+        }
+
+        return proc_close($process);
+    }
+
+    /**
+     * Send one control payload to the Control Server socket.
+     *
+     * @param string $host Control server host
+     * @param int $port Control server port
+     * @param array<string, mixed> $payload JSON payload to transmit
+     * @return array<string, mixed> Decoded response payload
+     */
+    public static function sendSocketCommand(string $host, int $port, array $payload): array
+    {
+        $endpoint = self::buildSocketEndpoint($host, $port);
+        if ($endpoint === null)
+        {
+            return [
+                'ok' => false,
+                'message' => 'Invalid Control Server socket endpoint.',
+            ];
+        }
+
+        $errno = 0;
+        $errstr = '';
+        $client = @stream_socket_client($endpoint, $errno, $errstr, self::CLIENT_SOCKET_TIMEOUT_SECONDS);
+        if ($client === false)
+        {
+            return [
+                'ok' => false,
+                'message' => 'Unable to connect to Control Server socket: ' . $errstr,
+            ];
+        }
+
+        stream_set_timeout($client, self::CLIENT_SOCKET_TIMEOUT_SECONDS);
+
+        $json = json_encode($payload, JSON_UNESCAPED_SLASHES);
+        if ($json === false)
+        {
+            fclose($client);
+
+            return [
+                'ok' => false,
+                'message' => 'Unable to encode Control Server socket payload.',
+            ];
+        }
+
+        if (@fwrite($client, $json . "") === false)
+        {
+            fclose($client);
+
+            return [
+                'ok' => false,
+                'message' => 'Unable to write to Control Server socket.',
+            ];
+        }
+
+        $line = fgets($client, self::MAX_CONTROL_LINE_BYTES + 1);
+        fclose($client);
+
+        if ($line === false)
+        {
+            return [
+                'ok' => false,
+                'message' => 'No response received from Control Server socket.',
+            ];
+        }
+
+        $response = json_decode(trim($line), true);
+        if (!is_array($response))
+        {
+            return [
+                'ok' => false,
+                'message' => 'Invalid response received from Control Server socket.',
+            ];
+        }
+
+        return $response;
+    }
+
+    /**
+     * Send one control payload to the Control Server WebSocket endpoint.
+     *
+     * @param string $host WebSocket host
+     * @param int $port WebSocket port
+     * @param array<string, mixed> $payload JSON payload to transmit
+     * @return array<string, mixed> Decoded response payload
+     */
+    public static function sendWebSocketCommand(string $host, int $port, array $payload): array
+    {
+        $endpoint = self::buildSocketEndpoint($host, $port);
+        if ($endpoint === null)
+        {
+            return [
+                'ok' => false,
+                'message' => 'Invalid Control Server WebSocket endpoint.',
+            ];
+        }
+
+        $errno = 0;
+        $errstr = '';
+        $client = @stream_socket_client($endpoint, $errno, $errstr, self::CLIENT_SOCKET_TIMEOUT_SECONDS);
+        if ($client === false)
+        {
+            return [
+                'ok' => false,
+                'message' => 'Unable to connect to Control Server WebSocket: ' . $errstr,
+            ];
+        }
+
+        stream_set_timeout($client, self::CLIENT_SOCKET_TIMEOUT_SECONDS);
+
+        $json = json_encode($payload, JSON_UNESCAPED_SLASHES);
+        if ($json === false)
+        {
+            fclose($client);
+
+            return [
+                'ok' => false,
+                'message' => 'Unable to encode WebSocket control payload.',
+            ];
+        }
+
+        $normalizedHost = self::normalizeClientHost($host);
+        if ($normalizedHost === null)
+        {
+            fclose($client);
+
+            return [
+                'ok' => false,
+                'message' => 'Invalid Control Server WebSocket host.',
+            ];
+        }
+
+        $key = base64_encode(random_bytes(16));
+        $request = "GET /control HTTP/1.1\r\n"
+            . 'Host: ' . self::formatHostHeader($normalizedHost, $port) . "\r\n"
+            . "Upgrade: websocket\r\n"
+            . "Connection: Upgrade\r\n"
+            . 'Sec-WebSocket-Key: ' . $key . "\r\n"
+            . "Sec-WebSocket-Version: 13\r\n\r\n";
+
+        if (@fwrite($client, $request) === false)
+        {
+            fclose($client);
+
+            return [
+                'ok' => false,
+                'message' => 'Unable to send WebSocket handshake request to Control Server.',
+            ];
+        }
+
+        $handshakeBuffer = '';
+        while (!str_contains($handshakeBuffer, "\r\n\r\n"))
+        {
+            $chunk = fread($client, 2048);
+            if ($chunk === false || $chunk === '')
+            {
+                fclose($client);
+
+                return [
+                    'ok' => false,
+                    'message' => 'No WebSocket handshake response received from Control Server.',
+                ];
+            }
+
+            $handshakeBuffer .= $chunk;
+            if (strlen($handshakeBuffer) > self::MAX_WEBSOCKET_HEADER_BYTES)
+            {
+                fclose($client);
+
+                return [
+                    'ok' => false,
+                    'message' => 'WebSocket handshake response from Control Server is too large.',
+                ];
+            }
+        }
+
+        [$responseHeaders, $responseRemainder] = array_pad(explode("\r\n\r\n", $handshakeBuffer, 2), 2, '');
+        if (!self::isValidWebSocketHandshakeResponse($responseHeaders, $key))
+        {
+            fclose($client);
+
+            return [
+                'ok' => false,
+                'message' => 'Control Server WebSocket handshake failed.',
+            ];
+        }
+
+        $length = strlen($json);
+        $mask = random_bytes(4);
+        $frame = chr(0x81);
+
+        if ($length <= 125)
+        {
+            $frame .= chr(0x80 | $length);
+        }
+        else if ($length <= 65535)
+        {
+            $frame .= chr(0x80 | 126) . pack('n', $length);
+        }
+        else
+        {
+            $frame .= chr(0x80 | 127) . pack('NN', 0, $length);
+        }
+
+        $maskedPayload = '';
+        for ($i = 0; $i < $length; $i++)
+        {
+            $maskedPayload .= $json[$i] ^ $mask[$i % 4];
+        }
+
+        if (@fwrite($client, $frame . $mask . $maskedPayload) === false)
+        {
+            fclose($client);
+
+            return [
+                'ok' => false,
+                'message' => 'Unable to write WebSocket frame to Control Server.',
+            ];
+        }
+
+        $responseBuffer = $responseRemainder;
+        while (true)
+        {
+            $frame = self::decodeWebSocketFrame($responseBuffer);
+            if ($frame !== null)
+            {
+                $opcode = TypeHelper::toInt($frame['opcode'] ?? null) ?? 1;
+                if ($opcode !== 1)
+                {
+                    fclose($client);
+
+                    return [
+                        'ok' => false,
+                        'message' => 'Unexpected WebSocket opcode received from Control Server.',
+                    ];
+                }
+
+                $response = json_decode(trim(TypeHelper::toString($frame['payload'] ?? '', allowEmpty: true) ?? ''), true);
+                fclose($client);
+
+                if (!is_array($response))
+                {
+                    return [
+                        'ok' => false,
+                        'message' => 'Invalid WebSocket response received from Control Server.',
+                    ];
+                }
+
+                return $response;
+            }
+
+            $chunk = fread($client, 2048);
+            if ($chunk === false || $chunk === '')
+            {
+                fclose($client);
+
+                return [
+                    'ok' => false,
+                    'message' => 'No WebSocket frame received from Control Server.',
+                ];
+            }
+
+            $responseBuffer .= $chunk;
+            if (strlen($responseBuffer) > self::MAX_WEBSOCKET_FRAME_BYTES + self::MAX_WEBSOCKET_HEADER_BYTES)
+            {
+                fclose($client);
+
+                return [
+                    'ok' => false,
+                    'message' => 'WebSocket response from Control Server is too large.',
+                ];
+            }
+        }
     }
 
     /**
@@ -991,7 +1393,13 @@ class ControlServer
             return false;
         }
 
-        $endpoint = 'tcp://' . $address . ':' . $port;
+        $endpoint = self::buildSocketEndpoint($address, $port);
+        if ($endpoint === null)
+        {
+            error_log('Control Server socket not opened: invalid bind address or port.');
+            return false;
+        }
+
         $errno = 0;
         $errstr = '';
 
@@ -1074,9 +1482,20 @@ class ControlServer
                 continue;
             }
 
-            $line = fgets($client, 8192);
+            $line = fgets($client, self::MAX_CONTROL_LINE_BYTES + 1);
             if ($line === false)
             {
+                continue;
+            }
+
+            if (strlen($line) > self::MAX_CONTROL_LINE_BYTES || (strlen($line) === self::MAX_CONTROL_LINE_BYTES && !str_ends_with($line, "\n")))
+            {
+                @fwrite($client, "Input exceeded the maximum allowed command length.\n");
+                self::closeControlClient($clientId);
+                $responses[] = [
+                    'ok' => false,
+                    'message' => 'Interactive control input exceeded the maximum allowed length.',
+                ];
                 continue;
             }
 
@@ -1691,9 +2110,17 @@ class ControlServer
                 {
                     $enabled = false;
                 }
-                elseif ($command === 'set_job')
+                else if ($command === 'set_job')
                 {
                     $enabled = !empty($request['enabled']);
+                }
+
+                if (!self::isKnownJob($job, $config, $state))
+                {
+                    return [
+                        'ok' => false,
+                        'message' => 'Unknown job name.',
+                    ];
                 }
 
                 $state['jobs'][$job] = $enabled;
@@ -1717,9 +2144,17 @@ class ControlServer
                 {
                     $enabled = false;
                 }
-                elseif ($command === 'set_service')
+                else if ($command === 'set_service')
                 {
                     $enabled = !empty($request['enabled']);
+                }
+
+                if (!self::isKnownService($service, $config, $state))
+                {
+                    return [
+                        'ok' => false,
+                        'message' => 'Unknown service name.',
+                    ];
                 }
 
                 $state['services'][$service] = $enabled;
@@ -1770,7 +2205,13 @@ class ControlServer
             return false;
         }
 
-        $endpoint = 'tcp://' . $address . ':' . $port;
+        $endpoint = self::buildSocketEndpoint($address, $port);
+        if ($endpoint === null)
+        {
+            error_log('Control Server WebSocket not opened: invalid bind address or port.');
+            return false;
+        }
+
         $errno = 0;
         $errstr = '';
         $server = @stream_socket_server($endpoint, $errno, $errstr);
@@ -1848,9 +2289,13 @@ class ControlServer
 
             if (empty($clientState['handshake_complete']))
             {
-                if (strpos($clientState['buffer'], "
+                if (strlen($clientState['buffer']) > self::MAX_WEBSOCKET_HEADER_BYTES)
+                {
+                    self::closeWebSocketClient($clientId);
+                    continue;
+                }
 
-") === false)
+                if (!str_contains($clientState['buffer'], "\r\n\r\n") && !str_contains($clientState['buffer'], "\n\n"))
                 {
                     self::$webSocketClientStates[$clientId] = $clientState;
                     continue;
@@ -1874,6 +2319,13 @@ class ControlServer
                 $clientState['buffer'] = $frame['remaining'];
                 $opcode = TypeHelper::toInt($frame['opcode'] ?? null) ?? 1;
                 $payload = TypeHelper::toString($frame['payload'] ?? '', allowEmpty: true) ?? '';
+                $masked = !empty($frame['masked']);
+
+                if (!$masked)
+                {
+                    self::closeWebSocketClient($clientId);
+                    continue 2;
+                }
 
                 if ($opcode === 8)
                 {
@@ -1991,18 +2443,16 @@ class ControlServer
     private static function performWebSocketHandshake($client, array &$clientState, array $config): bool
     {
         $request = TypeHelper::toString($clientState['buffer'] ?? '', allowEmpty: true) ?? '';
-        [$headerBlock, $remaining] = array_pad(explode("
-
-", $request, 2), 2, '');
-        $lines = preg_split("/
-/", $headerBlock) ?: [];
+        $normalizedRequest = str_replace("\r\n", "\n", $request);
+        [$headerBlock, $remaining] = array_pad(explode("\n\n", $normalizedRequest, 2), 2, '');
+        $lines = preg_split("/\n/", $headerBlock) ?: [];
         $requestLine = TypeHelper::toString($lines[0] ?? '', allowEmpty: true) ?? '';
         if ($requestLine === '')
         {
             return false;
         }
 
-        if (!preg_match('#^GET\s+([^\s]+)#i', $requestLine, $matches))
+        if (!preg_match('#^GET\s+([^\s]+)\s+HTTP/1\.[01]$#i', $requestLine, $matches))
         {
             return false;
         }
@@ -2020,14 +2470,23 @@ class ControlServer
             $headers[strtolower(trim($parts[0]))] = trim($parts[1]);
         }
 
+        $upgrade = strtolower(TypeHelper::toString($headers['upgrade'] ?? '', allowEmpty: true) ?? '');
+        $connection = strtolower(TypeHelper::toString($headers['connection'] ?? '', allowEmpty: true) ?? '');
+        $version = TypeHelper::toString($headers['sec-websocket-version'] ?? '', allowEmpty: true) ?? '';
         $key = TypeHelper::toString($headers['sec-websocket-key'] ?? '', allowEmpty: true) ?? '';
-        if ($key === '')
+        if ($upgrade !== 'websocket' || !str_contains($connection, 'upgrade') || $version !== '13' || !self::isValidWebSocketKey($key))
         {
             return false;
         }
 
         $peerIp = TypeHelper::toString($clientState['peer_ip'] ?? '', allowEmpty: true) ?? '';
-        $mode = str_starts_with($path, '/control') ? 'control' : 'browser';
+        $publicPath = self::webSocketPublicPath($config);
+        $mode = $path === '/control' ? 'control' : 'browser';
+        if (!in_array($path, ['/control', $publicPath], true))
+        {
+            return false;
+        }
+
         if ($mode === 'control' && !self::isAllowedControlIp($peerIp, $config))
         {
             return false;
@@ -2038,16 +2497,16 @@ class ControlServer
             return false;
         }
 
-        $accept = base64_encode(sha1($key . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11', true));
-        $response = "HTTP/1.1 101 Switching Protocols
-"
-            . "Upgrade: websocket
-"
-            . "Connection: Upgrade
-"
-            . "Sec-WebSocket-Accept: {$accept}
+        if ($mode === 'browser' && !self::isAllowedWebSocketOrigin(TypeHelper::toString($headers['origin'] ?? '', allowEmpty: true) ?? '', $config))
+        {
+            return false;
+        }
 
-";
+        $accept = base64_encode(sha1($key . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11', true));
+        $response = "HTTP/1.1 101 Switching Protocols\r\n"
+            . "Upgrade: websocket\r\n"
+            . "Connection: Upgrade\r\n"
+            . "Sec-WebSocket-Accept: {$accept}\r\n\r\n";
 
         @fwrite($client, $response);
         @fflush($client);
@@ -2092,7 +2551,7 @@ class ControlServer
             $payloadLength = unpack('n', substr($buffer, 2, 2))[1];
             $offset = 4;
         }
-        elseif ($payloadLength === 127)
+        else if ($payloadLength === 127)
         {
             if ($length < 10)
             {
@@ -2102,6 +2561,16 @@ class ControlServer
             $parts = unpack('N2', substr($buffer, 2, 8));
             $payloadLength = ((int)$parts[1] << 32) + (int)$parts[2];
             $offset = 10;
+        }
+
+        if ($payloadLength > self::MAX_WEBSOCKET_FRAME_BYTES)
+        {
+            return [
+                'opcode' => 8,
+                'payload' => '',
+                'remaining' => '',
+                'masked' => $masked,
+            ];
         }
 
         $mask = '';
@@ -2139,6 +2608,7 @@ class ControlServer
             'opcode' => $opcode,
             'payload' => $payload,
             'remaining' => $remaining,
+            'masked' => $masked,
         ];
     }
 
@@ -2158,7 +2628,7 @@ class ControlServer
         {
             $header .= chr($length);
         }
-        elseif ($length <= 65535)
+        else if ($length <= 65535)
         {
             $header .= chr(126) . pack('n', $length);
         }
@@ -2226,6 +2696,14 @@ class ControlServer
                 return [
                     'ok' => false,
                     'message' => 'Missing image subscription hash.',
+                ];
+            }
+
+            if (!self::isValidImageHash($imageHash))
+            {
+                return [
+                    'ok' => false,
+                    'message' => 'Invalid image subscription hash.',
                 ];
             }
 
@@ -2299,6 +2777,195 @@ class ControlServer
                 unset(self::$webSocketImageSubscriptions[$imageHash]);
             }
         }
+    }
+
+    /**
+     * Build a TCP socket endpoint for IPv4, IPv6, or DNS host names.
+     *
+     * @param string $host Host name or IP address
+     * @param int $port TCP port
+     * @return string|null Endpoint on success; otherwise null
+     */
+    private static function buildSocketEndpoint(string $host, int $port): ?string
+    {
+        $normalizedHost = self::normalizeClientHost($host);
+        if ($normalizedHost === null || $port < 1 || $port > 65535)
+        {
+            return null;
+        }
+
+        return 'tcp://' . self::formatSocketEndpointHost($normalizedHost) . ':' . $port;
+    }
+
+    /**
+     * Format one normalized host for a TCP endpoint.
+     *
+     * @param string $host Normalized host
+     * @return string Endpoint-safe host value
+     */
+    private static function formatSocketEndpointHost(string $host): string
+    {
+        return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false
+            ? '[' . $host . ']'
+            : $host;
+    }
+
+    /**
+     * Format one normalized host for an HTTP Host header.
+     *
+     * @param string $host Normalized host
+     * @param int $port TCP port
+     * @return string Host header value
+     */
+    private static function formatHostHeader(string $host, int $port): string
+    {
+        return self::formatSocketEndpointHost($host) . ':' . $port;
+    }
+
+    /**
+     * Validate one WebSocket response handshake block.
+     *
+     * @param string $headerBlock Raw response headers without the trailing separator
+     * @param string $key Original Sec-WebSocket-Key used by the client
+     * @return bool True when the response is valid
+     */
+    private static function isValidWebSocketHandshakeResponse(string $headerBlock, string $key): bool
+    {
+        $normalized = str_replace("\r\n", "\n", $headerBlock);
+        $lines = preg_split("/\n/", $normalized) ?: [];
+        $statusLine = TypeHelper::toString($lines[0] ?? '', allowEmpty: true) ?? '';
+        if (!str_starts_with($statusLine, 'HTTP/1.1 101') && !str_starts_with($statusLine, 'HTTP/1.0 101'))
+        {
+            return false;
+        }
+
+        $headers = [];
+        foreach (array_slice($lines, 1) as $line)
+        {
+            $parts = explode(':', $line, 2);
+            if (count($parts) !== 2)
+            {
+                continue;
+            }
+
+            $headers[strtolower(trim($parts[0]))] = trim($parts[1]);
+        }
+
+        $accept = TypeHelper::toString($headers['sec-websocket-accept'] ?? '', allowEmpty: true) ?? '';
+        $upgrade = strtolower(TypeHelper::toString($headers['upgrade'] ?? '', allowEmpty: true) ?? '');
+        $connection = strtolower(TypeHelper::toString($headers['connection'] ?? '', allowEmpty: true) ?? '');
+        $expectedAccept = base64_encode(sha1($key . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11', true));
+
+        return $upgrade === 'websocket'
+            && str_contains($connection, 'upgrade')
+            && $accept !== ''
+            && hash_equals($expectedAccept, $accept);
+    }
+
+    /**
+     * Determine whether one browser WebSocket Origin header is allowed.
+     *
+     * When public_host is configured, browser origins must match that host.
+     * Otherwise the Origin header is accepted as-is so existing deployments do
+     * not break unexpectedly.
+     *
+     * @param string $origin Raw Origin header value
+     * @param array $config Application configuration
+     * @return bool True when the origin is allowed
+     */
+    private static function isAllowedWebSocketOrigin(string $origin, array $config): bool
+    {
+        $origin = trim($origin);
+        if ($origin === '')
+        {
+            return true;
+        }
+
+        $configuredHost = TypeHelper::toString(self::configBlock($config)['websocket']['public_host'] ?? '', allowEmpty: true) ?? '';
+        if ($configuredHost === '')
+        {
+            return true;
+        }
+
+        $configuredHost = self::normalizeClientHost($configuredHost);
+        $originHost = self::normalizeClientHost(TypeHelper::toString(parse_url($origin, PHP_URL_HOST) ?? '', allowEmpty: true) ?? '');
+        if ($configuredHost === null || $originHost === null)
+        {
+            return false;
+        }
+
+        return hash_equals($configuredHost, $originHost);
+    }
+
+    /**
+     * Determine whether a Sec-WebSocket-Key header is valid.
+     *
+     * @param string $key Raw header value
+     * @return bool True when the key is a valid 16-byte base64 value
+     */
+    private static function isValidWebSocketKey(string $key): bool
+    {
+        if ($key === '')
+        {
+            return false;
+        }
+
+        $decoded = base64_decode($key, true);
+        return is_string($decoded) && strlen($decoded) === 16;
+    }
+
+    /**
+     * Determine whether one image hash is safe to use for live subscriptions.
+     *
+     * @param string $imageHash Raw image hash
+     * @return bool True when the hash uses the expected character set and length
+     */
+    private static function isValidImageHash(string $imageHash): bool
+    {
+        $imageHash = trim($imageHash);
+        return $imageHash !== ''
+            && strlen($imageHash) <= self::MAX_IMAGE_HASH_LENGTH
+            && preg_match('/^[A-Fa-f0-9]{32,128}$/', $imageHash) === 1;
+    }
+
+    /**
+     * Determine whether one job name exists in the runtime state.
+     *
+     * @param string $job Job name
+     * @param array $config Application configuration
+     * @param array $state Runtime state
+     * @return bool True when the job exists
+     */
+    private static function isKnownJob(string $job, array $config, array $state): bool
+    {
+        $job = TypeHelper::toString($job, allowEmpty: true) ?? '';
+        if ($job === '')
+        {
+            return false;
+        }
+
+        $jobs = $state['jobs'] ?? self::defaultRuntimeState($config)['jobs'];
+        return is_array($jobs) && array_key_exists($job, $jobs);
+    }
+
+    /**
+     * Determine whether one service name exists in the runtime state.
+     *
+     * @param string $service Service name
+     * @param array $config Application configuration
+     * @param array $state Runtime state
+     * @return bool True when the service exists
+     */
+    private static function isKnownService(string $service, array $config, array $state): bool
+    {
+        $service = TypeHelper::toString($service, allowEmpty: true) ?? '';
+        if ($service === '')
+        {
+            return false;
+        }
+
+        $services = $state['services'] ?? self::defaultServices($config);
+        return is_array($services) && array_key_exists($service, $services);
     }
 
     /**

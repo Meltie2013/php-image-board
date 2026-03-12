@@ -1,5 +1,7 @@
 <?php
 
+require __DIR__ . '/../bootstrap/app.php';
+
 /**
  * Backward-compatible wrapper for the merged maintenance control CLI.
  *
@@ -9,30 +11,8 @@
 
 if (PHP_SAPI !== 'cli')
 {
-    fwrite(STDERR, "This script must be run from the command line.
-");
+    fwrite(STDERR, "This script must be run from the command line.\n");
     exit(1);
 }
 
-$args = array_slice($argv, 1);
-$command = array_merge([PHP_BINARY, __DIR__ . '/server.php'], $args);
-
-$process = proc_open(
-    $command,
-    [
-        0 => STDIN,
-        1 => STDOUT,
-        2 => STDERR,
-    ],
-    $pipes,
-    __DIR__
-);
-
-if (!is_resource($process))
-{
-    fwrite(STDERR, "Unable to forward command to server.php.
-");
-    exit(1);
-}
-
-exit(proc_close($process));
+exit(ControlServer::forwardServerCommand(array_slice($argv, 1), __DIR__ . '/server.php'));
