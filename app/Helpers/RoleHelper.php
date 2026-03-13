@@ -96,11 +96,34 @@ class RoleHelper
      */
     public static function requireLogin(): void
     {
-        $userId = SessionManager::get('user_id');
-        if (!$userId)
+        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        if ($userId < 1)
         {
             header('Location: /user/login');
             exit();
+        }
+
+        $user = Database::fetch(
+            "SELECT u.status, r.name AS role_name
+             FROM app_users u
+             INNER JOIN app_roles r ON u.role_id = r.id
+             WHERE u.id = :id
+             LIMIT 1",
+            ['id' => $userId]
+        );
+
+        $status = strtolower(TypeHelper::toString($user['status'] ?? '', allowEmpty: true) ?? '');
+        if ($status !== 'active')
+        {
+            SessionManager::destroy();
+            header('Location: /user/login');
+            exit();
+        }
+
+        $roleName = TypeHelper::toString($user['role_name'] ?? '', allowEmpty: true) ?? '';
+        if ($roleName !== '')
+        {
+            SessionManager::set('user_role', $roleName);
         }
     }
 
@@ -122,10 +145,8 @@ class RoleHelper
      */
     public static function requireRole(array $allowedRoles, ?TemplateEngine $template = null): void
     {
-        $userId = SessionManager::get('user_id');
-        $userRole = strtolower(SessionManager::get('user_role') ?? '');
-
-        if (!$userId || !in_array($userRole, array_map('strtolower', $allowedRoles)))
+        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        if ($userId < 1)
         {
             http_response_code(403);
 
@@ -137,5 +158,33 @@ class RoleHelper
             }
             exit();
         }
+
+        $user = Database::fetch(
+            "SELECT u.status, r.name AS role_name
+             FROM app_users u
+             INNER JOIN app_roles r ON u.role_id = r.id
+             WHERE u.id = :id
+             LIMIT 1",
+            ['id' => $userId]
+        );
+
+        $status = strtolower(TypeHelper::toString($user['status'] ?? '', allowEmpty: true) ?? '');
+        $rawUserRole = TypeHelper::toString($user['role_name'] ?? '', allowEmpty: true) ?? '';
+        $userRole = strtolower($rawUserRole);
+
+        if ($status !== 'active' || !in_array($userRole, array_map('strtolower', $allowedRoles), true))
+        {
+            http_response_code(403);
+
+            if ($template)
+            {
+                $template->assign('title', 'Access Denied');
+                $template->assign('message', 'You are not authorized to view this page.');
+                $template->render('errors/error_page.html');
+            }
+            exit();
+        }
+
+        SessionManager::set('user_role', $rawUserRole);
     }
 }

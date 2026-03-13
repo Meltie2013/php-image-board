@@ -183,6 +183,124 @@ function server_send_command(string $host, int $port, array $payload): array
 }
 
 /**
+ * Resolve the preferred Control Server client endpoint.
+ *
+ * @param array<string, mixed> $config Application configuration
+ * @return array{host:string, port:int, use_websocket:bool}
+ */
+function server_control_endpoint(array $config): array
+{
+    $useWebSocket = ControlServer::webSocketEnabled($config);
+    $host = $useWebSocket
+        ? ControlServer::webSocketBindAddress($config)
+        : ControlServer::controlBindAddress($config);
+
+    if (in_array($host, ['0.0.0.0', '::', ''], true))
+    {
+        $host = '127.0.0.1';
+    }
+
+    $port = $useWebSocket
+        ? ControlServer::webSocketPort($config)
+        : ControlServer::controlPort($config);
+
+    return [
+        'host' => $host,
+        'port' => $port,
+        'use_websocket' => $useWebSocket,
+    ];
+}
+
+/**
+ * Refresh the live runtime state files and browser notifications.
+ *
+ * @param array<string, mixed> $config Application configuration
+ * @param array<string, mixed> $state Runtime state
+ * @return void
+ */
+function server_refresh_runtime_state(array $config, array $state): void
+{
+    ControlServer::writeHeartbeat($config, $state);
+    ControlServer::writeLiveEventsHeartbeat($config, $state);
+    ControlServer::broadcastLiveEventChanges($config);
+}
+
+/**
+ * Persist the runtime state and refresh the live runtime state files.
+ *
+ * @param array<string, mixed> $config Application configuration
+ * @param array<string, mixed> $state Runtime state
+ * @return void
+ */
+function server_persist_runtime_state(array $config, array &$state): void
+{
+    ControlServer::saveRuntimeState($config, $state);
+    server_refresh_runtime_state($config, $state);
+}
+
+/**
+ * Print one timestamped log line to the console.
+ *
+ * @param resource $stream Output stream resource
+ * @param string $message Log message
+ * @return void
+ */
+function server_log_line($stream, string $message): void
+{
+    fwrite($stream, '[' . gmdate('Y-m-d H:i:s') . '] ' . $message . "\n");
+}
+
+/**
+ * Parse runtime-only CLI options for server mode.
+ *
+ * @param array<int, string> $args Raw CLI arguments excluding script name
+ * @param int $defaultInterval Default tick interval
+ * @param int $defaultLogRetentionDays Default log retention days
+ * @return array{interval:int, run_once:bool, log_retention_days:int}
+ */
+function server_parse_runtime_options(array $args, int $defaultInterval, int $defaultLogRetentionDays): array
+{
+    $interval = max(1, $defaultInterval);
+    $runOnce = false;
+    $logRetentionDays = max(1, $defaultLogRetentionDays);
+
+    foreach ($args as $arg)
+    {
+        if ($arg === '--once')
+        {
+            $runOnce = true;
+            continue;
+        }
+
+        if (str_starts_with($arg, '--interval='))
+        {
+            $value = TypeHelper::toInt(substr($arg, strlen('--interval='))) ?? 0;
+            if ($value > 0)
+            {
+                $interval = $value;
+            }
+
+            continue;
+        }
+
+        if (str_starts_with($arg, '--log-retention-days='))
+        {
+            $value = TypeHelper::toInt(substr($arg, strlen('--log-retention-days='))) ?? 0;
+            if ($value > 0)
+            {
+                $logRetentionDays = $value;
+            }
+        }
+    }
+
+    return [
+        'interval' => $interval,
+        'run_once' => $runOnce,
+        'log_retention_days' => $logRetentionDays,
+    ];
+}
+
+/**
  * Build a Control Server control payload from parsed command arguments.
  *
  * @param array<int, string> $positionals Command arguments
@@ -515,19 +633,10 @@ function server_print_response(array $response): void
  */
 function server_run_control_mode(array $config, array $args): int
 {
-    $host = ControlServer::webSocketEnabled($config)
-        ? ControlServer::webSocketBindAddress($config)
-        : ControlServer::controlBindAddress($config);
-
-    if (in_array($host, ['0.0.0.0', '::', ''], true))
-    {
-        $host = '127.0.0.1';
-    }
-
-    $port = ControlServer::webSocketEnabled($config)
-        ? ControlServer::webSocketPort($config)
-        : ControlServer::controlPort($config);
-
+    $endpoint = server_control_endpoint($config);
+    $host = $endpoint['host'];
+    $port = $endpoint['port'];
+    $useWebSocket = $endpoint['use_websocket'];
     $token = ControlServer::controlAuthToken($config);
     $positionals = [];
 
@@ -593,9 +702,9 @@ function server_run_control_mode(array $config, array $args): int
         return 1;
     }
 
-    $response = ControlServer::webSocketEnabled($config)
-        ? ControlServer::sendWebSocketCommand($host, $port, $payload)
-        : ControlServer::sendSocketCommand($host, $port, $payload);
+    $response = $useWebSocket
+        ? server_send_websocket_command($host, $port, $payload)
+        : server_send_command($host, $port, $payload);
 
     server_print_response($response);
 
@@ -622,6 +731,7 @@ function server_run_maintenance_pass(array $state): array
     $blocksRemoved = 0;
     $logsRemoved = 0;
     $deletedCacheFiles = 0;
+    $deletedGalleryPageTokens = 0;
 
     if (!empty($state['jobs']['sessions']))
     {
@@ -645,7 +755,12 @@ function server_run_maintenance_pass(array $state): array
         $deletedCacheFiles = ImageCacheEngine::cleanExpired();
     }
 
-    $totalRemoved = $sessionsRemoved + $rateCountersRemoved + $blocksRemoved + $logsRemoved + $deletedCacheFiles;
+    if (!empty($state['jobs']['gallery_page_tokens']))
+    {
+        $deletedGalleryPageTokens = GalleryPageTokenStore::cleanExpired();
+    }
+
+    $totalRemoved = $sessionsRemoved + $rateCountersRemoved + $blocksRemoved + $logsRemoved + $deletedCacheFiles + $deletedGalleryPageTokens;
 
     return [
         'sessions_removed' => $sessionsRemoved,
@@ -653,6 +768,7 @@ function server_run_maintenance_pass(array $state): array
         'blocks_removed' => $blocksRemoved,
         'logs_removed' => $logsRemoved,
         'cache_removed' => $deletedCacheFiles,
+        'gallery_page_tokens_removed' => $deletedGalleryPageTokens,
         'total_removed' => $totalRemoved,
     ];
 }
@@ -663,38 +779,15 @@ if (server_should_run_control_mode($args))
     exit(server_run_control_mode($config, $args));
 }
 
-$interval = 1;
-$runOnce = false;
-$logRetentionDays = TypeHelper::toInt($config['security']['log_retention_days'] ?? null) ?? 30;
+$runtimeOptions = server_parse_runtime_options(
+    $args,
+    1,
+    TypeHelper::toInt($config['security']['log_retention_days'] ?? null) ?? 30
+);
 
-foreach ($args as $arg)
-{
-    if ($arg === '--once')
-    {
-        $runOnce = true;
-        continue;
-    }
-
-    if (str_starts_with($arg, '--interval='))
-    {
-        $value = TypeHelper::toInt(substr($arg, strlen('--interval='))) ?? 0;
-        if ($value > 0)
-        {
-            $interval = $value;
-        }
-
-        continue;
-    }
-
-    if (str_starts_with($arg, '--log-retention-days='))
-    {
-        $value = TypeHelper::toInt(substr($arg, strlen('--log-retention-days='))) ?? 0;
-        if ($value > 0)
-        {
-            $logRetentionDays = $value;
-        }
-    }
-}
+$interval = $runtimeOptions['interval'];
+$runOnce = $runtimeOptions['run_once'];
+$logRetentionDays = $runtimeOptions['log_retention_days'];
 
 $state = ControlServer::loadRuntimeState($config);
 $state['tick_interval_seconds'] = max(1, TypeHelper::toInt($state['tick_interval_seconds'] ?? null) ?? $interval);
@@ -708,13 +801,13 @@ ControlServer::broadcastLiveEventChanges($config);
 $controlServer = ControlServer::openControlSocket($config);
 if (ControlServer::controlEnabled($config) && $controlServer === false)
 {
-    fwrite(STDERR, '[' . gmdate('Y-m-d H:i:s') . "] Failed to bind Control Server socket.\n");
+    server_log_line(STDERR, 'Failed to bind Control Server socket.');
 }
 
 $webSocketServer = ControlServer::openWebSocketServer($config);
 if (ControlServer::webSocketEnabled($config) && $webSocketServer === false)
 {
-    fwrite(STDERR, '[' . gmdate('Y-m-d H:i:s') . "] Failed to bind Control Server WebSocket server.\n");
+    server_log_line(STDERR, 'Failed to bind Control Server WebSocket server.');
 }
 
 $running = true;
@@ -737,11 +830,13 @@ if (function_exists('pcntl_async_signals'))
     pcntl_signal(SIGTERM, $stop);
 }
 
-fwrite(
+server_log_line(
     STDOUT,
-    '[' . gmdate('Y-m-d H:i:s') . "] Control Server started (interval: {$state['tick_interval_seconds']}s, log retention: {$state['log_retention_days']} days, websocket port: "
+    'Control Server started (interval: ' . $state['tick_interval_seconds']
+    . 's, log retention: ' . $state['log_retention_days']
+    . ' days, websocket port: '
     . (ControlServer::webSocketEnabled($config) ? (string)ControlServer::webSocketPort($config) : 'disabled')
-    . ").\n"
+    . ').'
 );
 
 do
@@ -758,9 +853,7 @@ do
          */
         if (!empty($responses))
         {
-            ControlServer::writeHeartbeat($config, $state);
-            ControlServer::writeLiveEventsHeartbeat($config, $state);
-            ControlServer::broadcastLiveEventChanges($config);
+            server_refresh_runtime_state($config, $state);
         }
 
         if (!empty($responses) && !empty($state['verbose_logging']))
@@ -769,10 +862,7 @@ do
             {
                 $message = TypeHelper::toString($response['message'] ?? 'OK', allowEmpty: true) ?? 'OK';
 
-                fwrite(
-                    STDOUT,
-                    '[' . gmdate('Y-m-d H:i:s') . '] Control command processed: ' . $message . "\n"
-                );
+                server_log_line(STDOUT, 'Control command processed: ' . $message);
             }
         }
 
@@ -781,9 +871,7 @@ do
          * received, so the site can reliably detect that the backend process is
          * still alive.
          */
-        ControlServer::writeHeartbeat($config, $state);
-        ControlServer::writeLiveEventsHeartbeat($config, $state);
-        ControlServer::broadcastLiveEventChanges($config);
+        server_refresh_runtime_state($config, $state);
 
         $shouldRunPass = !$state['paused'] || !empty($state['run_cleanup_now']);
         if ($shouldRunPass)
@@ -792,32 +880,27 @@ do
 
             if ($result['total_removed'] > 0)
             {
-                fwrite(
+                server_log_line(
                     STDOUT,
-                    '[' . gmdate('Y-m-d H:i:s') . '] Cleanup pass completed; sessions removed: ' . $result['sessions_removed']
+                    'Cleanup pass completed; sessions removed: ' . $result['sessions_removed']
                     . ', rate counters removed: ' . $result['rate_counters_removed']
                     . ', temporary blocks removed: ' . $result['blocks_removed']
                     . ', security logs removed: ' . $result['logs_removed']
-                    . ', expired cache files removed: ' . $result['cache_removed'] . "\n"
+                    . ', expired cache files removed: ' . $result['cache_removed']
+                    . ', expired gallery page tokens removed: ' . $result['gallery_page_tokens_removed']
                 );
             }
 
             if (!empty($state['run_cleanup_now']))
             {
                 $state['run_cleanup_now'] = false;
-                ControlServer::saveRuntimeState($config, $state);
-                ControlServer::writeHeartbeat($config, $state);
-                ControlServer::writeLiveEventsHeartbeat($config, $state);
-                ControlServer::broadcastLiveEventChanges($config);
+                server_persist_runtime_state($config, $state);
             }
         }
     }
     catch (Throwable $e)
     {
-        fwrite(
-            STDERR,
-            '[' . gmdate('Y-m-d H:i:s') . '] Control Server pass failed: ' . $e->getMessage() . "\n"
-        );
+        server_log_line(STDERR, 'Control Server pass failed: ' . $e->getMessage());
     }
 
     if ($runOnce || !$running)
@@ -842,4 +925,4 @@ if (isset($webSocketServer) && is_resource($webSocketServer))
 ControlServer::clearHeartbeat($config);
 ControlServer::clearLiveEvents($config);
 
-fwrite(STDOUT, '[' . gmdate('Y-m-d H:i:s') . "] Control Server stopped.\n");
+server_log_line(STDOUT, 'Control Server stopped.');

@@ -43,6 +43,21 @@ class GalleryController
         return self::$config;
     }
 
+
+    /**
+     * Retrieve the current request's stable device cookie value.
+     *
+     * Gallery page image tokens bind to the existing browser/device cookie so
+     * follow-up image requests can be validated without starting the full
+     * application session lifecycle again.
+     *
+     * @return string Device cookie value, or empty string when unavailable.
+     */
+    private static function getCurrentRequestDeviceId(): string
+    {
+        return GalleryPageTokenStore::getCurrentDeviceId(self::getConfig());
+    }
+
     /**
      * Initialize template engine with optional cache clearing.
      *
@@ -104,11 +119,105 @@ class GalleryController
     }
 
     /**
+     * Build a clean tokenized image URL for fast gallery/detail image delivery.
+     *
+     * @param string $hash Unique image hash identifier.
+     * @param string $token Short-lived gallery image token.
+     * @return string Tokenized image URL.
+     */
+    private static function buildTokenizedImageUrl(string $hash, string $token): string
+    {
+        return '/image/' . $hash . '/token/' . $token;
+    }
+
+    /**
+     * Resolve one stored image path safely inside the images directory.
+     *
+     * @param string $originalPath Stored original image path from the database/session.
+     * @return string|null Absolute validated file path, or null when invalid.
+     */
+    private static function resolveStoredImagePath(string $originalPath): ?string
+    {
+        $baseDir = realpath(IMAGE_PATH);
+        if (!$baseDir || $originalPath === '')
+        {
+            return null;
+        }
+
+        $fullPath = realpath($baseDir . '/' . ltrim(str_replace("images/", "", $originalPath), '/'));
+        if (!$fullPath || strpos($fullPath, $baseDir) !== 0 || !file_exists($fullPath))
+        {
+            return null;
+        }
+
+        return $fullPath;
+    }
+
+    /**
+     * Serve one stored image from cache or disk using trusted metadata.
+     *
+     * @param string $hash Image hash identifier.
+     * @param string $originalPath Stored original file path.
+     * @param string $mimeType Stored mime type.
+     * @param bool $usePerUserCache Whether the cache should be user-scoped.
+     * @param int $userId Current user ID, or 0 for guests.
+     * @param bool $galleryPageCache Whether gallery-page browser cache headers should be used.
+     * @return bool True when the response was served, otherwise false.
+     */
+    private static function serveStoredImageFile(string $hash, string $originalPath, string $mimeType, bool $usePerUserCache, int $userId = 0, bool $galleryPageCache = false): bool
+    {
+        $cacheUserId = ($usePerUserCache && $userId > 0) ? $userId : null;
+
+        $cachedPath = ImageCacheEngine::getCachedImage($hash, $cacheUserId);
+        if ($cachedPath)
+        {
+            $resolvedMimeType = mime_content_type($cachedPath) ?: ($mimeType ?: 'application/octet-stream');
+            header('Content-Type: ' . $resolvedMimeType);
+            header('Content-Length: ' . filesize($cachedPath));
+
+            if ($galleryPageCache)
+            {
+                self::applyGalleryPageImageCacheHeaders();
+            }
+            else
+            {
+                self::applyServedImageCacheHeaders($usePerUserCache);
+            }
+
+            readfile($cachedPath);
+            exit;
+        }
+
+        $fullPath = self::resolveStoredImagePath($originalPath);
+        if ($fullPath === null)
+        {
+            return false;
+        }
+
+        $cachedPath = ImageCacheEngine::storeImage($hash, $fullPath, $cacheUserId);
+
+        header('Content-Type: ' . ($mimeType ?: 'application/octet-stream'));
+        header('Content-Length: ' . filesize($cachedPath));
+
+        if ($galleryPageCache)
+        {
+            self::applyGalleryPageImageCacheHeaders();
+        }
+        else
+        {
+            self::applyServedImageCacheHeaders($usePerUserCache);
+        }
+
+        readfile($cachedPath);
+        exit;
+    }
+
+    /**
      * Display the gallery index with paginated images.
      *
-     * Loads approved images, filters out age-sensitive items when the current user
-     * does not meet the age requirement, then builds pagination links and a compact
-     * image list for the template.
+     * Uses SQL-level pagination for the current page, filters age-sensitive
+     * content before the query is executed, then issues one lightweight page
+     * token so follow-up gallery image requests avoid the heavy session path.
      *
      * @param int|null $page Current page number, defaults to 1.
      * @return void
@@ -132,8 +241,6 @@ class GalleryController
             $limit = 1;
         }
 
-        $offset = ($page - 1) * $limit;
-
         // Session values are frequently strings; parse safely
         $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
         $currentUser = null;
@@ -154,27 +261,58 @@ class GalleryController
         }
 
         $minBirthDate = (new DateTime())->modify("-{$requiredYears} years")->format('Y-m-d');
+        $canViewAgeSensitive = self::checkAgeSensitiveAccess($currentUser, $minBirthDate);
 
-        // Fetch all approved images
-        $sql = "SELECT i.image_hash, i.original_path, i.age_sensitive, i.created_at, i.views, u.date_of_birth, u.age_verified_at FROM app_images i
-                LEFT JOIN app_users u ON i.user_id = u.id WHERE i.status = 'approved' ORDER BY i.created_at DESC";
+        if (RequestGuard::isGalleryPageRateLimited())
+        {
+            $template = self::initTemplate();
+            http_response_code(429);
+            $template->assign('title', 'Too Many Requests');
+            $template->assign('message', 'Too many gallery page requests. Please wait and try again.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $where = "WHERE status = 'approved'";
+        $params = [];
+        if (!$canViewAgeSensitive)
+        {
+            $where .= " AND age_sensitive = 0";
+        }
+
+        $countRow = Database::fetch("SELECT COUNT(*) AS total FROM app_images {$where}", $params);
+        $totalImages = TypeHelper::toInt($countRow['total'] ?? 0) ?? 0;
+        $totalPages = max(1, (int)ceil($totalImages / $limit));
+        if ($page > $totalPages)
+        {
+            $page = $totalPages;
+        }
+
+        $offset = ($page - 1) * $limit;
+
+        $sql = "SELECT image_hash, original_path, mime_type, age_sensitive, created_at, views
+                FROM app_images
+                {$where}
+                ORDER BY created_at DESC
+                LIMIT :limit OFFSET :offset";
 
         $stmt = Database::getPDO()->prepare($sql);
-        $stmt->execute();
-        $images = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        // Filter images based on age-sensitive access
-        $filteredImages = array_filter($images, function ($img) use ($currentUser, $minBirthDate)
+        foreach ($params as $key => $value)
         {
-            $ageSensitive = TypeHelper::toInt($img['age_sensitive'] ?? 0) ?? 0;
-            return ($ageSensitive === 0) || self::checkAgeSensitiveAccess($currentUser, $minBirthDate);
-        });
+            $stmt->bindValue($key, $value);
+        }
 
-        $totalImages = count($filteredImages);
-        $totalPages = max(1, (int)ceil($totalImages / $limit));
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+        $pageImages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Slice array for pagination
-        $pageImages = array_slice($filteredImages, $offset, $limit);
+        $galleryPageToken = GalleryPageTokenStore::issue(
+            $pageImages,
+            $userId,
+            session_id(),
+            self::getCurrentRequestDeviceId()
+        );
 
         $loopImages = [];
         foreach ($pageImages as $img)
@@ -188,7 +326,7 @@ class GalleryController
 
             $views = TypeHelper::toInt($img['views'] ?? null) ?? 0;
             $loopImages[] = [
-                "/" . $img['original_path'],
+                self::buildTokenizedImageUrl($imageHash, $galleryPageToken),
                 "/gallery/" . $imageHash,
                 $views,
             ];
@@ -523,6 +661,7 @@ class GalleryController
         $template->assign('img_favorites', NumericalHelper::formatCount($img['favorites']));
         $template->assign('img_views', NumericalHelper::formatCount($img['views']));
         $template->assign('img_has_favorited', $hasFavorited);
+
         $controlBlock = $config['control_server'] ?? ($config['maintenance_server'] ?? []);
         $webSocketConfig = is_array($controlBlock['websocket'] ?? null) ? $controlBlock['websocket'] : [];
         $webSocketPort = max(1, min(65535, TypeHelper::toInt($webSocketConfig['port'] ?? null) ?? (ControlServer::controlPort($config) + 1)));
@@ -551,6 +690,9 @@ class GalleryController
             $publicPath = '/' . $publicPath;
         }
 
+        $viewImageToken = GalleryPageTokenStore::issue([$img], $userId, session_id(), GalleryPageTokenStore::getCurrentDeviceId($config));
+        $template->assign('img_image_url', self::buildTokenizedImageUrl($img['image_hash'], $viewImageToken));
+        $template->assign('img_original_url', '/gallery/original/' . $img['image_hash']);
         $template->assign('img_live_poll_url', '/gallery/' . $img['image_hash'] . '/live');
         $template->assign('img_live_websocket_url', $webSocketScheme . '://' . $webSocketHost . ':' . $webSocketPort . $publicPath);
         $template->assign('img_live_tick', ControlServer::imageLiveTick($config, $img['image_hash']));
@@ -561,6 +703,65 @@ class GalleryController
         $template->render('gallery/gallery_view.html');
     }
 
+    /**
+     * Apply cache headers for one served image response.
+     *
+     * Public images may be cached by browsers and shared caches. Any image that
+     * depends on authentication or age-verification is restricted to private,
+     * non-shared browser handling.
+     *
+     * @param bool $private Whether the response is authorization-dependent
+     * @return void
+     */
+    private static function applyServedImageCacheHeaders(bool $private): void
+    {
+        if ($private)
+        {
+            header('Cache-Control: private, no-store, max-age=0');
+            header('Pragma: no-cache');
+            header('Expires: 0');
+            header('Vary: Cookie');
+            return;
+        }
+
+        header('Cache-Control: public, max-age=604800');
+    }
+
+    /**
+     * Apply browser-only cache headers for gallery page image requests.
+     *
+     * Gallery thumbnails remain authorization-scoped to the current session, so
+     * they should not be stored by shared caches, but browsers may reuse them
+     * briefly during normal paging/back-navigation.
+     *
+     * @return void
+     */
+    private static function applyGalleryPageImageCacheHeaders(): void
+    {
+        header('Cache-Control: private, max-age=300');
+        header('Vary: Cookie');
+    }
+
+    /**
+     * Render one rate-limit response for interactive gallery actions.
+     *
+     * @param TemplateEngine $template Template engine instance
+     * @param bool $json Whether JSON is expected by the client
+     * @return void
+     */
+    private static function renderInteractiveActionRateLimited(TemplateEngine $template, bool $json = false): void
+    {
+        if ($json)
+        {
+            self::sendJsonResponse(false, 'Too many requests. Please wait and try again.', [], 429);
+            return;
+        }
+
+        http_response_code(429);
+        $template->assign('title', 'Too Many Requests');
+        $template->assign('message', 'Too many requests. Please wait and try again.');
+        $template->render('errors/error_page.html');
+    }
 
     /**
      * Determine whether the current gallery request expects a JSON response.
@@ -730,6 +931,12 @@ class GalleryController
             return;
         }
 
+        if (RequestGuard::isInteractiveActionRateLimited('edit'))
+        {
+            self::renderInteractiveActionRateLimited($template);
+            return;
+        }
+
         // Verify CSRF token to prevent cross-site request forgery
         $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
         if (!Security::verifyCsrfToken($csrfToken))
@@ -807,6 +1014,12 @@ class GalleryController
             $template->assign('title', 'Method Not Allowed');
             $template->assign('message', 'Invalid request.');
             $template->render('errors/error_page.html');
+            return;
+        }
+
+        if (RequestGuard::isInteractiveActionRateLimited('favorite'))
+        {
+            self::renderInteractiveActionRateLimited($template, self::wantsJsonResponse());
             return;
         }
 
@@ -934,6 +1147,12 @@ class GalleryController
             $template->assign('title', 'Method Not Allowed');
             $template->assign('message', 'Invalid request.');
             $template->render('errors/error_page.html');
+            return;
+        }
+
+        if (RequestGuard::isInteractiveActionRateLimited('upvote'))
+        {
+            self::renderInteractiveActionRateLimited($template, self::wantsJsonResponse());
             return;
         }
 
@@ -1065,6 +1284,12 @@ class GalleryController
             return;
         }
 
+        if (RequestGuard::isInteractiveActionRateLimited('comment'))
+        {
+            self::renderInteractiveActionRateLimited($template, self::wantsJsonResponse());
+            return;
+        }
+
         $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
         if ($userId < 1)
         {
@@ -1145,6 +1370,117 @@ class GalleryController
     }
 
     /**
+     * Emit a minimal error response for lightweight gallery image requests.
+     *
+     * The fast gallery image path intentionally avoids template rendering and
+     * other heavy application services. Error responses remain small/plain so
+     * failed image requests do not consume unnecessary work.
+     *
+     * @param int $status HTTP status code.
+     * @return void
+     */
+    private static function sendGalleryImageError(int $status): void
+    {
+        http_response_code($status);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo ($status === 403) ? 'Forbidden' : 'Not Found';
+        exit;
+    }
+
+    /**
+     * Serve one validated gallery page image directly from the original file.
+     *
+     * This path avoids the heavier image cache/session lifecycle used by the
+     * single-image original endpoint so gallery grid rendering stays fast.
+     *
+     * @param string $hash Unique hash identifier for the image.
+     * @param string $originalPath Stored original file path.
+     * @param string $mimeType Trusted stored mime type.
+     * @return void
+     */
+    private static function serveFastGalleryPageImageFile(string $hash, string $originalPath, string $mimeType): void
+    {
+        $fullPath = self::resolveStoredImagePath($originalPath);
+        if ($fullPath === null)
+        {
+            self::sendGalleryImageError(404);
+        }
+
+        $lastModified = @filemtime($fullPath) ?: time();
+        $fileSize = @filesize($fullPath) ?: 0;
+        $etag = '"' . sha1($hash . '|' . $fileSize . '|' . $lastModified) . '"';
+        $ifNoneMatch = TypeHelper::toString($_SERVER['HTTP_IF_NONE_MATCH'] ?? '', allowEmpty: true) ?? '';
+        if ($ifNoneMatch !== '' && hash_equals(trim($ifNoneMatch), $etag))
+        {
+            header('ETag: ' . $etag);
+            header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModified) . ' GMT');
+            self::applyGalleryPageImageCacheHeaders();
+            http_response_code(304);
+            exit;
+        }
+
+        header('Content-Type: ' . ($mimeType ?: 'application/octet-stream'));
+        header('Content-Length: ' . $fileSize);
+        header('ETag: ' . $etag);
+        header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModified) . ' GMT');
+        self::applyGalleryPageImageCacheHeaders();
+        readfile($fullPath);
+        exit;
+    }
+
+    /**
+     * Serve one gallery page image previously authorized by index().
+     *
+     * This endpoint is intentionally lightweight: it validates a short-lived
+     * page token against the current request cookies, then streams the original
+     * image file directly without starting the heavier session/database flow.
+     *
+     * @param string $token Gallery page token.
+     * @param string $hash Unique hash identifier for the image.
+     * @return void
+     */
+    public static function servePageImage(string $token, string $hash): void
+    {
+        $config = self::getConfig();
+        $hash = TypeHelper::toString($hash, allowEmpty: false) ?? '';
+        $token = TypeHelper::toString($token, allowEmpty: false) ?? '';
+
+        if ($token === '' || $hash === '')
+        {
+            self::sendGalleryImageError(404);
+        }
+
+        $sessionCookieName = TypeHelper::toString($config['session']['name'] ?? 'cms_session', allowEmpty: false) ?? 'cms_session';
+        $sessionId = TypeHelper::toString($_COOKIE[$sessionCookieName] ?? '', allowEmpty: true) ?? '';
+        $deviceId = GalleryPageTokenStore::getCurrentDeviceId($config);
+
+        $image = GalleryPageTokenStore::getAuthorizedImage($token, $hash, $sessionId, $deviceId);
+        if (!$image)
+        {
+            self::sendGalleryImageError(404);
+        }
+
+        $originalPath = TypeHelper::toString($image['original_path'] ?? null, allowEmpty: false) ?? '';
+        $mimeType = TypeHelper::toString($image['mime_type'] ?? null, allowEmpty: false) ?? 'application/octet-stream';
+        self::serveFastGalleryPageImageFile($hash, $originalPath, $mimeType);
+    }
+
+    /**
+     * Fast-path entry point for gallery page images.
+     *
+     * This method is called before the main application bootstrap finishes so
+     * gallery tile requests avoid database/session initialization entirely.
+     *
+     * @param string $token Gallery page token.
+     * @param string $hash Unique hash identifier for the image.
+     * @return void
+     */
+    public static function serveFastPageImageRequest(string $token, string $hash): void
+    {
+        self::servePageImage($token, $hash);
+    }
+
+    /**
      * Serve an image file directly from the uploads directory.
      *
      * This endpoint is used by the gallery to deliver the actual image bytes.
@@ -1189,14 +1525,10 @@ class GalleryController
         $sql = "SELECT
                 original_path,
                 mime_type,
-                age_sensitive,
-                i.user_id,
-                u.date_of_birth,
-                u.age_verified_at
-            FROM app_images i
-            LEFT JOIN app_users u ON i.user_id = u.id
-            WHERE i.image_hash = :hash
-            AND (i.status = 'approved' OR i.status = 'rejected')
+                age_sensitive
+            FROM app_images
+            WHERE image_hash = :hash
+            AND status = 'approved'
             LIMIT 1";
 
         $image = Database::fetch($sql, [':hash' => $hash]);
@@ -1232,48 +1564,15 @@ class GalleryController
             return;
         }
 
-        // Check cache AFTER passing age restriction
-        $cachedPath = ImageCacheEngine::getCachedImage($hash, $usePerUserCache ? $userId : null);
-        if ($cachedPath)
-        {
-            // Cached image exists – serve immediately
-            $mimeType = mime_content_type($cachedPath) ?: ($image['mime_type'] ?: 'application/octet-stream');
-            header('Content-Type: ' . $mimeType);
-            header('Content-Length: ' . filesize($cachedPath));
-            header('Cache-Control: public, max-age=604800'); // Browser caching (7 days)
-            readfile($cachedPath);
-            exit;
-        }
-
-        // Resolve original file path
-        $baseDir = realpath(IMAGE_PATH);
         $originalPath = TypeHelper::toString($image['original_path'] ?? null, allowEmpty: false) ?? '';
-        if (!$baseDir || $originalPath === '')
+        $mimeType = TypeHelper::toString($image['mime_type'] ?? null, allowEmpty: false) ?? 'application/octet-stream';
+        if (!self::serveStoredImageFile($hash, $originalPath, $mimeType, $usePerUserCache, $userId))
         {
             http_response_code(404);
             $template->assign('title', 'Image Not Found');
             $template->assign('message', 'The requested image could not be found.');
             $template->render('errors/error_page.html');
-            return;
         }
-
-        $fullPath = realpath($baseDir . '/' . ltrim(str_replace("images/", "", $originalPath), '/'));
-        if (!$fullPath || strpos($fullPath, $baseDir) !== 0 || !file_exists($fullPath))
-        {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
-            return;
-        }
-
-        // Store image in cache and serve
-        $cachedPath = ImageCacheEngine::storeImage($hash, $fullPath, $usePerUserCache ? $userId : null);
-
-        header('Content-Type: ' . ($image['mime_type'] ?: 'application/octet-stream'));
-        header('Content-Length: ' . filesize($cachedPath));
-        header('Cache-Control: public, max-age=604800'); // Allow browser caching (7 days)
-        readfile($cachedPath);
-        exit;
     }
+
 }

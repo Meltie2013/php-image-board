@@ -290,6 +290,12 @@ class UploadController
         // Require login
         RoleHelper::requireLogin();
 
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && RequestGuard::isInteractiveActionRateLimited('upload'))
+        {
+            http_response_code(429);
+            $errors[] = 'Too many upload attempts. Please wait and try again.';
+        }
+
         // Initialize template engine with caching support
         $template = self::initTemplate();
 

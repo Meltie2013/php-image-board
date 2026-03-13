@@ -3,11 +3,6 @@
 require __DIR__ . '/bootstrap/app.php';
 
 // -------------------------
-// Load configuration
-// -------------------------
-$config = require CONFIG_PATH . '/config.php';
-
-// -------------------------
 // Security headers
 // -------------------------
 header('X-Frame-Options: DENY');
@@ -15,6 +10,27 @@ header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
 header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
 header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+{
+    header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+}
+
+$requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+
+if (preg_match('#^/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})/token/([a-f0-9]{32})$#', $requestPath, $matches))
+{
+    GalleryController::serveFastPageImageRequest($matches[2], $matches[1]);
+}
+
+if (preg_match('#^/gallery/page-image/([a-f0-9]{32})/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})$#', $requestPath, $matches))
+{
+    GalleryController::serveFastPageImageRequest($matches[1], $matches[2]);
+}
+
+// -------------------------
+// Load configuration
+// -------------------------
+$config = require CONFIG_PATH . '/config.php';
 
 // Ensure logs directory exists
 $logDir = LOG_PATH;
@@ -178,16 +194,18 @@ $router->setNotFound(function ()
 // -------------------------
 
 $image_hash = '([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})';
+$gallery_page_token = '([a-f0-9]{32})';
 $router->add([
     ['/gallery', [GalleryController::class, 'index'], ['GET']],
     ['/gallery/upload-image', [UploadController::class, 'upload'], ['GET', 'POST']],
     ['/gallery/page/(\d+)', [GalleryController::class, 'index'], ['GET']],
+    ["/image/$image_hash/token/$gallery_page_token", function ($hash, $token) { GalleryController::servePageImage($token, $hash); }, ['GET']],
     ["/gallery/$image_hash", [GalleryController::class, 'view'], ['GET']],
     ["/gallery/original/$image_hash", function ($hash) { GalleryController::serveImage($hash); }, ['GET']],
 
     ['/user/login', [AuthController::class, 'login'], ['GET', 'POST']],
     ['/user/register', [AuthController::class, 'register'], ['GET', 'POST']],
-    ['/user/logout', [AuthController::class, 'logout'], ['GET']],
+    ['/user/logout', [AuthController::class, 'logout'], ['POST']],
 
     ['/profile/overview', [ProfileController::class, 'index'], ['GET']],
     ['/profile/avatar', [ProfileController::class, 'avatar'], ['GET', 'POST']],

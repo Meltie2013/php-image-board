@@ -38,6 +38,16 @@ session_set_cookie_params([
 
 session_start();
 
+header('X-Frame-Options: DENY');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: same-origin');
+header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+{
+    header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+}
+
 // -------------------------------------------------
 // Paths / constants
 // -------------------------------------------------
@@ -54,12 +64,7 @@ define('UPDATES_DIR', APP_ROOT . '/database/updates');
 
 define('INSTALLER_CSS', '/assets/css/installer.css');
 define('INSTALLER_LOCK_FILE', __DIR__ . '/installer.lock');
-
-if (is_file(CONFIG_FILE) && is_file(INSTALLER_LOCK_FILE))
-{
-    http_response_code(403);
-    exit('Installer is locked.');
-}
+define('INSTALLER_RATE_LIMIT_FILE', rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'php_image_board_installer_rate_limit_' . hash('sha256', APP_ROOT) . '.json');
 
 // -------------------------------------------------
 // Minimal security helpers (standalone)
@@ -119,14 +124,45 @@ function installer_redirect(string $to): void
 }
 
 /**
- * Build the current installer login rate-limit session key.
+ * Build the current installer login rate-limit key.
  *
  * @return string
  */
 function installer_rate_limit_key(): string
 {
     $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-    return 'installer_login_' . hash('sha256', $ip);
+    return hash('sha256', (string) $ip);
+}
+
+/**
+ * Read installer login limiter state from disk.
+ *
+ * @return array<string, array<string, int>>
+ */
+function installer_rate_limit_read(): array
+{
+    if (!is_file(INSTALLER_RATE_LIMIT_FILE)) {
+        return [];
+    }
+
+    $json = @file_get_contents(INSTALLER_RATE_LIMIT_FILE);
+    if (!is_string($json) || $json === '') {
+        return [];
+    }
+
+    $decoded = json_decode($json, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+/**
+ * Persist installer login limiter state to disk.
+ *
+ * @param array<string, array<string, int>> $state
+ * @return void
+ */
+function installer_rate_limit_write(array $state): void
+{
+    @file_put_contents(INSTALLER_RATE_LIMIT_FILE, json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX);
 }
 
 /**
@@ -137,28 +173,25 @@ function installer_rate_limit_key(): string
 function installer_is_rate_limited(): bool
 {
     $key = installer_rate_limit_key();
-
-    if (!isset($_SESSION[$key]))
-    {
-        $_SESSION[$key] = [
-            'count' => 0,
-            'first' => time(),
-        ];
-    }
-
+    $state = installer_rate_limit_read();
+    $now = time();
     $window = 900;
     $maxAttempts = 5;
-    $now = time();
+    $changed = false;
 
-    if (($now - (int)$_SESSION[$key]['first']) > $window)
-    {
-        $_SESSION[$key] = [
-            'count' => 0,
-            'first' => $now,
-        ];
+    foreach ($state as $entryKey => $entry) {
+        $first = (int) ($entry['first'] ?? 0);
+        if ($first < 1 || ($now - $first) > $window) {
+            unset($state[$entryKey]);
+            $changed = true;
+        }
     }
 
-    return (int)$_SESSION[$key]['count'] >= $maxAttempts;
+    if ($changed) {
+        installer_rate_limit_write($state);
+    }
+
+    return (int) ($state[$key]['count'] ?? 0) >= $maxAttempts;
 }
 
 /**
@@ -169,18 +202,66 @@ function installer_is_rate_limited(): bool
 function installer_record_failed_login(): void
 {
     $key = installer_rate_limit_key();
+    $state = installer_rate_limit_read();
+    $now = time();
 
-    if (!isset($_SESSION[$key]))
-    {
-        $_SESSION[$key] = [
+    if (!isset($state[$key]) || !is_array($state[$key])) {
+        $state[$key] = [
             'count' => 0,
-            'first' => time(),
+            'first' => $now,
         ];
     }
 
-    $_SESSION[$key]['count'] = (int)$_SESSION[$key]['count'] + 1;
+    if (($now - (int) ($state[$key]['first'] ?? $now)) > 900) {
+        $state[$key] = [
+            'count' => 0,
+            'first' => $now,
+        ];
+    }
+
+    $state[$key]['count'] = (int) ($state[$key]['count'] ?? 0) + 1;
+    installer_rate_limit_write($state);
 }
 
+/**
+ * Clear failed-login counters for the current installer client.
+ *
+ * @return void
+ */
+function installer_clear_failed_login(): void
+{
+    $key = installer_rate_limit_key();
+    $state = installer_rate_limit_read();
+    if (isset($state[$key])) {
+        unset($state[$key]);
+        installer_rate_limit_write($state);
+    }
+}
+
+/**
+ * Determine whether the installer should expose install pages.
+ *
+ * @return bool
+ */
+function installer_is_locked(): bool
+{
+    return is_file(CONFIG_FILE) && is_file(INSTALLER_LOCK_FILE);
+}
+
+/**
+ * Persist the installer lock file.
+ *
+ * @return bool
+ */
+function installer_write_lock_file(): bool
+{
+    if (is_file(INSTALLER_LOCK_FILE)) {
+        return true;
+    }
+
+    $content = "Installer locked on " . date('Y-m-d H:i:s') . PHP_EOL;
+    return @file_put_contents(INSTALLER_LOCK_FILE, $content, LOCK_EX) !== false;
+}
 
 function installer_safe_return_to(string $candidate, string $fallback): string
 {
@@ -716,6 +797,11 @@ InstallerSecurity::initCsrf();
 $action = $_POST['action'] ?? '';
 $tab = $_GET['tab'] ?? 'install';
 $page = $_GET['page'] ?? 'overview';
+$lockedInstaller = installer_is_locked();
+
+if ($lockedInstaller && $tab !== 'update' && !isset($_GET['logout']) && !in_array($action, ['login', 'apply_updates', 'merge_config'], true)) {
+    installer_redirect('index.php?tab=update');
+}
 
 // Logout
 if (isset($_GET['logout'])) {
@@ -794,7 +880,7 @@ if ($action === 'login') {
         installer_redirect('index.php');
     }
 
-    unset($_SESSION[installer_rate_limit_key()]);
+    installer_clear_failed_login();
     $_SESSION['installer_authed'] = true;
 
     // Regenerate session id to reduce fixation risk
@@ -1038,6 +1124,12 @@ if ($action === 'install_db') {
             installer_flash_add('success', 'app_settings seeded successfully.');
         } else {
             installer_flash_add('warning', 'app_settings seed failed: ' . $seed['error']);
+        }
+
+        if (installer_write_lock_file()) {
+            installer_flash_add('success', 'Installer locked. Use the update tab for future maintenance.');
+        } else {
+            installer_flash_add('warning', 'Base install finished, but the installer lock file could not be written. Lock /install manually before going live.');
         }
 
     } else {

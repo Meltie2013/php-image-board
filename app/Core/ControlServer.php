@@ -30,6 +30,88 @@ class ControlServer
     }
 
     /**
+     * Return one nested configuration value from the active Control Server block.
+     *
+     * @param array $config Application configuration
+     * @param array<int, string> $path Nested key path
+     * @param mixed $default Default value when the path is missing
+     * @return mixed
+     */
+    private static function configValue(array $config, array $path, mixed $default = null): mixed
+    {
+        $value = self::configBlock($config);
+
+        foreach ($path as $segment)
+        {
+            if (!is_array($value) || !array_key_exists($segment, $value))
+            {
+                return $default;
+            }
+
+            $value = $value[$segment];
+        }
+
+        return $value;
+    }
+
+    /**
+     * Return one nested configuration value normalized as a string.
+     *
+     * @param array $config Application configuration
+     * @param array<int, string> $path Nested key path
+     * @param string $default Default value when the path is missing
+     * @return string Normalized string value
+     */
+    private static function configString(array $config, array $path, string $default = ''): string
+    {
+        $value = TypeHelper::toString(self::configValue($config, $path, $default), allowEmpty: true) ?? $default;
+        return $value !== '' ? $value : $default;
+    }
+
+    /**
+     * Return one nested configuration value normalized as an integer.
+     *
+     * @param array $config Application configuration
+     * @param array<int, string> $path Nested key path
+     * @param int $default Default value when the path is missing
+     * @return int Normalized integer value
+     */
+    private static function configInt(array $config, array $path, int $default): int
+    {
+        return TypeHelper::toInt(self::configValue($config, $path, $default)) ?? $default;
+    }
+
+    /**
+     * Build and open one non-blocking socket server endpoint.
+     *
+     * @param string $address Bind address
+     * @param int $port Bind port
+     * @param string $serverLabel Human-readable server label for error messages
+     * @return resource|false Socket server resource on success; otherwise false
+     */
+    private static function createSocketServer(string $address, int $port, string $serverLabel)
+    {
+        $endpoint = self::buildSocketEndpoint($address, $port);
+        if ($endpoint === null)
+        {
+            error_log($serverLabel . ' not opened: invalid bind address or port.');
+            return false;
+        }
+
+        $errno = 0;
+        $errstr = '';
+        $server = @stream_socket_server($endpoint, $errno, $errstr);
+        if ($server === false)
+        {
+            error_log($serverLabel . ' bind failed for ' . $endpoint . ' (' . $errno . '): ' . $errstr);
+            return false;
+        }
+
+        stream_set_blocking($server, false);
+        return $server;
+    }
+
+    /**
      * Connected control clients keyed by stream ID.
      *
      * @var array<int, resource>
@@ -114,15 +196,7 @@ class ControlServer
      */
     public static function heartbeatPath(array $config): string
     {
-        $relativePath = TypeHelper::toString(self::configBlock($config)['heartbeat_file'] ?? '', allowEmpty: true)
-            ?? self::DEFAULT_HEARTBEAT_FILE;
-
-        if ($relativePath === '')
-        {
-            $relativePath = self::DEFAULT_HEARTBEAT_FILE;
-        }
-
-        return APP_ROOT . '/' . ltrim($relativePath, '/');
+        return APP_ROOT . '/' . ltrim(self::configString($config, ['heartbeat_file'], self::DEFAULT_HEARTBEAT_FILE), '/');
     }
 
     /**
@@ -133,15 +207,7 @@ class ControlServer
      */
     public static function statePath(array $config): string
     {
-        $relativePath = TypeHelper::toString(self::configBlock($config)['state_file'] ?? '', allowEmpty: true)
-            ?? self::DEFAULT_STATE_FILE;
-
-        if ($relativePath === '')
-        {
-            $relativePath = self::DEFAULT_STATE_FILE;
-        }
-
-        return APP_ROOT . '/' . ltrim($relativePath, '/');
+        return APP_ROOT . '/' . ltrim(self::configString($config, ['state_file'], self::DEFAULT_STATE_FILE), '/');
     }
 
     /**
@@ -152,8 +218,7 @@ class ControlServer
      */
     public static function heartbeatTimeout(array $config): int
     {
-        $timeout = TypeHelper::toInt(self::configBlock($config)['heartbeat_timeout_seconds'] ?? null) ?? 5;
-        return max(1, $timeout);
+        return max(1, self::configInt($config, ['heartbeat_timeout_seconds'], 5));
     }
 
     /**
@@ -164,7 +229,7 @@ class ControlServer
      */
     public static function isRequired(array $config): bool
     {
-        return !empty(self::configBlock($config)['required']);
+        return !empty(self::configValue($config, ['required']));
     }
 
     /**
@@ -175,7 +240,7 @@ class ControlServer
      */
     public static function controlEnabled(array $config): bool
     {
-        return !empty(self::configBlock($config)['control']['enabled']);
+        return !empty(self::configValue($config, ['control', 'enabled']));
     }
 
     /**
@@ -186,8 +251,7 @@ class ControlServer
      */
     public static function controlBindAddress(array $config): string
     {
-        $address = TypeHelper::toString(self::configBlock($config)['control']['bind_address'] ?? '127.0.0.1', allowEmpty: true) ?? '127.0.0.1';
-        return $address !== '' ? $address : '127.0.0.1';
+        return self::configString($config, ['control', 'bind_address'], '127.0.0.1');
     }
 
     /**
@@ -198,8 +262,7 @@ class ControlServer
      */
     public static function controlPort(array $config): int
     {
-        $port = TypeHelper::toInt(self::configBlock($config)['control']['port'] ?? null) ?? 37991;
-        return max(1, min(65535, $port));
+        return max(1, min(65535, self::configInt($config, ['control', 'port'], 37991)));
     }
 
     /**
@@ -210,7 +273,7 @@ class ControlServer
      */
     public static function webSocketEnabled(array $config): bool
     {
-        $webSocket = self::configBlock($config)['websocket'] ?? [];
+        $webSocket = self::configValue($config, ['websocket'], []);
         if (!is_array($webSocket))
         {
             return false;
@@ -227,10 +290,9 @@ class ControlServer
      */
     public static function webSocketBindAddress(array $config): string
     {
-        $webSocket = self::configBlock($config)['websocket'] ?? [];
-        $defaultAddress = !empty($webSocket['allow_remote_clients']) ? '0.0.0.0' : '127.0.0.1';
-        $address = TypeHelper::toString($webSocket['bind_address'] ?? $defaultAddress, allowEmpty: true) ?? $defaultAddress;
-        return $address !== '' ? $address : $defaultAddress;
+        $allowRemoteClients = !empty(self::configValue($config, ['websocket', 'allow_remote_clients']));
+        $defaultAddress = $allowRemoteClients ? '0.0.0.0' : '127.0.0.1';
+        return self::configString($config, ['websocket', 'bind_address'], $defaultAddress);
     }
 
     /**
@@ -241,10 +303,8 @@ class ControlServer
      */
     public static function webSocketPort(array $config): int
     {
-        $webSocket = self::configBlock($config)['websocket'] ?? [];
         $defaultPort = self::controlPort($config) + 1;
-        $port = TypeHelper::toInt($webSocket['port'] ?? null) ?? $defaultPort;
-        return max(1, min(65535, $port));
+        return max(1, min(65535, self::configInt($config, ['websocket', 'port'], $defaultPort)));
     }
 
     /**
@@ -255,7 +315,7 @@ class ControlServer
      */
     public static function webSocketAllowRemoteClients(array $config): bool
     {
-        return !empty(self::configBlock($config)['websocket']['allow_remote_clients']);
+        return !empty(self::configValue($config, ['websocket', 'allow_remote_clients']));
     }
 
     /**
@@ -305,7 +365,7 @@ class ControlServer
      */
     public static function controlAuthToken(array $config): string
     {
-        return TypeHelper::toString(self::configBlock($config)['control']['auth_token'] ?? '', allowEmpty: true) ?? '';
+        return self::configString($config, ['control', 'auth_token'], '');
     }
 
     /**
@@ -745,6 +805,7 @@ class ControlServer
             'request_guard' => !isset($jobs['request_guard']) || !empty($jobs['request_guard']),
             'security_logs' => !isset($jobs['security_logs']) || !empty($jobs['security_logs']),
             'image_cache' => !isset($jobs['image_cache']) || !empty($jobs['image_cache']),
+            'gallery_page_tokens' => !isset($jobs['gallery_page_tokens']) || !empty($jobs['gallery_page_tokens']),
         ];
 
         foreach ($jobs as $name => $enabled)
@@ -962,15 +1023,7 @@ class ControlServer
      */
     public static function liveEventsPath(array $config): string
     {
-        $relativePath = TypeHelper::toString(self::configBlock($config)['live_events_file'] ?? '', allowEmpty: true)
-            ?? self::DEFAULT_LIVE_EVENTS_FILE;
-
-        if ($relativePath === '')
-        {
-            $relativePath = self::DEFAULT_LIVE_EVENTS_FILE;
-        }
-
-        return APP_ROOT . '/' . ltrim($relativePath, '/');
+        return APP_ROOT . '/' . ltrim(self::configString($config, ['live_events_file'], self::DEFAULT_LIVE_EVENTS_FILE), '/');
     }
 
     /**
@@ -1375,10 +1428,9 @@ class ControlServer
             return false;
         }
 
-        $block = self::configBlock($config);
         $address = self::controlBindAddress($config);
         $port = self::controlPort($config);
-        $allowRemoteControl = !empty($block['control']['allow_remote_control']);
+        $allowRemoteControl = !empty(self::configValue($config, ['control', 'allow_remote_control']));
         $expectedToken = self::controlAuthToken($config);
 
         if (!self::isValidControlToken($expectedToken, $allowRemoteControl))
@@ -1393,25 +1445,7 @@ class ControlServer
             return false;
         }
 
-        $endpoint = self::buildSocketEndpoint($address, $port);
-        if ($endpoint === null)
-        {
-            error_log('Control Server socket not opened: invalid bind address or port.');
-            return false;
-        }
-
-        $errno = 0;
-        $errstr = '';
-
-        $server = @stream_socket_server($endpoint, $errno, $errstr);
-        if ($server === false)
-        {
-            error_log('Control Server socket bind failed for ' . $endpoint . ' (' . $errno . '): ' . $errstr);
-            return false;
-        }
-
-        stream_set_blocking($server, false);
-        return $server;
+        return self::createSocketServer($address, $port, 'Control Server socket');
     }
 
     /**
@@ -2205,24 +2239,7 @@ class ControlServer
             return false;
         }
 
-        $endpoint = self::buildSocketEndpoint($address, $port);
-        if ($endpoint === null)
-        {
-            error_log('Control Server WebSocket not opened: invalid bind address or port.');
-            return false;
-        }
-
-        $errno = 0;
-        $errstr = '';
-        $server = @stream_socket_server($endpoint, $errno, $errstr);
-        if ($server === false)
-        {
-            error_log('Control Server WebSocket bind failed for ' . $endpoint . ' (' . $errno . '): ' . $errstr);
-            return false;
-        }
-
-        stream_set_blocking($server, false);
-        return $server;
+        return self::createSocketServer($address, $port, 'Control Server WebSocket');
     }
 
     /**
@@ -2497,7 +2514,7 @@ class ControlServer
             return false;
         }
 
-        if ($mode === 'browser' && !self::isAllowedWebSocketOrigin(TypeHelper::toString($headers['origin'] ?? '', allowEmpty: true) ?? '', $config))
+        if ($mode === 'browser' && !self::isAllowedWebSocketOrigin(TypeHelper::toString($headers['origin'] ?? '', allowEmpty: true) ?? '', $headers, $config))
         {
             return false;
         }
@@ -2863,38 +2880,61 @@ class ControlServer
     }
 
     /**
-     * Determine whether one browser WebSocket Origin header is allowed.
+     * Browser-origin policy for the public WebSocket endpoint.
      *
-     * When public_host is configured, browser origins must match that host.
-     * Otherwise the Origin header is accepted as-is so existing deployments do
-     * not break unexpectedly.
+     * The Origin header must be present and must match either the configured
+     * public host or, when that is not set, the Host header used for the
+     * handshake. This keeps browser subscriptions same-origin by default while
+     * still allowing explicit public_host overrides.
      *
      * @param string $origin Raw Origin header value
+     * @param array $headers Parsed request headers
      * @param array $config Application configuration
      * @return bool True when the origin is allowed
      */
-    private static function isAllowedWebSocketOrigin(string $origin, array $config): bool
+    private static function isAllowedWebSocketOrigin(string $origin, array $headers, array $config): bool
     {
         $origin = trim($origin);
         if ($origin === '')
         {
-            return true;
+            return false;
         }
 
-        $configuredHost = TypeHelper::toString(self::configBlock($config)['websocket']['public_host'] ?? '', allowEmpty: true) ?? '';
-        if ($configuredHost === '')
-        {
-            return true;
-        }
-
-        $configuredHost = self::normalizeClientHost($configuredHost);
         $originHost = self::normalizeClientHost(TypeHelper::toString(parse_url($origin, PHP_URL_HOST) ?? '', allowEmpty: true) ?? '');
-        if ($configuredHost === null || $originHost === null)
+        if ($originHost === null)
         {
             return false;
         }
 
-        return hash_equals($configuredHost, $originHost);
+        $allowedHosts = [];
+
+        $configuredHost = TypeHelper::toString(self::configBlock($config)['websocket']['public_host'] ?? '', allowEmpty: true) ?? '';
+        if ($configuredHost !== '')
+        {
+            $normalizedConfiguredHost = self::normalizeClientHost($configuredHost);
+            if ($normalizedConfiguredHost !== null)
+            {
+                $allowedHosts[$normalizedConfiguredHost] = true;
+            }
+        }
+
+        $requestHost = TypeHelper::toString($headers['host'] ?? '', allowEmpty: true) ?? '';
+        if ($requestHost !== '')
+        {
+            $requestHost = preg_replace('/:\d+$/', '', $requestHost) ?: '';
+            $normalizedRequestHost = self::normalizeClientHost($requestHost);
+            if ($normalizedRequestHost !== null)
+            {
+                $allowedHosts[$normalizedRequestHost] = true;
+            }
+        }
+
+        if (empty($allowedHosts))
+        {
+            return false;
+        }
+
+        return isset($allowedHosts[$originHost]);
     }
 
     /**

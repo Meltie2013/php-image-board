@@ -189,6 +189,7 @@ return [
             'request_guard' => 1,
             'security_logs' => 1,
             'image_cache' => 1,
+            'gallery_page_tokens' => 1,
         ],
         // Runtime-togglable maintenance jobs owned by server.php.
 
@@ -198,11 +199,11 @@ return [
             // Enables the shared WebSocket server used by browser live updates
             // and CLI/runtime control clients.
 
-            'allow_remote_clients' => 1,
+            'allow_remote_clients' => 0,
             // When enabled, the WebSocket listener may bind publicly so browser
             // sessions can receive live updates in real time.
 
-            'bind_address' => '0.0.0.0',
+            'bind_address' => '127.0.0.1',
             // Bind to all interfaces by default so remote browser sessions can
             // subscribe to gallery updates.
 
@@ -254,11 +255,13 @@ return [
     'request_guard' => [
 
         // Optional global limiter for very abusive clients (all endpoints)
+        // Keep this off for now. Your endpoint-specific limits are better targeted,
+        // and a global cap is the easiest place to create false positives.
         'global' => [
             'enabled' => 0,
             'window_seconds' => 60,
-            'limit' => 300,
-            'cooldown_seconds' => 300,
+            'limit' => 600,
+            'cooldown_seconds' => 120,
         ],
 
         // Image delivery endpoint limiter (/gallery/original/{hash})
@@ -267,41 +270,110 @@ return [
             'window_seconds' => 60,
             'limit_per_fingerprint' => 120,
             'limit_per_user' => 180,
-            'limit_per_guest' => 90,
-            'limit_per_fingerprint_bot' => 40,
-            'limit_per_fingerprint_tool' => 25,
-            'limit_per_fingerprint_search_bot' => 120,
-            'cooldown_seconds' => 600,
+            'limit_per_guest' => 120,
+            'limit_per_fingerprint_bot' => 24,
+            'limit_per_fingerprint_tool' => 12,
+            'limit_per_fingerprint_search_bot' => 180,
+            'cooldown_seconds' => 300,
 
             // If the same stable device fingerprint appears across many IPs,
             // assume aggressive tooling / proxy rotation and temporarily jail it.
             'device_multi_ip_window_seconds' => 600,
-            'device_multi_ip_threshold' => 5,
+            'device_multi_ip_threshold' => 6,
 
             // If a single IP starts producing many fingerprints, tighten limits on IP.
             'ip_escalation_window_seconds' => 300,
-            'ip_escalation_fingerprints' => 10,
-            'ip_limit_when_escalated' => 200,
+            'ip_escalation_fingerprints' => 15,
+            'ip_limit_when_escalated' => 240,
+        ],
+
+        // Gallery index limiter (/gallery, /gallery/page/{n})
+        'gallery_pages' => [
+            'enabled' => 1,
+            'window_seconds' => 60,
+            'limit_per_fingerprint' => 24,
+            'limit_per_user' => 30,
+            'limit_per_guest' => 20,
+            'limit_per_ip' => 80,
+            'cooldown_seconds' => 180,
         ],
 
         // Auth endpoint limiter (login/register)
         'auth' => [
             'enabled' => 1,
             'window_seconds' => 600,
-            'limit_per_fingerprint' => 12,
-            'limit_per_user' => 16,
-            'limit_per_guest' => 10,
-            'limit_per_ip' => 30,
-            'limit_per_tool' => 5,
-            'single_ip_flood_threshold' => 35,
+            'limit_per_fingerprint' => 10,
+            'limit_per_user' => 12,
+            'limit_per_guest' => 8,
+            'limit_per_ip' => 20,
+            'limit_per_tool' => 3,
+            'single_ip_flood_threshold' => 12,
             'device_multi_ip_window_seconds' => 900,
-            'device_multi_ip_threshold' => 4,
-            'cooldown_seconds' => 600,
+            'device_multi_ip_threshold' => 5,
+            'cooldown_seconds' => 900,
 
             // Additional jail trigger based on repeated failures
             'failure_window_seconds' => 600,
-            'failure_threshold' => 10,
-            'failure_cooldown_seconds' => 900,
+            'failure_threshold' => 8,
+            'failure_cooldown_seconds' => 1200,
+        ],
+
+        // Interactive authenticated actions such as uploads, edits, votes,
+        // favorites, and comments.
+        'actions' => [
+            'default' => [
+                'enabled' => 1,
+                'window_seconds' => 300,
+                'limit_per_fingerprint' => 18,
+                'limit_per_user' => 22,
+                'limit_per_ip' => 35,
+                'cooldown_seconds' => 300,
+            ],
+
+            'upload' => [
+                'enabled' => 1,
+                'window_seconds' => 600,
+                'limit_per_fingerprint' => 6,
+                'limit_per_user' => 6,
+                'limit_per_ip' => 10,
+                'cooldown_seconds' => 600,
+            ],
+
+            'edit' => [
+                'enabled' => 1,
+                'window_seconds' => 300,
+                'limit_per_fingerprint' => 12,
+                'limit_per_user' => 15,
+                'limit_per_ip' => 24,
+                'cooldown_seconds' => 300,
+            ],
+
+            'favorite' => [
+                'enabled' => 1,
+                'window_seconds' => 300,
+                'limit_per_fingerprint' => 30,
+                'limit_per_user' => 36,
+                'limit_per_ip' => 60,
+                'cooldown_seconds' => 300,
+            ],
+
+            'upvote' => [
+                'enabled' => 1,
+                'window_seconds' => 300,
+                'limit_per_fingerprint' => 30,
+                'limit_per_user' => 36,
+                'limit_per_ip' => 60,
+                'cooldown_seconds' => 300,
+            ],
+
+            'comment' => [
+                'enabled' => 1,
+                'window_seconds' => 300,
+                'limit_per_fingerprint' => 10,
+                'limit_per_user' => 12,
+                'limit_per_ip' => 20,
+                'cooldown_seconds' => 600,
+            ],
         ],
     ],
 ];

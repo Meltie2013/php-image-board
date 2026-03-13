@@ -282,6 +282,60 @@ class RequestGuard
     }
 
     /**
+     * Check whether one gallery page request should be rate limited.
+     *
+     * The gallery page authorizes one page of thumbnail/image requests at once,
+     * so limiting is performed on the page request instead of every image tile.
+     *
+     * @return bool True when the gallery page request should be denied.
+     */
+    public static function isGalleryPageRateLimited(): bool
+    {
+        $cfg = self::getConfigArray('request_guard.gallery_pages', []);
+        $enabled = !array_key_exists('enabled', $cfg) || !empty($cfg['enabled']);
+        if (!$enabled)
+        {
+            return false;
+        }
+
+        $window = TypeHelper::toInt($cfg['window_seconds'] ?? 60);
+        $limitFingerprint = TypeHelper::toInt($cfg['limit_per_fingerprint'] ?? 60);
+        $limitUser = TypeHelper::toInt($cfg['limit_per_user'] ?? $limitFingerprint);
+        $limitGuest = TypeHelper::toInt($cfg['limit_per_guest'] ?? $limitFingerprint);
+        $limitIp = TypeHelper::toInt($cfg['limit_per_ip'] ?? max($limitUser, $limitGuest));
+        $cooldown = TypeHelper::toInt($cfg['cooldown_seconds'] ?? 300);
+
+        $clientKey = self::clientKey();
+        $actorKey = self::actorKey();
+        $actorLimit = self::isAuthenticated() ? $limitUser : $limitGuest;
+
+        if (self::hitLimit('gallery_page', $clientKey, $window, $limitFingerprint))
+        {
+            self::applyDecision('rate_limited', self::isAuthenticated() ? 'gallery_page_rate_limit_user' : 'gallery_page_rate_limit_guest', $cooldown);
+            return true;
+        }
+
+        if (self::hitLimit('gallery_page_actor', $actorKey, $window, $actorLimit))
+        {
+            self::applyDecision('rate_limited', self::isAuthenticated() ? 'gallery_page_rate_limit_user_account' : 'gallery_page_rate_limit_guest_actor', $cooldown);
+            return true;
+        }
+
+        $ip = self::ip();
+        if ($ip !== '')
+        {
+            $ipKey = 'ip|' . self::normalizeIp($ip);
+            if (self::hitLimit('gallery_page_ip', $ipKey, $window, $limitIp))
+            {
+                self::applyDecision('rate_limited', 'gallery_page_rate_limit_ip', $cooldown, '', true);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Record an auth failure (used for brute force against unknown accounts).
      *
      * This does not reveal whether an account exists; it simply increments counters.
@@ -326,6 +380,70 @@ class RequestGuard
                 }
             }
         }
+    }
+
+    /**
+     * Check whether one authenticated interactive action should be rate limited.
+     *
+     * This is intended for low-cost but abuse-prone member actions such as
+     * uploads, comments, votes, favorites, and metadata edits.
+     *
+     * @param string $action Action name key from request_guard.actions
+     * @return bool True when the action should be denied for now
+     */
+    public static function isInteractiveActionRateLimited(string $action): bool
+    {
+        $action = strtolower(trim($action));
+        if ($action === '')
+        {
+            return false;
+        }
+
+        $cfg = self::getConfigArray('request_guard.actions.' . $action, []);
+        if (empty($cfg))
+        {
+            $cfg = self::getConfigArray('request_guard.actions.default', []);
+        }
+
+        $enabled = !array_key_exists('enabled', $cfg) || !empty($cfg['enabled']);
+        if (!$enabled)
+        {
+            return false;
+        }
+
+        $window = TypeHelper::toInt($cfg['window_seconds'] ?? 300);
+        $limitFingerprint = TypeHelper::toInt($cfg['limit_per_fingerprint'] ?? 20);
+        $limitUser = TypeHelper::toInt($cfg['limit_per_user'] ?? $limitFingerprint);
+        $limitIp = TypeHelper::toInt($cfg['limit_per_ip'] ?? max($limitUser, $limitFingerprint));
+        $cooldown = TypeHelper::toInt($cfg['cooldown_seconds'] ?? 600);
+
+        $clientKey = self::clientKey();
+        $actorKey = self::actorKey();
+
+        if (self::hitLimit('act_' . $action, $clientKey, $window, $limitFingerprint))
+        {
+            self::applyDecision('rate_limited', 'interactive_action_' . $action . '_fingerprint', $cooldown);
+            return true;
+        }
+
+        if (self::hitLimit('act_' . $action . '_actor', $actorKey, $window, $limitUser))
+        {
+            self::applyDecision('rate_limited', 'interactive_action_' . $action . '_actor', $cooldown);
+            return true;
+        }
+
+        $ip = self::ip();
+        if ($ip !== '')
+        {
+            $ipKey = 'ip|' . self::normalizeIp($ip);
+            if (self::hitLimit('act_' . $action . '_ip', $ipKey, $window, $limitIp))
+            {
+                self::applyDecision('rate_limited', 'interactive_action_' . $action . '_ip', $cooldown, '', true);
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

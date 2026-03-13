@@ -108,7 +108,7 @@
                     {/if}
 
                     <section>
-                        <h5><a href="/gallery/original/{$img_hash}">View Image</a></h5>
+                        <h5><a href="{$img_original_url}">View Image</a></h5>
                         <h5><a href="#" class="js-open-comments">Comments (<span data-live-comments-count="1">{$img_comment_count}</span>)</a></h5>
                     </section>
 
@@ -127,7 +127,7 @@
                     {$alert_tag} {$alert_message} <a href="#">Learn more</a>
                 </div>
                 {/if}
-                <img src="/gallery/original/{$img_hash}" class="gallery-image-view">
+                <img src="{$img_original_url}" class="gallery-image-view">
             </div>
         </div>
     </main>

@@ -128,10 +128,18 @@ class AuthController
             $userIdToCheck = TypeHelper::toInt($user['id'] ?? null);
             if ($userIdToCheck)
             {
-                // Block suspended accounts immediately
-                if ($user['status'] === 'suspended')
+                // Block any account that is not active.
+                $accountStatus = strtolower(TypeHelper::toString($user['status'] ?? '', allowEmpty: true) ?? '');
+                if ($accountStatus !== 'active')
                 {
-                    $errors[] = "Account suspended.";
+                    if ($accountStatus === 'suspended')
+                    {
+                        $errors[] = "Account suspended.";
+                    }
+                    else
+                    {
+                        $errors[] = "Account pending approval.";
+                    }
                 }
 
                 // Check if the user is currently jailed (temporary block)
@@ -140,8 +148,8 @@ class AuthController
                     $errors[] = "Try again later.";
                 }
 
-                // Check for permanent suspension (6+ failed attempts)
-                if ((TypeHelper::toInt($user['failed_logins'] ?? null) ?? 0) >= 6 && empty($errors))
+                // Check for permanent suspension (12 failed attempts)
+                if ((TypeHelper::toInt($user['failed_logins'] ?? null) ?? 0) >= 12 && empty($errors))
                 {
                     Database::query("UPDATE app_users SET status = 'suspended' WHERE id = :id",
                         ['id' => $userIdToCheck]
@@ -419,6 +427,21 @@ class AuthController
      */
     public static function logout(): void
     {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            http_response_code(405);
+            header('Location: /index.php');
+            exit();
+        }
+
+        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
+        if (!Security::verifyCsrfToken($csrfToken))
+        {
+            http_response_code(403);
+            header('Location: /index.php');
+            exit();
+        }
+
         // Destroy all session data
         SessionManager::destroy();
 

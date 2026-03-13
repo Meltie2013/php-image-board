@@ -47,9 +47,12 @@
                 <i class="fa-regular fa-user"></i>
             </a>
 
-            <a class="nav-icon" href="/user/logout" aria-label="Logout" data-tooltip="Logout">
-                <i class="fa-solid fa-right-from-bracket"></i>
-            </a>
+            <form action="/user/logout" method="post" style="display: inline; margin: 0; padding: 0;">
+                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                <button class="nav-icon" type="submit" aria-label="Logout" data-tooltip="Logout" style="background: none; border: 0; padding: 0; cursor: pointer;">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </button>
+            </form>
             {else}
             <a class="nav-icon" href="/user/login" aria-label="Login" data-tooltip="Login">
                 <i class="fa-solid fa-right-to-bracket"></i>

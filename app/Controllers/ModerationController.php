@@ -786,7 +786,10 @@ class ModerationController
 
         header('Content-Type: ' . $image['mime_type']);
         header('Content-Length: ' . filesize($fullPath));
-        header('Cache-Control: public, max-age=604800'); // Allow caching (7 days)
+        header('Cache-Control: private, no-store, max-age=0');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        header('Vary: Cookie');
         readfile($fullPath);
         exit;
     }
