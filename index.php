@@ -22,11 +22,6 @@ if (preg_match('#^/image/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-
     GalleryController::serveFastPageImageRequest($matches[2], $matches[1]);
 }
 
-if (preg_match('#^/gallery/page-image/([a-f0-9]{32})/([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})$#', $requestPath, $matches))
-{
-    GalleryController::serveFastPageImageRequest($matches[1], $matches[2]);
-}
-
 // -------------------------
 // Load configuration
 // -------------------------
