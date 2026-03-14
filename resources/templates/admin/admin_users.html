@@ -1,51 +1,73 @@
 {include file="global/header.html"}
 
-    <main class="gallery-container-view">
-        <div class="gallery-item-view admin-layout">
-            <div class="gallery-left-side">
-                <div class="gallery-details-view admin-menu">
+    <main class="admin-container">
+        <div class="admin-shell admin-layout">
+            <div class="admin-sidebar">
+                <div class="admin-sidebar-inner admin-menu">
                     {include file="admin/admin_menu.html"}
                 </div>
             </div>
 
-            <div class="gallery-image-wrapper admin-dashboard">
-                <h2>User Management</h2>
+            <div class="admin-content admin-dashboard">
+                <div class="admin-page-header">
+                    <div>
+                        <div class="admin-kicker">Administration Control Panel</div>
+                        <h2>{$admin_page_title}</h2>
+                        <p>{$admin_page_description}</p>
+                    </div>
 
-                <div class="dashboard-content-wrapper">
-                    <div class="dashboard-cards-wrapper">
-                        <div class="dashboard-label">Users</div>
-                        <div class="pending-images-wrapper">
-                            <table class="pending-images-table">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Username</th>
-                                        <th>Email</th>
-                                        <th>Role</th>
-                                        <th>Status</th>
-                                        <th>Created</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {foreach $users as list($u_id, $u_username, $u_email, $u_role_name, $u_status, $u_created_at)}
-                                    <tr>
-                                        <td>{$u_id}</td>
-                                        <td>{$u_username}</td>
-                                        <td style="white-space: normal;">{$u_email}</td>
-                                        <td>{$u_role_name}</td>
-                                        <td>{$u_status}</td>
-                                        <td>{$u_created_at}</td>
-                                        <td>
-                                            <a href="/admin/users/edit/{$u_id}" class="admin-btn admin-btn-secondary">Edit</a>
-                                        </td>
-                                    </tr>
-                                    {/foreach}
-                                </tbody>
-                            </table>
-                        </div>
+                    <div class="admin-page-actions">
+                        <a href="/admin/users/create" class="admin-btn admin-btn-primary"><i class="fa-solid fa-user-plus"></i> Create User</a>
                     </div>
                 </div>
+
+                <section class="admin-panel">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <h3>Accounts Directory</h3>
+                            <p>Browse active accounts and jump straight into edit actions.</p>
+                        </div>
+                    </div>
+
+                    <div class="admin-panel-body">
+                        {if empty($users)}
+                            <div class="admin-empty-state">
+                                <p>No users are available to display.</p>
+                            </div>
+                        {else}
+                            <div class="pending-images-wrapper">
+                                <table class="pending-images-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Username</th>
+                                            <th>Email</th>
+                                            <th>Role</th>
+                                            <th>Status</th>
+                                            <th>Created</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {foreach $users as list($u_id, $u_username, $u_email, $u_role_name, $u_status, $u_created_at)}
+                                        <tr>
+                                            <td>{$u_id}</td>
+                                            <td>{$u_username}</td>
+                                            <td class="is-wrap">{$u_email}</td>
+                                            <td><span class="admin-pill">{$u_role_name}</span></td>
+                                            <td><span class="admin-status admin-status-{$u_status}">{$u_status}</span></td>
+                                            <td>{$u_created_at}</td>
+                                            <td>
+                                                <a href="/admin/users/edit/{$u_id}" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-pen-to-square"></i> Edit</a>
+                                            </td>
+                                        </tr>
+                                        {/foreach}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {/if}
+                    </div>
+                </section>
             </div>
         </div>
     </main>

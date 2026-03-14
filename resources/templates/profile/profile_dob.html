@@ -1,47 +1,99 @@
 {include file="global/header.html"}
 
     <div class="profile-container">
-        {include file="profile/profile_menu.html"}
+        <div class="profile-shell profile-layout">
+            {include file="profile/profile_menu.html"}
 
-        <section class="profile-content">
-            <h1>Update Date of Birth</h1>
+            <section class="profile-content">
+                <div class="profile-dashboard">
+                    <div class="profile-page-header">
+                        <div>
+                            <div class="profile-kicker">Age Verification</div>
+                            <h1>{$profile_page_title}</h1>
+                            <p>{$profile_page_description}</p>
+                        </div>
 
-            {if $error}
-            <div class="alert alert-danger">
-            {foreach $error as $err}
-                {$err}
-            {/foreach}
-            </div>
-            {/if}
+                        <div class="profile-page-actions">
+                            <a href="/profile/overview" class="profile-action-btn"><i class="fa-regular fa-id-card"></i> Back to Overview</a>
+                        </div>
+                    </div>
 
-            {if $success}
-            <div class="alert alert-success">
-                {$success}
-            </div>
-            {/if}
+                    <div class="profile-edit-grid">
+                        <article class="profile-panel">
+                            <div class="profile-panel-header">
+                                <div>
+                                    <div class="profile-panel-kicker">Verification Record</div>
+                                    <h2>Manage your date of birth</h2>
+                                </div>
+                            </div>
 
-            {if $date_of_birth}
-            <div class="alert alert-warning">
-                <b>Warning:</b> Once you submit your DoB (Date of Birth), you can not change it. <a href="#">Learn more</a>
-            </div>
-            {else}
-            <div class="alert alert-info">
-                <b>Message:</b> To view sensitive content, you must verify your age.
-            </div>
-            {/if}
+                            <div class="profile-message-stack">
+                                {if $error}
+                                <div class="profile-alert profile-alert-danger">
+                                {foreach $error as $err}
+                                    <div>{$err}</div>
+                                {/foreach}
+                                </div>
+                                {/if}
 
-            <form method="post">
-            <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                <label for="date_of_birth">Date of Birth:</label>
-                <input type="date" name="date_of_birth" value="{$date_of_birth}">
-                
-                {if $date_of_birth}
-                <button type="submit" name="update_dob" disabled>Update Date of Birth</button>
-                {else}
-                <button type="submit" name="update_dob">Update Date of Birth</button>
-                {/if}
-            </form>
-        </section>
+                                {if $success}
+                                <div class="profile-alert profile-alert-success">
+                                    {$success}
+                                </div>
+                                {/if}
+
+                                {if $date_of_birth}
+                                <div class="profile-alert profile-alert-warning">
+                                    Once you submit your date of birth, it can no longer be changed through the profile page.
+                                </div>
+                                {else}
+                                <div class="profile-alert profile-alert-info">
+                                    To view sensitive content, you must verify your age.
+                                </div>
+                                {/if}
+                            </div>
+
+                            <form method="post" class="profile-form-shell">
+                                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+
+                                <div class="profile-form-group">
+                                    <label for="profile_dob">Date of Birth</label>
+                                    <input id="profile_dob" type="date" name="date_of_birth" value="{$date_of_birth}">
+                                </div>
+
+                                <div class="profile-form-actions">
+                                    {if $date_of_birth}
+                                    <button type="submit" name="update_dob" class="profile-submit-btn" disabled>Birth Date Locked</button>
+                                    {else}
+                                    <button type="submit" name="update_dob" class="profile-submit-btn">Save Date of Birth</button>
+                                    {/if}
+                                </div>
+                            </form>
+                        </article>
+
+                        <article class="profile-panel profile-panel-secondary">
+                            <div class="profile-panel-header">
+                                <div>
+                                    <div class="profile-panel-kicker">Status</div>
+                                    <h2>Current verification state</h2>
+                                </div>
+                            </div>
+
+                            <div class="profile-detail-stack">
+                                <div class="profile-detail-item profile-detail-item-full">
+                                    <span>Verification</span>
+                                    <strong>{if $date_of_birth}Verified{else}Pending{/if}</strong>
+                                </div>
+                                <div class="profile-detail-item profile-detail-item-full">
+                                    <span>Recorded Date</span>
+                                    <strong>{if $date_of_birth}{$date_of_birth_format}{else}Not set{/if}</strong>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+                </div>
+            </section>
+        </div>
     </div>
 
 {include file="global/footer.html"}

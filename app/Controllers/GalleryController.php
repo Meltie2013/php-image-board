@@ -16,32 +16,23 @@
  * - Age-gating logic for sensitive content (requires verified DOB)
  * - Path normalization/realpath checks when serving files from disk
  */
-class GalleryController
+class GalleryController extends BaseController
 {
     /**
-     * Cached config for controller usage.
-     *
-     * Stored statically so configuration is loaded once per request and reused
-     * across controller actions without repeated disk reads.
+     * Static template variables assigned for all gallery templates.
      *
      * @var array
      */
-    private static array $config;
+    protected static array $templateAssignments = [
+        'is_gallery_page' => 1,
+    ];
 
     /**
-     * Load and cache config once per request.
+     * Gallery templates require a CSRF token for interactive actions.
      *
-     * @return array
+     * @var bool
      */
-    private static function getConfig(): array
-    {
-        if (empty(self::$config))
-        {
-            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require CONFIG_PATH . '/config.php');
-        }
-
-        return self::$config;
-    }
+    protected static bool $templateUsesCsrf = true;
 
 
     /**
@@ -58,48 +49,6 @@ class GalleryController
         return GalleryPageTokenStore::getCurrentDeviceId(self::getConfig());
     }
 
-    /**
-     * Initialize template engine with optional cache clearing.
-     *
-     * Also injects a CSRF token into the template scope so all rendered forms
-     * can submit state-changing actions safely.
-     *
-     * @return TemplateEngine
-     */
-    private static function initTemplate(): TemplateEngine
-    {
-        $config = self::getConfig();
-        $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
-        if (!empty($config['template']['disable_cache']))
-        {
-            $template->clearCache();
-        }
-
-        $template->assign('is_gallery_page', 1);
-        $template->assign('csrf_token', Security::generateCsrfToken());
-        return $template;
-    }
-
-    /**
-     * Retrieve a username by user ID.
-     *
-     * Used for display purposes in the gallery UI. Returns an empty string when
-     * the user ID is missing or no matching user is found.
-     *
-     * @param int|null $userId ID of the user, or null if not available.
-     * @return string Username if found, otherwise empty string.
-     */
-    private static function getUsernameById(?int $userId): string
-    {
-        if ($userId === null)
-        {
-            return '';
-        }
-
-        // Query to fetch username by user ID
-        $result = Database::fetch("SELECT username FROM app_users WHERE id = :id LIMIT 1", [':id' => $userId]);
-        return TypeHelper::toString($result['username']) ?? '';
-    }
 
     /**
      * Check if a user has access to age-sensitive content.
@@ -412,10 +361,7 @@ class GalleryController
         $hash = TypeHelper::toString($hash);
         if ($hash === '')
         {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
+            self::renderImageNotFound($template);
             return;
         }
 
@@ -480,10 +426,7 @@ class GalleryController
 
         if (!$img)
         {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
+            self::renderImageNotFound($template);
             return;
         }
 
@@ -508,10 +451,7 @@ class GalleryController
         $imageId = TypeHelper::toInt($img['id']) ?? null;
         if ($imageId < 1)
         {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
+            self::renderImageNotFound($template);
             return;
         }
 
@@ -526,6 +466,7 @@ class GalleryController
         if ($imgHash !== '' && !in_array($imgHash, $viewedImages, true))
         {
             Database::execute("UPDATE app_images SET views = views + 1 WHERE id = :id LIMIT 1", [':id' => $imageId]);
+            ControlServer::bumpImageLiveTick($config, $imgHash);
 
             $viewedImages[] = $imgHash;
             SessionManager::set('viewed_images', $viewedImages);
@@ -884,16 +825,18 @@ class GalleryController
         $currentTick = ControlServer::imageLiveTick(self::getConfig(), $hash);
         $sinceTick = max(0, TypeHelper::toInt($_GET['since'] ?? null) ?? 0);
 
+        $state = self::getLiveInteractionState($imageId, $userId);
+
         if ($sinceTick > 0 && $currentTick <= $sinceTick)
         {
             self::sendJsonResponse(true, 'No live gallery changes detected.', [
                 'changed' => false,
                 'tick' => $currentTick,
+                'state' => $state,
             ]);
             return;
         }
 
-        $state = self::getLiveInteractionState($imageId, $userId);
         self::sendJsonResponse(true, 'Live gallery state loaded.', [
             'changed' => true,
             'tick' => $currentTick,
@@ -941,10 +884,7 @@ class GalleryController
         $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
         if (!Security::verifyCsrfToken($csrfToken))
         {
-            http_response_code(403);
-            $template->assign('title', 'Access Denied');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
+            self::renderInvalidRequest($template);
             return;
         }
 
@@ -952,10 +892,7 @@ class GalleryController
         $hash = TypeHelper::toString($hash);
         if ($hash === '')
         {
-            http_response_code(404);
-            $template->assign('title', '404 Not Found');
-            $template->assign('message', 'Oops! We couldn’t find that image.');
-            $template->render('errors/error_page.html');
+            self::renderErrorPage(404, '404 Not Found', 'Oops! We couldn’t find that image.', $template);
             return;
         }
 
@@ -966,10 +903,7 @@ class GalleryController
 
         if (!$img)
         {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
+            self::renderImageNotFound($template);
             return;
         }
 
@@ -1026,10 +960,7 @@ class GalleryController
         $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
         if ($userId < 1)
         {
-            http_response_code(403);
-            $template->assign('title', 'Access Denied');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
+            self::renderInvalidRequest($template);
             return;
         }
 
@@ -1037,20 +968,14 @@ class GalleryController
         $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
         if (!Security::verifyCsrfToken($csrfToken))
         {
-            http_response_code(403);
-            $template->assign('title', 'Access Denied');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
+            self::renderInvalidRequest($template);
             return;
         }
 
         $hash = TypeHelper::toString($hash);
         if ($hash === '')
         {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
+            self::renderImageNotFound($template);
             return;
         }
 
@@ -1159,10 +1084,7 @@ class GalleryController
         $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
         if ($userId < 1)
         {
-            http_response_code(403);
-            $template->assign('title', 'Access Denied');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
+            self::renderInvalidRequest($template);
             return;
         }
 
@@ -1170,20 +1092,14 @@ class GalleryController
         $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
         if (!Security::verifyCsrfToken($csrfToken))
         {
-            http_response_code(403);
-            $template->assign('title', 'Access Denied');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
+            self::renderInvalidRequest($template);
             return;
         }
 
         $hash = TypeHelper::toString($hash);
         if ($hash === '')
         {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
+            self::renderImageNotFound($template);
             return;
         }
 
@@ -1293,10 +1209,7 @@ class GalleryController
         $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
         if ($userId < 1)
         {
-            http_response_code(403);
-            $template->assign('title', 'Access Denied');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
+            self::renderInvalidRequest($template);
             return;
         }
 
@@ -1304,20 +1217,14 @@ class GalleryController
         $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
         if (!Security::verifyCsrfToken($csrfToken))
         {
-            http_response_code(403);
-            $template->assign('title', 'Access Denied');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
+            self::renderInvalidRequest($template);
             return;
         }
 
         $hash = TypeHelper::toString($hash);
         if ($hash === '')
         {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
+            self::renderImageNotFound($template);
             return;
         }
 
@@ -1335,20 +1242,14 @@ class GalleryController
 
         if (!$image)
         {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
+            self::renderImageNotFound($template);
             return;
         }
 
         $imageId = TypeHelper::toInt($image['id'] ?? null) ?? 0;
         if ($imageId < 1)
         {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
+            self::renderImageNotFound($template);
             return;
         }
 
@@ -1503,10 +1404,7 @@ class GalleryController
         $hash = TypeHelper::toString($hash);
         if ($hash === '')
         {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
+            self::renderImageNotFound($template);
             return;
         }
 
@@ -1534,10 +1432,7 @@ class GalleryController
         $image = Database::fetch($sql, [':hash' => $hash]);
         if (!$image)
         {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
+            self::renderImageNotFound($template);
             return;
         }
 

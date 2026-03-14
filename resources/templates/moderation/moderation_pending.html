@@ -1,94 +1,125 @@
 {include file="global/header.html"}
 
-    <main class="gallery-container-view">
-        <div class="gallery-item-view moderation-layout">
-            <div class="gallery-left-side">
-                <div class="gallery-details-view moderation-menu">
+    <main class="moderation-container">
+        <div class="moderation-shell moderation-layout">
+            <div class="moderation-sidebar">
+                <div class="moderation-sidebar-inner moderation-menu">
                     {include file="moderation/moderation_menu.html"}
                 </div>
             </div>
 
-            <div class="gallery-image-wrapper moderation-dashboard">
-                <h2>Moderation Dashboard - Pending Images</h2>
+            <div class="moderation-content moderation-dashboard">
+                <div class="moderation-page-header">
+                    <div>
+                        <div class="moderation-kicker">Moderation Control Panel</div>
+                        <h2>{$moderation_page_title}</h2>
+                        <p>{$moderation_page_description}</p>
+                    </div>
 
-                <div class="dashboard-content-wrapper">
-                    <div class="dashboard-comparison-wrapper pending-images-wrapper">
+                    <div class="moderation-page-actions">
+                        <a href="/moderation/dashboard" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-gauge-high"></i> Dashboard</a>
+                        <a href="/moderation/image-comparison" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-code-compare"></i> Compare</a>
+                    </div>
+                </div>
 
-                    {if $pending_count > 0}
-                        <table class="pending-images-table">
-                            <thead>
-                                <tr>
-                                    <th>Image Hash</th>
-                                    <th>Image Uploader</th>
-                                    <th>Upload Date</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {foreach $pending_rows as list($image_hash, $username, $created_at)}
-                                <tr>
-                                    <td>{$image_hash}</td>
-                                    <td>{ucfirst($username)}</td>
-                                    <td>{$created_at}</td>
-                                    <td>
-                                        <span class="hover-preview">
-                                            <button class="btn-view" title="View Image">
-                                                <i class="fa-solid fa-eye"></i>
-                                            </button>
+                <section class="moderation-panel">
+                    <div class="moderation-panel-heading">
+                        <div>
+                            <h3>Approval Queue</h3>
+                            <p>{$pending_count} image{if $pending_count != 1}s{/if} currently waiting for review.</p>
+                        </div>
+                    </div>
 
-                                            <span class="hover-preview-box">
-                                                <a href="/moderation/image-pending/{$image_hash}">
-                                                    <img src="/moderation/image-pending/{$image_hash}" alt="Preview">
-                                                </a>
-                                            </span>
-                                        </span>                                
+                    <div class="moderation-panel-body">
+                        {if $pending_count > 0}
+                            <div class="pending-images-wrapper">
+                                <table class="pending-images-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Image Hash</th>
+                                            <th>Image Uploader</th>
+                                            <th>Upload Date</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {foreach $pending_rows as list($image_hash, $username, $created_at)}
+                                        <tr>
+                                            <td class="is-wrap">{$image_hash}</td>
+                                            <td>{ucfirst($username)}</td>
+                                            <td>{$created_at}</td>
+                                            <td>
+                                                <div class="moderation-row-actions">
+                                                    <span class="hover-preview">
+                                                        <a
+                                                            class="btn-view moderation-preview-trigger"
+                                                            href="/moderation/image-pending/{$image_hash}"
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            aria-label="View Image"
+                                                            data-preview-href="/moderation/image-pending/{$image_hash}"
+                                                            data-preview-src="/moderation/image-pending/{$image_hash}"
+                                                        >
+                                                            <i class="fa-solid fa-eye"></i>
+                                                        </a>
+                                                    </span>
 
-                                        <button class="btn-edit" title="Edit Image"><i class="fa-solid fa-pen"></i></button>
+                                                    <button class="btn-edit" type="button" aria-label="Edit Image"><i class="fa-solid fa-pen"></i></button>
 
-                                        <form method="POST" action="/moderation/image-pending/approve/{$image_hash}" style="display:inline;">
-                                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                                            <button type="submit" class="btn-approve" title="Approve Image"><i class="fa-solid fa-check"></i></button>
-                                        </form>
+                                                    <form method="POST" action="/moderation/image-pending/approve/{$image_hash}" class="moderation-inline-form">
+                                                        <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                                        <button type="submit" class="btn-approve" aria-label="Approve Image"><i class="fa-solid fa-check"></i></button>
+                                                    </form>
 
-                                        <form method="POST" action="/moderation/image-pending/approve/sensitive/{$image_hash}" style="display:inline;" onsubmit="return confirm('Mark this image as sensitive?');">
-                                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                                            <button type="submit" class="btn-warning" title="Approve Sensitive Image"><i class="fa-solid fa-exclamation"></i></button>
-                                        </form>
+                                                    <form method="POST" action="/moderation/image-pending/approve/sensitive/{$image_hash}" class="moderation-inline-form" onsubmit="return confirm('Mark this image as sensitive?');">
+                                                        <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                                        <button type="submit" class="btn-warning" aria-label="Approve Sensitive Image"><i class="fa-solid fa-exclamation"></i></button>
+                                                    </form>
 
-                                        <form method="POST" action="/moderation/image-pending/reject/{$image_hash}" style="display:inline;" onsubmit="return confirm('Reject this image?');">
-                                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                                            <button type="submit" class="btn-reject" title="Reject Image"><i class="fa-solid fa-xmark"></i></button>
-                                        </form>
-                                    </td>
-                                </tr>
-                                {/foreach}
-                            </tbody>
-                        </table>
+                                                    <form method="POST" action="/moderation/image-pending/reject/{$image_hash}" class="moderation-inline-form" onsubmit="return confirm('Reject this image?');">
+                                                        <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                                        <button type="submit" class="btn-reject" aria-label="Reject Image"><i class="fa-solid fa-xmark"></i></button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {/foreach}
+                                    </tbody>
+                                </table>
+                            </div>
 
-                        {if $pagination_prev || $pagination_next}
-                            <div class="pending-pagination">
-                                {if $pagination_prev}
-                                <a href="{$pagination_prev}">Prev</a>
-                                {/if}
+                            {if $pagination_prev || $pagination_next}
+                                <div class="pending-pagination">
+                                    {if $pagination_prev}
+                                    <a href="{$pagination_prev}">Prev</a>
+                                    {/if}
 
-                                {foreach $pagination_pages as list($page_url, $page_number, $current)}
-                                <a href="{$page_url}" class="{if $current}current{/if}">{$page_number}</a>
-                                {/foreach}
+                                    {foreach $pagination_pages as list($page_url, $page_number, $current)}
+                                    <a href="{$page_url}" class="{if $current}current{/if}">{$page_number}</a>
+                                    {/foreach}
 
-                                {if $pagination_next}
-                                <a href="{$pagination_next}">Next</a>
-                                {/if}
+                                    {if $pagination_next}
+                                    <a href="{$pagination_next}">Next</a>
+                                    {/if}
+                                </div>
+                            {/if}
+                        {else}
+                            <div class="moderation-empty-state">
+                                <p>No pending images found.</p>
                             </div>
                         {/if}
-
-                    {else}
-                        <p class="no-pending-images">No pending images found.</p>
-                    {/if}
-
                     </div>
+                </section>
+                <div class="moderation-preview-portal" id="moderation-preview-portal" aria-hidden="true">
+                    <a href="#" class="moderation-preview-portal-link" tabindex="-1">
+                        <img src="" alt="Image preview" class="moderation-preview-portal-image">
+                    </a>
                 </div>
             </div>
         </div>
     </main>
+
+    <script src="/assets/js/moderation-pending-preview.js"></script>
+
 
 {include file="global/footer.html"}

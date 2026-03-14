@@ -90,7 +90,6 @@ $runtimeState = ControlServer::loadRuntimeState($config);
 
 $maintenanceModeEnabled = false;
 $siteOnline = !empty($runtimeState['site_online']);
-
 if ($controlServerAlive)
 {
     $maintenanceModeEnabled = !empty($heartbeatState['maintenance_mode']);
@@ -105,7 +104,6 @@ else
 }
 
 $siteOffline = ($controlServerRequired && !$controlServerAlive) || !$siteOnline || !ControlServer::serviceEnabled($config, 'site', $runtimeState);
-
 if ($siteOffline || $maintenanceModeEnabled)
 {
     $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
@@ -119,9 +117,9 @@ if ($siteOffline || $maintenanceModeEnabled)
 
     if ($siteOffline)
     {
-        $template->assign('title', 'Site Offline');
-        $template->assign('message', 'Oops, looks like our site is having some issues.');
-        $template->assign('submessage', 'Please try again in a moment.');
+        $template->assign('title', 'Service Temporarily Unavailable');
+        $template->assign('message', 'The site is temporarily offline for maintenance and platform updates.');
+        $template->assign('submessage', 'We’ll be back online as soon as this work is complete.');
         $template->assign('mode', 'offline');
     }
     else

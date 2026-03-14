@@ -1,100 +1,37 @@
 {include file="global/header.html"}
 
-    <main class="gallery-container-view">
+    <main class="gallery-container-view gallery-view-page">
         <div class="gallery-item-view">
-            <div class="gallery-left-side">
+            <aside class="gallery-left-side">
                 <div class="gallery-details-view">
                     <section>
-                        {if $is_logged_in}
-                        <div class="gallery-toolbar" data-live-toolbar="1">
-                            {if $can_edit_image}
-                            <button type="button" class="js-open-edit-image" title="Edit Image">
-                                <i class="fa-solid fa-pen-to-square"></i>
-                            </button>
-                            {/if}
-
-                            <button title="Image Views" data-live-views="1">
-                                <i class="fa-solid fa-eye"></i>
-                                <span data-live-views-count="1">{$img_views}</span>
-                            </button>
-        
-                            {if $img_has_favorited}
-                            <button title="Already Favorited" data-live-favorite-button="1" data-live-active="1">
-                                <i class="fa-solid fa-star"></i>
-                                <span data-live-favorites-count="1">{$img_favorites}</span>
-                            </button>
-                            {else}
-                            <form method="POST" action="/gallery/{$img_hash}/favorite" data-live-action-form="favorite">
-                                <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                                <button type="submit" title="Add Favorite" data-live-favorite-button="1">
-                                    <i class="fa-regular fa-star"></i>
-                                    <span data-live-favorites-count="1">{$img_favorites}</span>
-                                </button>
-                            </form>
-                            {/if}
-
-                            {if $img_has_voted}
-                            <button title="Already Upvoted" data-live-vote-button="1" data-live-active="1">
-                                <i class="fa-solid fa-thumbs-up"></i>
-                                <span data-live-votes-count="1">{$img_votes}</span>
-                            </button>
-                            {else}
-                            <form method="POST" action="/gallery/{$img_hash}/upvote" data-live-action-form="vote">
-                                <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                                <button type="submit" title="Up Vote" data-live-vote-button="1">
-                                    <i class="fa-regular fa-thumbs-up"></i>
-                                    <span data-live-votes-count="1">{$img_votes}</span>
-                                </button>
-                            </form>
-                            {/if}
-
-                            <button title="Report Image">
-                                <i class="fa-solid fa-flag"></i>
-                            </button>
+                        <div class="gallery-panel-heading">
+                            <span class="gallery-panel-kicker">Metadata</span>
+                            <h2>Technical Details</h2>
                         </div>
-                        {else}
-                        <div class="gallery-toolbar">
-                            <button title="Image Views" data-live-views="1">
-                                <i class="fa-solid fa-eye"></i>
-                                <span data-live-views-count="1">{$img_views}</span>
-                            </button>
 
-                            <button title="Login to Favorite" data-live-favorite-button="1">
-                                <i class="fa-regular fa-star"></i>
-                                <span data-live-favorites-count="1">{$img_favorites}</span>
-                            </button>
-
-                            <button title="Login to Upvote" data-live-vote-button="1">
-                                <i class="fa-regular fa-thumbs-up"></i>
-                                <span data-live-votes-count="1">{$img_votes}</span>
-                            </button>
-                        </div>
-                        {/if}
-                    </section>
-
-                    <section>
-                        <h3>Details</h3>
                         <ul>
-                            <li><strong>Image ID:</strong> {$img_hash}</li>
-                            <li><strong>File Type:</strong> {$img_mime_type}</li>
-                            <li><strong>Dimensions:</strong> {$img_width} × {$img_height} px</li>
-                            <li><strong>File Size:</strong> {$img_size}</li>
-                            <li><strong>Image Status:</strong> {$img_approved_status}</li>
-                            <li><strong>Uploaded By:</strong> {$img_username}</li>
-                            <li><strong>Upload Date:</strong> {$img_created_at}</li>
+                            <li><strong>Dimensions</strong> <span>{$img_width} × {$img_height} px</span></li>
+                            <li><strong>File Size</strong> <span>{$img_size}</span></li>
+                            <li><strong>Uploaded By</strong> <span>{$img_username}</span></li>
+                            <li><strong>Upload Date</strong> <span>{$img_created_at}</span></li>
                         </ul>
                     </section>
 
                     <section>
-                        <h3>Hashes</h3>
-                        <ul>
+                        <div class="gallery-panel-heading">
+                            <span class="gallery-panel-kicker">Integrity</span>
+                            <h2>Stored Hashes</h2>
+                        </div>
+
+                        <ul class="gallery-hash-list">
                             <li>
-                                <strong>MD5:</strong>
+                                <strong>MD5</strong>
                                 <small>{$img_md5}</small>
                             </li>
 
                             <li>
-                                <strong>SHA-1:</strong>
+                                <strong>SHA-1</strong>
                                 <small>{$img_sha1}</small>
                             </li>
                         </ul>
@@ -102,33 +39,131 @@
 
                     {if $img_description}
                     <section>
-                        <h3>Description</h3>
-                        <small>{$img_description}</small>
-                    </section>
-                    {/if}
-
-                    <section>
-                        <h5><a href="{$img_original_url}">View Image</a></h5>
-                        <h5><a href="#" class="js-open-comments">Comments (<span data-live-comments-count="1">{$img_comment_count}</span>)</a></h5>
-                    </section>
-
-                    {if $img_has_tag}
-                    <section>
-                        <h3>Tags</h3>
-
+                        <div class="gallery-panel-heading">
+                            <span class="gallery-panel-kicker">Caption</span>
+                            <h2>Description</h2>
+                        </div>
+                        <p class="gallery-description-block">{$img_description}</p>
                     </section>
                     {/if}
                 </div>
-            </div>
+            </aside>
 
-            <div class="gallery-image-wrapper">
+            <section class="gallery-image-wrapper">
+                <div class="gallery-image-header">
+                    <div>
+                        <span class="gallery-panel-kicker">Viewer</span>
+                        <h1>Image Display</h1>
+                        <p class="gallery-image-reference">Image Id: {$img_hash}</p>
+                    </div>
+
+                    <div class="gallery-image-statuses">
+                        <span class="gallery-image-pill">{$img_approved_status}</span>
+                        <span class="gallery-image-pill">{$img_mime_type}</span>
+                        <span class="gallery-image-pill">{if $img_age_sensitive}Sensitive{else}Standard{/if}</span>
+                    </div>
+                </div>
+
+                <div class="gallery-image-toolbar-row">
+                    <div class="gallery-view-primary-actions">
+                        <a href="{$img_original_url}" class="gallery-hero-btn is-primary">
+                            <i class="fa-solid fa-up-right-from-square"></i>
+                            View Original
+                        </a>
+
+                        <a href="#" class="gallery-hero-btn js-open-comments">
+                            <i class="fa-solid fa-comments"></i>
+                            Comments <span data-live-comments-count="1">{$img_comment_count}</span>
+                        </a>
+
+                        {if $can_edit_image}
+                        <button type="button" class="gallery-hero-btn gallery-hero-btn-button js-open-edit-image" aria-label="Edit Image">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                            Edit
+                        </button>
+                        {/if}
+
+                        <button type="button" class="gallery-hero-btn gallery-hero-btn-button" aria-label="Report Image">
+                            <i class="fa-solid fa-flag"></i>
+                            Report
+                        </button>
+                    </div>
+
+                    {if $is_logged_in}
+                    <div class="gallery-view-feedback-actions" data-live-toolbar="1">
+                        <div class="gallery-feedback-btn gallery-feedback-stat" aria-hidden="true">
+                            <i class="fa-regular fa-eye"></i>
+                            <span>Views</span>
+                            <b data-live-views-count="1">{$img_views}</b>
+                        </div>
+
+                        {if $img_has_favorited}
+                        <button type="button" class="gallery-feedback-btn" data-live-favorite-button="1" data-live-active="1" aria-label="Already Favorited">
+                            <i class="fa-solid fa-star"></i>
+                            <span>Favorite</span>
+                            <b data-live-favorites-count="1">{$img_favorites}</b>
+                        </button>
+                        {else}
+                        <form method="POST" action="/gallery/{$img_hash}/favorite" data-live-action-form="favorite">
+                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                            <button type="submit" class="gallery-feedback-btn" data-live-favorite-button="1" aria-label="Add Favorite">
+                                <i class="fa-regular fa-star"></i>
+                                <span>Favorite</span>
+                                <b data-live-favorites-count="1">{$img_favorites}</b>
+                            </button>
+                        </form>
+                        {/if}
+
+                        {if $img_has_voted}
+                        <button type="button" class="gallery-feedback-btn" data-live-vote-button="1" data-live-active="1" aria-label="Already Upvoted">
+                            <i class="fa-solid fa-thumbs-up"></i>
+                            <span>Like</span>
+                            <b data-live-votes-count="1">{$img_votes}</b>
+                        </button>
+                        {else}
+                        <form method="POST" action="/gallery/{$img_hash}/upvote" data-live-action-form="vote">
+                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                            <button type="submit" class="gallery-feedback-btn" data-live-vote-button="1" aria-label="Up Vote">
+                                <i class="fa-regular fa-thumbs-up"></i>
+                                <span>Like</span>
+                                <b data-live-votes-count="1">{$img_votes}</b>
+                            </button>
+                        </form>
+                        {/if}
+                    </div>
+                    {else}
+                    <div class="gallery-view-feedback-actions gallery-view-feedback-actions-guest">
+                        <div class="gallery-feedback-btn gallery-feedback-stat" aria-hidden="true">
+                            <i class="fa-regular fa-eye"></i>
+                            <span>Views</span>
+                            <b data-live-views-count="1">{$img_views}</b>
+                        </div>
+
+                        <button type="button" class="gallery-feedback-btn" data-live-favorite-button="1" aria-label="Login to Favorite">
+                            <i class="fa-regular fa-star"></i>
+                            <span>Favorite</span>
+                            <b data-live-favorites-count="1">{$img_favorites}</b>
+                        </button>
+
+                        <button type="button" class="gallery-feedback-btn" data-live-vote-button="1" aria-label="Login to Upvote">
+                            <i class="fa-regular fa-thumbs-up"></i>
+                            <span>Like</span>
+                            <b data-live-votes-count="1">{$img_votes}</b>
+                        </button>
+                    </div>
+                    {/if}
+                </div>
+
                 {if $img_age_sensitive || $img_reject_reason}
                 <div class="alert {$alert_color}">
                     {$alert_tag} {$alert_message} <a href="#">Learn more</a>
                 </div>
                 {/if}
-                <img src="{$img_original_url}" class="gallery-image-view">
-            </div>
+
+                <figure class="gallery-image-stage">
+                    <img src="{$img_original_url}" class="gallery-image-view" alt="Gallery image view">
+                </figure>
+            </section>
         </div>
     </main>
 
@@ -137,67 +172,65 @@
         <div class="edit-image-modal" role="dialog" aria-modal="true" aria-label="Edit Image">
             <div class="edit-image-modal-header">
                 <h3>Editing Image</h3>
-    
+
                 <button type="button" class="edit-image-modal-close js-close-edit-image" title="Close">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
-    
+
             {if $can_edit_image}
             <form method="POST" action="/gallery/{$img_hash}/edit" class="edit-image-modal-form">
                 <input type="hidden" name="csrf_token" value="{$csrf_token}">
-    
+
                 <div class="edit-image-field">
                     <label>Image ID</label>
                     <div class="edit-image-readonly">{$img_hash}</div>
                 </div>
-    
+
                 <div class="edit-image-field">
                     <label for="description">Description</label>
                     <textarea id="description" name="description" rows="5" placeholder="Write a description...">{$img_description}</textarea>
                 </div>
-    
+
                 <div class="edit-image-field">
                     <label for="tags">Tags (coming soon)</label>
                     <input id="tags" type="text" name="tags" placeholder="tag1 tag2 tag3" disabled>
                 </div>
-    
+
                 <div class="edit-image-actions">
                     <button type="submit">Save</button>
                 </div>
             </form>
             {else}
             <div class="edit-image-modal-denied">
-                <small>Sorry, you do not have permission to edit this image!</small>
+                <small>You do not have permission to edit this image.</small>
             </div>
             {/if}
         </div>
-    </div>    
-    {/if} 
+    </div>
+    {/if}
 
     <div class="comments-modal-overlay js-comments-overlay" aria-hidden="true">
         <div class="comments-modal" role="dialog" aria-modal="true" aria-label="Image Comments">
             <div class="comments-modal-header">
-                <h3>Total Comments ({$img_comment_count})</h3>
-    
+                <h3>Image Comments</h3>
+
                 <button type="button" class="comments-modal-close js-close-comments" title="Close">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
 
-            {if $is_logged_in}
-            <form method="POST" action="/gallery/{$img_hash}/comment" class="comments-modal-form">
-                <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                <textarea name="comment_body" rows="3" placeholder="Write a comment..." required></textarea>
-                <button type="submit">Post Comment</button>
-            </form>
-
             <div class="comments-modal-body">
-                {if $img_comment_count > 0}
-                <h3>User Comments</h3>
+                {if $is_logged_in}
+                <form method="POST" action="/gallery/{$img_hash}/comment" class="comments-modal-form">
+                    <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                    <textarea name="comment_body" rows="5" maxlength="500" placeholder="Write your comment..."></textarea>
+                    <button type="submit">Post Comment</button>
+                </form>
 
+                {if $comment_rows}
                 <div class="gallery-comments-list">
-                    <small>Showing <u>{$displayed_comments}</u> comment(s) per page.</small>
+                    <small>Comments are pulled from the latest approved conversation on this image page.</small>
                     {foreach $comment_rows as list($comment_username, $comment_created_at, $comment_body)}
                     <div class="gallery-comment">
                         <div class="gallery-comment-meta">
@@ -235,12 +268,12 @@
                     <small>Be the first to comment on this image!</small>
                 </div>
                 {/if}
+                {else}
+                <div class="comments-modal-footer">
+                    <small>Greetings guest! To view or post comments, please <a href="/user/register/">register</a> or <a href="/user/login">login</a>.</small>
+                </div>
+                {/if}
             </div>
-            {else}
-            <div class="comments-modal-footer">
-                <small>Greatings guest! To view or post comments, please <a href="/user/register/">register</a> or <a href="/user/login">login</a>.</small>
-            </div>
-            {/if}
 
         </div>
     </div>

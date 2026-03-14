@@ -1,55 +1,155 @@
 {include file="global/header.html"}
 
     <div class="profile-container">
-        {include file="profile/profile_menu.html"}
+        <div class="profile-shell profile-layout">
+            {include file="profile/profile_menu.html"}
 
-        <section class="profile-content">
-            <h1>Welcome, {$username}!</h1>
+            <section class="profile-content">
+                <div class="profile-dashboard">
+                    <div class="profile-page-header profile-page-header-overview">
+                        <div class="profile-page-identity">
+                            <div class="profile-page-avatar-wrap">
+                                {if $avatar_path}
+                                <img src="{$avatar_path}" alt="{$display_name}" class="profile-page-avatar">
+                                {else}
+                                <div class="profile-page-avatar profile-page-avatar-placeholder">
+                                    <i class="fa-regular fa-user"></i>
+                                </div>
+                                {/if}
+                            </div>
 
-            <div class="profile-info">
-                <div class="profile-info-column">
-                    {if $avatar_path}
-                    <h3>Avatar</h3>
-                    <img src="{$avatar_path}" alt="Avatar" class="profile-avatar">
-                    {/if}
+                            <div class="profile-page-copy">
+                                <div class="profile-kicker">Personal Space</div>
+                                <h1>{$display_name}</h1>
+                                <p>{$profile_page_description}</p>
 
-                    <h3>Status</h3>
-                    <div class="profile-value">{$account_status}</div>
+                                <div class="profile-badge-row">
+                                    <span class="profile-pill">{$account_role}</span>
+                                    <span class="profile-pill profile-pill-muted">{$account_status}</span>
+                                    <span class="profile-pill profile-pill-muted">Age {$age_verification_status}</span>
+                                </div>
+                            </div>
+                        </div>
 
-                    <h3>Role</h3>
-                    <div class="profile-value">{$account_role}</div>
+                        <div class="profile-page-actions">
+                            <a href="/profile/avatar" class="profile-action-btn is-primary"><i class="fa-regular fa-image"></i> Update Avatar</a>
+                            <a href="/profile/email" class="profile-action-btn"><i class="fa-regular fa-envelope"></i> Edit Email</a>
+                            <a href="/profile/change-password" class="profile-action-btn"><i class="fa-solid fa-key"></i> Security</a>
+                        </div>
+                    </div>
 
-                    <h3>Account Standing</h3>
-                    <div class="profile-value">&nbsp;</div>
+                    <div class="profile-stat-grid">
+                        <article class="profile-stat-card">
+                            <div class="profile-stat-label"><i class="fa-regular fa-image"></i> Approved Images</div>
+                            <div class="profile-stat-value">{$user_image_count}</div>
+                        </article>
 
-                    <h3>Display Name</h3>
-                    <div class="profile-value">&nbsp;</div>
+                        <article class="profile-stat-card">
+                            <div class="profile-stat-label"><i class="fa-regular fa-star"></i> Favorites</div>
+                            <div class="profile-stat-value">{$user_favorite_count}</div>
+                        </article>
+
+                        <article class="profile-stat-card">
+                            <div class="profile-stat-label"><i class="fa-regular fa-thumbs-up"></i> Upvotes</div>
+                            <div class="profile-stat-value">{$user_vote_count}</div>
+                        </article>
+
+                        <article class="profile-stat-card">
+                            <div class="profile-stat-label"><i class="fa-regular fa-clock"></i> Last Login</div>
+                            <div class="profile-stat-value profile-stat-value-small">{$last_login}</div>
+                        </article>
+                    </div>
+
+                    <div class="profile-overview-grid">
+                        <article class="profile-panel profile-summary-panel">
+                            <div class="profile-panel-header">
+                                <div>
+                                    <div class="profile-panel-kicker">Identity Snapshot</div>
+                                    <h2>Account presentation</h2>
+                                </div>
+                            </div>
+
+                            <div class="profile-summary-card">
+                                <div class="profile-summary-row">
+                                    <span>Display Name</span>
+                                    <strong>{$display_name}</strong>
+                                </div>
+                                <div class="profile-summary-row">
+                                    <span>Username</span>
+                                    <strong>@{$username}</strong>
+                                </div>
+                                <div class="profile-summary-row">
+                                    <span>Standing</span>
+                                    <strong>{$account_standing}</strong>
+                                </div>
+                                <div class="profile-summary-row">
+                                    <span>Registered</span>
+                                    <strong>{$registered_date}</strong>
+                                </div>
+                            </div>
+                        </article>
+
+                        <div class="profile-panel-stack">
+                            <article class="profile-panel">
+                                <div class="profile-panel-header">
+                                    <div>
+                                        <div class="profile-panel-kicker">Account Details</div>
+                                        <h2>Core account information</h2>
+                                    </div>
+                                </div>
+
+                                <div class="profile-detail-grid">
+                                    <div class="profile-detail-item">
+                                        <span>Email Address</span>
+                                        <strong>{$email}</strong>
+                                    </div>
+
+                                    <div class="profile-detail-item">
+                                        <span>Status</span>
+                                        <strong>{$account_status}</strong>
+                                    </div>
+                                </div>
+                            </article>
+
+                            <article class="profile-panel">
+                                <div class="profile-panel-header">
+                                    <div>
+                                        <div class="profile-panel-kicker">Quick Actions</div>
+                                        <h2>Recommended account upkeep</h2>
+                                    </div>
+                                </div>
+
+                                <div class="profile-shortcut-grid">
+                                    <a href="/profile/avatar" class="profile-shortcut-card">
+                                        <span class="profile-shortcut-icon"><i class="fa-regular fa-image"></i></span>
+                                        <strong>Avatar refresh</strong>
+                                        <small>Keep your profile card aligned with the site aesthetic.</small>
+                                    </a>
+
+                                    <a href="/profile/email" class="profile-shortcut-card">
+                                        <span class="profile-shortcut-icon"><i class="fa-regular fa-envelope"></i></span>
+                                        <strong>Email review</strong>
+                                        <small>Make sure recovery and verification notices still reach you.</small>
+                                    </a>
+
+                                    <a href="/profile/change-password" class="profile-shortcut-card">
+                                        <span class="profile-shortcut-icon"><i class="fa-solid fa-key"></i></span>
+                                        <strong>Security pass</strong>
+                                        <small>Rotate credentials if you have not updated them recently.</small>
+                                    </a>
+
+                                    <a href="/profile/dob" class="profile-shortcut-card">
+                                        <span class="profile-shortcut-icon"><i class="fa-regular fa-calendar"></i></span>
+                                        <strong>Age verification</strong>
+                                        <small>Manage access rules for sensitive content categories.</small>
+                                    </a>
+                                </div>
+                            </article>
+                        </div>
+                    </div>
                 </div>
-
-                <div class="profile-info-column">
-                    <h3>Email Address</h3>
-                    <div class="profile-value">{$email}</div>
-
-                    <h3>Date of Birth</h3>
-                    <div class="profile-value">{$date_of_birth}</div>
-
-                    <h3>Registered Date</h3>
-                    <div class="profile-value">{$registered_date}</div>
-
-                    <h3>Last Login</h3>
-                    <div class="profile-value">{$last_login}</div>
-
-                    <h3>Uploaded Images</h3>
-                    <div class="profile-value">{$user_image_count}</div>
-
-                    <h3>Image Favorites</h3>
-                    <div class="profile-value">{$user_favorite_count}</div>
-
-                    <h3>Image Upvotes</h3>
-                    <div class="profile-value">{$user_vote_count}</div>
-                </div>
-            </div>
-        </section>
+            </section>
+        </div>
     </div>
 
 {include file="global/footer.html"}

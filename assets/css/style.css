@@ -8,5 +8,6 @@
  */
 
 @import "default/alerts.css";
+@import "default/control-panels.css";
 @import "default/main.css";
 @import "default/error.css";

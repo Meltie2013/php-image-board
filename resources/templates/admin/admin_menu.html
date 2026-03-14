@@ -1,12 +1,78 @@
-<div class="admin-menu">
-    <h3>Admin Panel</h3>
+<div class="admin-menu-shell">
+    <div class="admin-menu-top">
+        <div class="admin-kicker">Administration Control Panel</div>
+        <h3>ACP</h3>
+    </div>
 
-    <ul>
-        <li><a href="/admin/dashboard">Dashboard</a></li>
-        <li><a href="/admin/users">Users</a></li>
-        <li><a href="/admin/users/create">Create User</a></li>
-        <li><a href="/admin/settings">App Settings</a></li>
-        <li><a href="/admin/security/logs">Security Logs</a></li>
-        <li><a href="/admin/security/blocks">Block List</a></li>
-    </ul>
+    <div class="admin-menu-group">
+        <span class="admin-menu-group-title">Overview</span>
+        <div class="admin-menu-links">
+            <a href="/admin/dashboard" class="admin-menu-link {if $current_admin_nav == 'dashboard'}is-active{/if}">
+                <span class="admin-menu-link-icon"><i class="fa-solid fa-gauge-high"></i></span>
+                <span class="admin-menu-link-text">
+                    <span class="admin-menu-link-title">Dashboard</span>
+                    <span class="admin-menu-link-desc">System overview, quick actions, and recent security events.</span>
+                </span>
+            </a>
+        </div>
+    </div>
+
+    <div class="admin-menu-group">
+        <span class="admin-menu-group-title">Accounts</span>
+        <div class="admin-menu-links">
+            <a href="/admin/users" class="admin-menu-link {if $current_admin_nav == 'users'}is-active{/if}">
+                <span class="admin-menu-link-icon"><i class="fa-solid fa-users"></i></span>
+                <span class="admin-menu-link-text">
+                    <span class="admin-menu-link-title">Users</span>
+                    <span class="admin-menu-link-desc">Review accounts, roles, statuses, and creation dates.</span>
+                </span>
+            </a>
+
+            <a href="/admin/users/create" class="admin-menu-link {if $current_admin_nav == 'users_create'}is-active{/if}">
+                <span class="admin-menu-link-icon"><i class="fa-solid fa-user-plus"></i></span>
+                <span class="admin-menu-link-text">
+                    <span class="admin-menu-link-title">Create User</span>
+                    <span class="admin-menu-link-desc">Provision a new account with the proper permissions.</span>
+                </span>
+            </a>
+        </div>
+    </div>
+
+    <div class="admin-menu-group">
+        <span class="admin-menu-group-title">Configuration</span>
+        <div class="admin-menu-links">
+            <a href="/admin/settings" class="admin-menu-link {if $current_admin_nav == 'settings'}is-active{/if}">
+                <span class="admin-menu-link-icon"><i class="fa-solid fa-sliders"></i></span>
+                <span class="admin-menu-link-text">
+                    <span class="admin-menu-link-title">App Settings</span>
+                    <span class="admin-menu-link-desc">Manage configuration keys for gallery, forum, chat, and security.</span>
+                </span>
+            </a>
+        </div>
+    </div>
+
+    <div class="admin-menu-group">
+        <span class="admin-menu-group-title">Security</span>
+        <div class="admin-menu-links">
+            <a href="/admin/security/logs" class="admin-menu-link {if $current_admin_nav == 'security_logs'}is-active{/if}">
+                <span class="admin-menu-link-icon"><i class="fa-solid fa-shield-halved"></i></span>
+                <span class="admin-menu-link-text">
+                    <span class="admin-menu-link-title">Security Logs</span>
+                    <span class="admin-menu-link-desc">Inspect audit history, request traces, and event categories.</span>
+                </span>
+            </a>
+
+            <a href="/admin/security/blocks" class="admin-menu-link {if $current_admin_nav == 'block_list'}is-active{/if}">
+                <span class="admin-menu-link-icon"><i class="fa-solid fa-ban"></i></span>
+                <span class="admin-menu-link-text">
+                    <span class="admin-menu-link-title">Block List</span>
+                    <span class="admin-menu-link-desc">Control bans, jails, rate-limits, and other enforcement records.</span>
+                </span>
+            </a>
+        </div>
+    </div>
+
+    <div class="admin-menu-footer">
+
+    </div>
 </div>

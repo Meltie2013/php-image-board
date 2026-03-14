@@ -3,70 +3,43 @@
 /**
  * Controller responsible for the moderation and admin dashboard.
  */
-class ModerationController
+class ModerationController extends BaseController
 {
     /**
-     * Cached config for controller usage.
+     * Static template variables assigned for all moderation templates.
      *
      * @var array
      */
-    private static array $config;
+    protected static array $templateAssignments = [
+        'is_gallery_page' => 1,
+        'is_moderation_panel' => 1,
+    ];
 
     /**
-     * Load and cache config once per request.
+     * Moderation templates require a CSRF token for moderation actions.
      *
-     * @return array
+     * @var bool
      */
-    private static function getConfig(): array
-    {
-        if (empty(self::$config))
-        {
-            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require CONFIG_PATH . '/config.php');
-        }
-        return self::$config;
-    }
+    protected static bool $templateUsesCsrf = true;
 
     /**
-     * Initialize template engine with optional cache clearing.
+     * Assign shared moderation page metadata for the sidebar and page header.
      *
-     * @return TemplateEngine
+     * @param TemplateEngine $template Active template engine instance.
+     * @param string $nav Current navigation key for sidebar highlighting.
+     * @param string $title Current page title.
+     * @param string $description Current page summary/description.
+     * @param string $section Current sidebar section key.
+     * @return void
      */
-    private static function initTemplate(): TemplateEngine
+    private static function assignModerationPage(TemplateEngine $template, string $nav, string $title, string $description, string $section = ''): void
     {
-        $config = self::getConfig();
-        $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
-        if (!empty($config['template']['disable_cache']))
-        {
-            $template->clearCache();
-        }        // Mark this request as a moderation panel page so the header can include
-        // moderation-specific styling.
-        $template->assign('is_gallery_page', 1);
-        $template->assign('is_moderation_panel', 1);
-
-
-        $template->assign('csrf_token', Security::generateCsrfToken());
-        return $template;
+        $template->assign('current_moderation_nav', $nav);
+        $template->assign('current_moderation_section', $section);
+        $template->assign('moderation_page_title', $title);
+        $template->assign('moderation_page_description', $description);
     }
 
-    /**
-     * Retrieve a username by user ID.
-     *
-     * @param int|null $userId ID of the user, or null if not available.
-     * @return string Username if found, otherwise empty string.
-     */
-    private static function getUsernameById(?int $userId): string
-    {
-        if ($userId === null)
-        {
-            return '';
-        }
-
-        // Query to fetch username by user ID
-        $sql = "SELECT username FROM app_users WHERE id = :id LIMIT 1";
-        $result = Database::fetch($sql, [':id' => $userId]);
-
-        return $result['username'] ?? '';
-    }
 
     /**
      * Moderation panel dashboard.
@@ -104,12 +77,8 @@ class ModerationController
         $storage_total = StorageHelper::getMaxStorageReadable();
         $storage_percent = StorageHelper::getStorageUsagePercent();
 
-        // Get percentage as numeric value
-        $percentString = StorageHelper::getStorageUsagePercent(2);
-        $percentNumeric = TypeHelper::toFloat(rtrim($percentString, '%')) ?? 0.0;
-
-        // Convert to degrees for conic-gradient
-        $storage_usage_percent = ($percentNumeric / 100) * 360 . 'deg';
+        // Preserve the percent as CSS-ready width for the storage fill meter.
+        $storage_usage_percent = StorageHelper::getStorageUsagePercent(2);
 
         // Assign flat template variables
         $template->assign('total_images', NumericalHelper::formatCount($total_images));
@@ -124,6 +93,14 @@ class ModerationController
         $template->assign('storage_total', $storage_total);
         $template->assign('storage_percent', $storage_percent);
         $template->assign('storage_usage_percent', $storage_usage_percent);
+
+        self::assignModerationPage(
+            $template,
+            'dashboard',
+            'Dashboard',
+            'Central visibility for approval queues, media volume, and storage pressure across the gallery.',
+            'overview'
+        );
 
         $template->render('moderation/moderation_dashboard.html');
     }
@@ -205,6 +182,14 @@ class ModerationController
         $template->assign('pagination_prev', $paginationPrev);
         $template->assign('pagination_next', $paginationNext);
 
+        self::assignModerationPage(
+            $template,
+            'pending',
+            'Pending Images',
+            'Review queued uploads, inspect previews, and approve or reject submissions with a faster moderation flow.',
+            'queue'
+        );
+
         $template->render('moderation/moderation_pending.html');
     }
 
@@ -240,10 +225,7 @@ class ModerationController
         // Verify CSRF token to prevent cross-site request forgery
         if (!Security::verifyCsrfToken($csrfToken))
         {
-            http_response_code(403);
-            $template->assign('title', 'Access Denied');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
+            self::renderInvalidRequest($template);
             return;
         }
 
@@ -252,10 +234,7 @@ class ModerationController
         $hash = TypeHelper::toString($hash);
         if ($hash === '')
         {
-            http_response_code(404);
-            $template->assign('title', '404 Not Found');
-            $template->assign('message', 'Oops! We couldn’t find that image.');
-            $template->render('errors/error_page.html');
+            self::renderErrorPage(404, '404 Not Found', 'Oops! We couldn’t find that image.', $template);
             return;
         }
 
@@ -268,10 +247,7 @@ class ModerationController
 
         if (!$image)
         {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
+            self::renderImageNotFound($template);
             return;
         }
 
@@ -333,10 +309,7 @@ class ModerationController
         // Verify CSRF token to prevent cross-site request forgery
         if (!Security::verifyCsrfToken($csrfToken))
         {
-            http_response_code(403);
-            $template->assign('title', 'Access Denied');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
+            self::renderInvalidRequest($template);
             return;
         }
 
@@ -345,10 +318,7 @@ class ModerationController
         $hash = TypeHelper::toString($hash);
         if ($hash === '')
         {
-            http_response_code(404);
-            $template->assign('title', '404 Not Found');
-            $template->assign('message', 'Oops! We couldn’t find that image.');
-            $template->render('errors/error_page.html');
+            self::renderErrorPage(404, '404 Not Found', 'Oops! We couldn’t find that image.', $template);
             return;
         }
 
@@ -361,10 +331,7 @@ class ModerationController
 
         if (!$image)
         {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
+            self::renderImageNotFound($template);
             return;
         }
 
@@ -427,10 +394,7 @@ class ModerationController
         // Verify CSRF token to prevent cross-site request forgery
         if (!Security::verifyCsrfToken($csrfToken))
         {
-            http_response_code(403);
-            $template->assign('title', 'Access Denied');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
+            self::renderInvalidRequest($template);
             return;
         }
 
@@ -439,10 +403,7 @@ class ModerationController
         $hash = TypeHelper::toString($hash);
         if ($hash === '')
         {
-            http_response_code(404);
-            $template->assign('title', '404 Not Found');
-            $template->assign('message', 'Oops! We couldn’t find that image.');
-            $template->render('errors/error_page.html');
+            self::renderErrorPage(404, '404 Not Found', 'Oops! We couldn’t find that image.', $template);
             return;
         }
 
@@ -455,10 +416,7 @@ class ModerationController
 
         if (!$image)
         {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
+            self::renderImageNotFound($template);
             return;
         }
 
@@ -581,6 +539,14 @@ class ModerationController
         $template->assign('selected_image1_original_path', !empty($selectedImage1['image_hash']) ? '/gallery/original/' . $selectedImage1['image_hash'] : '');
         $template->assign('selected_image2_hash', $selectedImage2['image_hash'] ?? '');
         $template->assign('selected_image2_original_path', !empty($selectedImage2['image_hash']) ? '/gallery/original/' . $selectedImage2['image_hash'] : '');
+
+        self::assignModerationPage(
+            $template,
+            'comparison',
+            'Image Comparison',
+            'Compare two approved uploads side-by-side and review hash similarity before taking moderation action.',
+            'tools'
+        );
 
         $template->render('moderation/moderation_comparison.html');
     }
@@ -733,6 +699,14 @@ class ModerationController
         $template->assign('processed_images', $processedImages);
         $template->assign('message', $message);
 
+        self::assignModerationPage(
+            $template,
+            'rehash',
+            'Image Rehashing',
+            'Rebuild perceptual hash data for approved uploads when legacy records need to be refreshed or repaired.',
+            'tools'
+        );
+
         // Render moderation panel template with rehash tool
         $template->render('moderation/moderation_rehash.html');
     }
@@ -765,10 +739,7 @@ class ModerationController
 
         if (!$image)
         {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
+            self::renderImageNotFound($template);
             return;
         }
 
@@ -777,10 +748,7 @@ class ModerationController
 
         if (!$fullPath || strpos($fullPath, $baseDir) !== 0 || !file_exists($fullPath))
         {
-            http_response_code(404);
-            $template->assign('title', 'Image Not Found');
-            $template->assign('message', 'The requested image could not be found.');
-            $template->render('errors/error_page.html');
+            self::renderImageNotFound($template);
             return;
         }
 

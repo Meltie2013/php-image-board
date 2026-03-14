@@ -12,79 +12,36 @@
  * - Administrator role required
  * - CSRF validation for all state-changing actions
  */
-class AdminController
+class AdminController extends BaseController
 {
     /**
-     * Cached configuration for controller usage.
-     *
-     * Stored statically so configuration is loaded once per request and reused
-     * across controller actions without repeated disk reads.
+     * Static template variables assigned for all admin templates.
      *
      * @var array
      */
-    private static array $config;
+    protected static array $templateAssignments = [
+        'is_gallery_page' => 1,
+        'is_admin_panel' => 1,
+    ];
 
     /**
-     * Load and cache config once per request.
+     * Assign shared administration page metadata used by the menu and page hero.
      *
-     * Uses SettingsManager when available/initialized, otherwise falls back to
-     * reading config/config.php from disk.
-     *
-     * @return array
+     * @param TemplateEngine $template Active template engine instance.
+     * @param string $nav Current navigation key for sidebar highlighting.
+     * @param string $title Current page title.
+     * @param string $description Current page summary/description.
+     * @param string $section Current sidebar section key.
+     * @return void
      */
-    private static function getConfig(): array
+    private static function assignAdminPage(TemplateEngine $template, string $nav, string $title, string $description, string $section = ''): void
     {
-        if (empty(self::$config))
-        {
-            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require CONFIG_PATH . '/config.php');
-        }
-
-        return self::$config;
+        $template->assign('current_admin_nav', $nav);
+        $template->assign('current_admin_section', $section);
+        $template->assign('admin_page_title', $title);
+        $template->assign('admin_page_description', $description);
     }
 
-    /**
-     * Initialize the template engine for admin panel pages.
-     *
-     * Creates TemplateEngine and assigns admin panel marker variables used by
-     * header/navigation templates to render admin-specific styling.
-     *
-     * @return TemplateEngine
-     */
-    private static function initTemplate(): TemplateEngine
-    {
-        $config = self::getConfig();
-        $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
-        if (!empty($config['template']['disable_cache']))
-        {
-            $template->clearCache();
-        }        // Mark this request as an admin panel page so the header can include
-        // admin-specific styling.
-        $template->assign('is_gallery_page', 1);
-        $template->assign('is_admin_panel', 1);
-
-        return $template;
-    }
-
-    /**
-     * Retrieve a username by user ID.
-     *
-     * Used for display purposes in the gallery UI. Returns an empty string when
-     * the user ID is missing or no matching user is found.
-     *
-     * @param int|null $userId ID of the user, or null if not available.
-     * @return string Username if found, otherwise empty string.
-     */
-    private static function getUsernameById(?int $userId): string
-    {
-        if ($userId === null)
-        {
-            return '';
-        }
-
-        // Query to fetch username by user ID
-        $result = Database::fetch("SELECT username FROM app_users WHERE id = :id LIMIT 1", [':id' => $userId]);
-        return TypeHelper::toString($result['username']) ?? '';
-    }
 
     /**
      * Enforce administrator authorization for the current request.
@@ -101,11 +58,8 @@ class AdminController
 
         if (!$userId || $role !== 'Administrator')
         {
-            http_response_code(403);
             $template = self::initTemplate();
-            $template->assign('title', 'Access Denied');
-            $template->assign('message', 'Administrator access required.');
-            $template->render('errors/error_page.html');
+            self::renderErrorPage(403, 'Access Denied', 'Administrator access required.', $template);
             exit();
         }
     }
@@ -139,7 +93,7 @@ class AdminController
 
         try
         {
-            $rows = Database::fetchAll("SELECT id, user_id, category, message, created_at FROM app_security_logs ORDER BY id DESC LIMIT 15");
+            $rows = Database::fetchAll("SELECT id, user_id, category, message, created_at FROM app_security_logs ORDER BY id DESC LIMIT 5");
             foreach ($rows as $r)
             {
                 $recentLogs[] = [
@@ -154,6 +108,14 @@ class AdminController
         {
             $recentLogs = [];
         }
+
+        self::assignAdminPage(
+            $template,
+            'dashboard',
+            'Dashboard',
+            'Central visibility for users, moderation pressure, and recent security activity.',
+            'overview'
+        );
 
         $template->assign('total_users', $totalUsers);
         $template->assign('active_blocks', $activeBlocks);
@@ -205,6 +167,14 @@ class AdminController
                 TypeHelper::toString($r['name'] ?? ''),
             ];
         }
+
+        self::assignAdminPage(
+            $template,
+            'users',
+            'User Management',
+            'Review member accounts, roles, and account states from a single control surface.',
+            'accounts'
+        );
 
         $template->assign('users', $users);
         $template->assign('roles', $roles);
@@ -290,6 +260,14 @@ class AdminController
                 TypeHelper::toString($r['name'] ?? ''),
             ];
         }
+
+        self::assignAdminPage(
+            $template,
+            'users_create',
+            'Create User',
+            'Create a new account with the correct role, status, and profile defaults.',
+            'accounts'
+        );
 
         $template->assign('roles', $roles);
         $template->assign('csrf_token', Security::generateCsrfToken());
@@ -409,6 +387,14 @@ class AdminController
             ];
         }
 
+        self::assignAdminPage(
+            $template,
+            'users',
+            'Edit User',
+            'Update account identity, status, role assignments, and password data.',
+            'accounts'
+        );
+
         $template->assign('user_id', TypeHelper::toInt($user['id'] ?? ''));
         $template->assign('user_role_id', TypeHelper::toInt($user['role_id'] ?? ''));
         $template->assign('user_username', TypeHelper::toString($user['username'] ?? ''));
@@ -436,6 +422,25 @@ class AdminController
 
         $template = self::initTemplate();
 
+        $notice = '';
+        $noticeType = '';
+        $settingsError = Security::sanitizeString($_GET['error'] ?? '');
+        if (isset($_GET['success']))
+        {
+            $notice = 'Setting saved successfully.';
+            $noticeType = 'success';
+        }
+        else if ($settingsError === 'csrf')
+        {
+            $notice = 'The request could not be verified. Please try again.';
+            $noticeType = 'error';
+        }
+        else if ($settingsError === 'key')
+        {
+            $notice = 'A setting key is required before saving.';
+            $noticeType = 'error';
+        }
+
         $rows = Database::fetchAll("SELECT `key`, `value`, `type`, updated_at FROM app_settings ORDER BY `key` ASC");
         $settings = [];
         foreach ($rows as $s)
@@ -459,8 +464,18 @@ class AdminController
             ];
         }
 
+        self::assignAdminPage(
+            $template,
+            'settings',
+            'Application Settings',
+            'Manage the site configuration keys that power gallery, chat, forum, and security behaviour.',
+            'configuration'
+        );
+
         $template->assign('settings', $settings);
         $template->assign('csrf_token', Security::generateCsrfToken());
+        $template->assign('admin_notice', $notice);
+        $template->assign('admin_notice_type', $noticeType);
         $template->render('admin/admin_settings.html');
     }
 
@@ -533,6 +548,35 @@ class AdminController
         self::requireAdmin();
 
         $template = self::initTemplate();
+
+        $notice = '';
+        $noticeType = '';
+        $blockError = Security::sanitizeString($_GET['error'] ?? '');
+        if (isset($_GET['created']))
+        {
+            $notice = 'Block entry saved successfully.';
+            $noticeType = 'success';
+        }
+        else if (isset($_GET['removed']))
+        {
+            $notice = 'Matching block entry records were removed.';
+            $noticeType = 'success';
+        }
+        else if ($blockError === 'csrf')
+        {
+            $notice = 'The request could not be verified. Please try again.';
+            $noticeType = 'error';
+        }
+        else if ($blockError === 'scope')
+        {
+            $notice = 'Choose a user, IP address, or fingerprint before creating a block entry.';
+            $noticeType = 'error';
+        }
+        else if ($blockError === 'match')
+        {
+            $notice = 'Provide at least one block match value before removing entries.';
+            $noticeType = 'error';
+        }
 
         $filters = [
             'ip' => Security::sanitizeString($_GET['ip'] ?? ''),
@@ -749,6 +793,14 @@ class AdminController
             $pagination_pages[] = [$buildUrl($totalPages), $totalPages, false];
         }
 
+        self::assignAdminPage(
+            $template,
+            'security_logs',
+            'Security Logs',
+            'Filter and review audit events before drilling into the full request details.',
+            'security'
+        );
+
         $template->assign('logs', $logs);
         $template->assign('filter_ip', TypeHelper::toString(inet_ntop(hex2bin($filters['ip']))));
         $template->assign('filter_fingerprint', TypeHelper::toString($filters['fingerprint']));
@@ -806,6 +858,14 @@ class AdminController
             exit();
         }
 
+        self::assignAdminPage(
+            $template,
+            'security_logs',
+            'Security Log Details',
+            'Inspect the full event payload, client details, and audit metadata for a single entry.',
+            'security'
+        );
+
         $template->assign('log_id', TypeHelper::toString($log['id'] ?? ''));
         $template->assign('log_created_at', TypeHelper::toString(DateHelper::date_only_format($log['created_at']) ?? ''));
         $template->assign('log_category', TypeHelper::toString($log['category'] ?? ''));
@@ -832,6 +892,35 @@ class AdminController
         self::requireAdmin();
 
         $template = self::initTemplate();
+
+        $notice = '';
+        $noticeType = '';
+        $blockError = Security::sanitizeString($_GET['error'] ?? '');
+        if (isset($_GET['created']))
+        {
+            $notice = 'Block entry saved successfully.';
+            $noticeType = 'success';
+        }
+        else if (isset($_GET['removed']))
+        {
+            $notice = 'Matching block entry records were removed.';
+            $noticeType = 'success';
+        }
+        else if ($blockError === 'csrf')
+        {
+            $notice = 'The request could not be verified. Please try again.';
+            $noticeType = 'error';
+        }
+        else if ($blockError === 'scope')
+        {
+            $notice = 'Choose a user, IP address, or fingerprint before creating a block entry.';
+            $noticeType = 'error';
+        }
+        else if ($blockError === 'match')
+        {
+            $notice = 'Provide at least one block match value before removing entries.';
+            $noticeType = 'error';
+        }
 
         $filters = [
             'ip' => Security::sanitizeString($_GET['ip'] ?? ''),
@@ -906,7 +995,17 @@ class AdminController
             ];
         }
 
+        self::assignAdminPage(
+            $template,
+            'block_list',
+            'Block List',
+            'Create, review, and remove temporary or permanent enforcement records.',
+            'security'
+        );
+
         $template->assign('blocks', $blocks);
+        $template->assign('admin_notice', $notice);
+        $template->assign('admin_notice_type', $noticeType);
         $template->assign('filter_ip', TypeHelper::toString($filters['ip']));
         $template->assign('filter_fingerprint', TypeHelper::toString($filters['fingerprint']));
         $template->assign('filter_user_id', TypeHelper::toString($filters['user_id']));
@@ -1110,6 +1209,13 @@ class AdminController
         }
 
         $template = self::initTemplate();
+        self::assignAdminPage(
+            $template,
+            'block_list',
+            'Edit Block Entry',
+            'Adjust the status, reason, and expiration for an existing enforcement record.',
+            'security'
+        );
         $template->assign('block_id', TypeHelper::toInt($block['id'] ?? ''));
         $template->assign('block_scope', TypeHelper::toString($block['scope'] ?? ''));
         $template->assign('block_status', TypeHelper::toString($block['status'] ?? ''));

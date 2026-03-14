@@ -13,48 +13,70 @@
  * - CSRF protection for state-changing form submissions
  * - Uploaded avatars are validated before storage
  */
-class ProfileController
+class ProfileController extends BaseController
 {
     /**
-     * Cached config for controller usage.
+     * Static template variables assigned for all profile templates.
      *
      * @var array
      */
-    private static array $config;
+    protected static array $templateAssignments = [
+        'is_profile_page' => 1,
+    ];
 
     /**
-     * Load and cache config once per request.
+     * Profile templates require a CSRF token for account actions.
      *
-     * @return array
+     * @var bool
      */
-    private static function getConfig(): array
-    {
-        if (empty(self::$config))
-        {
-            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require CONFIG_PATH . '/config.php');
-        }
+    protected static bool $templateUsesCsrf = true;
 
-        return self::$config;
+    /**
+     * Assign shared profile page metadata used by the sidebar and page header.
+     *
+     * @param TemplateEngine $template Active template engine instance.
+     * @param string $nav Current navigation key for sidebar highlighting.
+     * @param string $title Current page title.
+     * @param string $description Current page summary/description.
+     * @param string $section Current sidebar section key.
+     * @return void
+     */
+    private static function assignProfilePage(TemplateEngine $template, string $nav, string $title, string $description, string $section = ''): void
+    {
+        $template->assign('current_profile_nav', $nav);
+        $template->assign('current_profile_section', $section);
+        $template->assign('profile_page_title', $title);
+        $template->assign('profile_page_description', $description);
     }
 
     /**
-     * Initialize template engine with optional cache clearing.
+     * Assign shared profile shell data used by the sidebar and overview hero.
      *
-     * @return TemplateEngine
+     * @param TemplateEngine $template Active template engine instance.
+     * @param array $user Current user record.
+     * @return void
      */
-    private static function initTemplate(): TemplateEngine
+    private static function assignProfileChrome(TemplateEngine $template, array $user): void
     {
-        $config = self::getConfig();
-        $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
-        if (!empty($config['template']['disable_cache']))
+        $username = TypeHelper::toString($user['username'] ?? '') ?? '';
+        $displayName = trim(TypeHelper::toString($user['display_name'] ?? '') ?? '');
+        if ($displayName === '')
         {
-            $template->clearCache();
+            $displayName = ucfirst($username);
         }
 
+        $status = ucfirst(TypeHelper::toString($user['status'] ?? 'active') ?? 'Active');
+        $roleName = RoleHelper::getRoleNameById(TypeHelper::toInt($user['role_id'] ?? null));
+        $ageVerified = !empty($user['age_verified_at']) || !empty($user['date_of_birth']);
 
-        $template->assign('is_profile_page', 1);
-        $template->assign('csrf_token', Security::generateCsrfToken());
-        return $template;
+        $template->assign('profile_username', ucfirst($username));
+        $template->assign('profile_display_name', $displayName);
+        $template->assign('profile_avatar_path', $user['avatar_path'] ?? '');
+        $template->assign('profile_status', $status);
+        $template->assign('profile_role_name', $roleName ?: 'Member');
+        $template->assign('profile_email', $user['email'] ?? '');
+        $template->assign('profile_age_status', $ageVerified ? 'Verified' : 'Pending');
+        $template->assign('profile_member_since', !empty($user['created_at']) ? DateHelper::format($user['created_at']) : 'Unknown');
     }
 
     /**
@@ -117,9 +139,7 @@ class ProfileController
                 return strncmp($header, "ÿØÿ", 3) === 0;
 
             case 'image/png':
-                return strncmp($header, "PNG
-
-", 8) === 0;
+                return strncmp($header, "PNG\r\n\x1A\n", 8) === 0;
 
             case 'image/gif':
                 return strncmp($header, 'GIF87a', 6) === 0 || strncmp($header, 'GIF89a', 6) === 0;
@@ -141,7 +161,7 @@ class ProfileController
     {
         // Require login
         RoleHelper::requireLogin();
-    
+
         // Fetch current user data from database
         $userId = TypeHelper::toInt(SessionManager::get('user_id'));
         $user = Database::fetch(
@@ -149,9 +169,11 @@ class ProfileController
                 u.id,
                 u.role_id,
                 u.username,
+                u.display_name,
                 u.email,
                 u.avatar_path,
                 u.date_of_birth,
+                u.age_verified_at,
                 u.status,
                 u.last_login,
                 u.created_at,
@@ -171,20 +193,39 @@ class ProfileController
              WHERE u.id = :id LIMIT 1",
             ['id' => $userId]
         );
-    
+
         $uploadedImages = Database::fetch(
             "SELECT COUNT(*) AS count FROM app_images WHERE user_id = :id AND status = 'approved'",
             ['id' => $userId]
         );
-    
+
         // Initialize template engine with caching support
         $template = self::initTemplate();
-    
+        self::assignProfileChrome($template, $user ?: []);
+        self::assignProfilePage(
+            $template,
+            'overview',
+            'Profile Overview',
+            'A summary of your account identity, activity, and visibility across the image board.',
+            'account'
+        );
+
+        $displayName = trim(TypeHelper::toString($user['display_name'] ?? '') ?? '');
+        if ($displayName === '')
+        {
+            $displayName = ucfirst(TypeHelper::toString($user['username'] ?? '') ?? '');
+        }
+
+        $accountStatus = ucfirst(TypeHelper::toString($user['status'] ?? 'active') ?? 'Active');
+
         // Assign user data to template variables
         $template->assign('avatar_path', $user['avatar_path']);
         $template->assign('username', ucfirst($user['username']));
+        $template->assign('display_name', $displayName);
         $template->assign('account_role', RoleHelper::getRoleNameById($user['role_id']));
-        $template->assign('account_status', ucfirst($user['status']));
+        $template->assign('account_status', $accountStatus);
+        $template->assign('account_standing', strtolower($accountStatus) === 'active' ? 'In good standing' : $accountStatus);
+        $template->assign('age_verification_status', !empty($user['age_verified_at']) ? 'Verified' : 'Pending');
         $template->assign('email', $user['email']);
         $template->assign('last_login', DateHelper::format($user['last_login']));
         $template->assign('date_of_birth', DateHelper::birthday_format($user['date_of_birth']) ?? 'Not set');
@@ -192,10 +233,10 @@ class ProfileController
         $template->assign('user_image_count', NumericalHelper::formatCount($uploadedImages['count']));
         $template->assign('user_favorite_count', NumericalHelper::formatCount($user['favorite_count']));
         $template->assign('user_vote_count', NumericalHelper::formatCount($user['vote_count']));
-    
+
         // Render profile overview template
         $template->render('profile/profile_overview.html');
-    }    
+    }
 
     /**
      * Avatar update page.
@@ -268,7 +309,22 @@ class ProfileController
             $errors[] = "User not found.";
         }
 
-        $user = Database::fetch("SELECT id, username, display_name, email, avatar_path, date_of_birth, password_hash, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
+        $user = Database::fetch(
+            "SELECT
+                id,
+                role_id,
+                username,
+                display_name,
+                email,
+                avatar_path,
+                date_of_birth,
+                status,
+                last_login,
+                created_at,
+                password_hash,
+                age_verified_at
+             FROM app_users
+             WHERE id = :id LIMIT 1",
             ['id' => $userId]
         );
 
@@ -331,6 +387,7 @@ class ProfileController
 
                         $success = "Date of birth updated successfully.";
                         $user['date_of_birth'] = $dob;
+                        $user['age_verified_at'] = date('Y-m-d H:i:s');
                     }
                     break;
 
@@ -573,12 +630,58 @@ class ProfileController
 
         // Initialize template engine
         $template = self::initTemplate();
+        self::assignProfileChrome($template, $user ?: []);
+
+        switch ($type)
+        {
+            case 'avatar':
+                self::assignProfilePage(
+                    $template,
+                    'avatar',
+                    'Profile Avatar',
+                    'Refresh the identity badge used across your account pages with a square avatar that fits the board aesthetic.',
+                    'account'
+                );
+                break;
+
+            case 'email':
+                self::assignProfilePage(
+                    $template,
+                    'email',
+                    'Email Address',
+                    'Keep your recovery and verification address current so future account notices always reach you.',
+                    'account'
+                );
+                break;
+
+            case 'dob':
+                self::assignProfilePage(
+                    $template,
+                    'dob',
+                    'Date of Birth',
+                    'Manage age verification for sensitive content access while preserving a clear record inside your account center.',
+                    'security'
+                );
+                break;
+
+            case 'change_password':
+            default:
+                self::assignProfilePage(
+                    $template,
+                    'change_password',
+                    'Password & Security',
+                    'Update your credentials with a cleaner security workflow designed to keep the account area polished and trustworthy.',
+                    'security'
+                );
+                break;
+        }
 
         // Assign template variables
         $template->assign('avatar_size', $config['profile']['avatar_size']);
         $template->assign('email', $user['email']);
         $template->assign('avatar_path', $user['avatar_path']);
         $template->assign('date_of_birth', $user['date_of_birth'] ?? '');
+        $template->assign('date_of_birth_format', DateHelper::birthday_format($user['date_of_birth']) ?? 'Not set');
         $template->assign('user', $user);
         $template->assign('error', $errors);
         $template->assign('success', $success);

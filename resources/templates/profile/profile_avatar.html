@@ -1,39 +1,101 @@
 {include file="global/header.html"}
 
     <div class="profile-container">
-        {include file="profile/profile_menu.html"}
+        <div class="profile-shell profile-layout">
+            {include file="profile/profile_menu.html"}
 
-        <section class="profile-content">
-            <h1>Change Avatar</h1>
+            <section class="profile-content">
+                <div class="profile-dashboard">
+                    <div class="profile-page-header">
+                        <div>
+                            <div class="profile-kicker">Account Customization</div>
+                            <h1>{$profile_page_title}</h1>
+                            <p>{$profile_page_description}</p>
+                        </div>
 
-            <div class="alert alert-warning">
-                Avatar size {$avatar_size}x{$avatar_size} pixels recommended. Uploaded images are resized automatically.
-            </div>
+                        <div class="profile-page-actions">
+                            <a href="/profile/overview" class="profile-action-btn"><i class="fa-regular fa-id-card"></i> Back to Overview</a>
+                        </div>
+                    </div>
 
-            {if $error}
-            <div class="alert alert-danger">
-            {foreach $error as $err}
-                {$err}
-            {/foreach}
-            </div>
-            {/if}
+                    <div class="profile-edit-grid">
+                        <article class="profile-panel">
+                            <div class="profile-panel-header">
+                                <div>
+                                    <div class="profile-panel-kicker">Avatar Studio</div>
+                                    <h2>Update your profile image</h2>
+                                </div>
+                            </div>
 
-            {if $success}
-            <div class="alert alert-success">
-                {$success}
-            </div>
-            {/if}
+                            <div class="profile-message-stack">
+                                <div class="profile-alert profile-alert-warning">
+                                    Avatar size {$avatar_size}x{$avatar_size} pixels recommended. Uploaded images are resized automatically.
+                                </div>
 
-            {if $avatar_path}
-            <img src="{$avatar_path}" alt="Avatar" class="profile-avatar-upload">
-            {/if}
+                                {if $error}
+                                <div class="profile-alert profile-alert-danger">
+                                {foreach $error as $err}
+                                    <div>{$err}</div>
+                                {/foreach}
+                                </div>
+                                {/if}
 
-            <form method="post" enctype="multipart/form-data">
-                <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                <input type="file" name="avatar" accept="image/png, image/jpeg, image/gif" required>
-                <button type="submit" name="update_avatar">Update Avatar</button>
-            </form>
-        </section>
+                                {if $success}
+                                <div class="profile-alert profile-alert-success">
+                                    {$success}
+                                </div>
+                                {/if}
+                            </div>
+
+                            <div class="profile-avatar-stage">
+                                <div class="profile-avatar-stage-visual">
+                                    {if $avatar_path}
+                                    <img src="{$avatar_path}" alt="Avatar" class="profile-avatar-upload">
+                                    {else}
+                                    <div class="profile-avatar-upload profile-avatar-upload-placeholder">
+                                        <i class="fa-regular fa-user"></i>
+                                    </div>
+                                    {/if}
+                                </div>
+
+                                <div class="profile-avatar-stage-copy">
+                                    <h3>Current profile badge</h3>
+                                    <p>Square avatars look best here and stay visually consistent across profile, moderation, and future community surfaces.</p>
+                                </div>
+                            </div>
+
+                            <form method="post" enctype="multipart/form-data" class="profile-form-shell">
+                                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+
+                                <div class="profile-form-group">
+                                    <label for="profile_avatar_upload">Choose Avatar</label>
+                                    <input id="profile_avatar_upload" type="file" name="avatar" accept="image/png, image/jpeg, image/gif" required>
+                                </div>
+
+                                <div class="profile-form-actions">
+                                    <button type="submit" name="update_avatar" class="profile-submit-btn">Save Avatar</button>
+                                </div>
+                            </form>
+                        </article>
+
+                        <article class="profile-panel profile-panel-secondary">
+                            <div class="profile-panel-header">
+                                <div>
+                                    <div class="profile-panel-kicker">Guidance</div>
+                                    <h2>Recommended upload rules</h2>
+                                </div>
+                            </div>
+
+                            <div class="profile-checklist">
+                                <div class="profile-checklist-item"><i class="fa-solid fa-check"></i><span>Use a clean square image for the sharpest final resize.</span></div>
+                                <div class="profile-checklist-item"><i class="fa-solid fa-check"></i><span>PNG is best when you need transparency around the subject.</span></div>
+                                <div class="profile-checklist-item"><i class="fa-solid fa-check"></i><span>Avoid busy edges so the avatar still reads well at smaller sizes.</span></div>
+                            </div>
+                        </article>
+                    </div>
+                </div>
+            </section>
+        </div>
     </div>
 
 {include file="global/footer.html"}

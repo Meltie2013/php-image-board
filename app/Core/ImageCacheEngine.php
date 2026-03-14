@@ -15,33 +15,6 @@
  */
 class ImageCacheEngine
 {
-    /**
-     * Cached configuration for controller usage.
-     *
-     * Stored statically so configuration is loaded once per request and reused
-     * across controller actions without repeated disk reads.
-     *
-     * @var array
-     */
-    private static array $config;
-
-    /**
-     * Load and cache config once per request.
-     *
-     * Uses SettingsManager when available/initialized, otherwise falls back to
-     * reading config/config.php from disk.
-     *
-     * @return array
-     */
-    private static function getConfig(): array
-    {
-        if (empty(self::$config))
-        {
-            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require CONFIG_PATH . '/config.php');
-        }
-
-        return self::$config;
-    }
 
     // Cache directory for processed images (must be writable by the web server)
     private static string $cacheDir = CACHE_IMAGE_PATH . '/';

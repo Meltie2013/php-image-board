@@ -1,18 +1,31 @@
 {include file="global/header.html"}
 
-    <main class="gallery-container-view">
-        <div class="gallery-item-view admin-layout">
-            <div class="gallery-left-side">
-                <div class="gallery-details-view admin-menu">
+    <main class="admin-container">
+        <div class="admin-shell admin-layout">
+            <div class="admin-sidebar">
+                <div class="admin-sidebar-inner admin-menu">
                     {include file="admin/admin_menu.html"}
                 </div>
             </div>
 
-            <div class="gallery-image-wrapper admin-dashboard">
-                <h2>Edit Block Entry #{$block_id}</h2>
+            <div class="admin-content admin-dashboard">
+                <div class="admin-page-header">
+                    <div>
+                        <div class="admin-kicker">Administration Control Panel</div>
+                        <h2>{$admin_page_title}: #{$block_id}</h2>
+                        <p>{$admin_page_description}</p>
+                    </div>
+
+                    <div class="admin-page-actions">
+                        <a href="/admin/security/blocks" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back to Block List</a>
+                    </div>
+                </div>
 
                 {if !empty($success)}
-                    <p class="success">{$success}</p>
+                    <div class="admin-notice admin-notice-success">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <p>{$success}</p>
+                    </div>
                 {/if}
 
                 {if !empty($error)}
@@ -23,41 +36,69 @@
                     </div>
                 {/if}
 
-                <form method="POST" action="/admin/security/blocks/edit/{$block_id}">
-                    <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                <section class="admin-panel">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <h3>Entry Controls</h3>
+                            <p>Review immutable match values, then adjust enforcement status and expiration.</p>
+                        </div>
+                    </div>
 
-                    <label>Scope</label>
-                    <input type="text" value="{$block_scope}" disabled>
+                    <div class="admin-panel-body">
+                        <form method="POST" action="/admin/security/blocks/edit/{$block_id}" class="admin-form">
+                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
 
-                    <label>Status</label>
-                    <select name="status">
-                        <option value="blocked" {if $block_status == 'blocked'}selected{/if}>blocked</option>
-                        <option value="banned" {if $block_status == 'banned'}selected{/if}>banned</option>
-                        <option value="jailed" {if $block_status == 'jailed'}selected{/if}>jailed</option>
-                        <option value="rate_limited" {if $block_status == 'rate_limited'}selected{/if}>rate_limited</option>
-                    </select>
+                            <div class="admin-form-grid-two">
+                                <div class="admin-field">
+                                    <label>Scope</label>
+                                    <input type="text" value="{$block_scope}" disabled>
+                                </div>
 
-                    <label>User ID</label>
-                    <input type="text" value="{$block_user_id}" disabled>
+                                <div class="admin-field">
+                                    <label>Status</label>
+                                    <select name="status">
+                                        <option value="blocked" {if $block_status == 'blocked'}selected{/if}>blocked</option>
+                                        <option value="banned" {if $block_status == 'banned'}selected{/if}>banned</option>
+                                        <option value="jailed" {if $block_status == 'jailed'}selected{/if}>jailed</option>
+                                        <option value="rate_limited" {if $block_status == 'rate_limited'}selected{/if}>rate_limited</option>
+                                    </select>
+                                </div>
+                            </div>
 
-                    <label>IP</label>
-                    <input type="text" value="{$block_ip}" disabled>
+                            <div class="admin-form-grid-two">
+                                <div class="admin-field">
+                                    <label>User ID</label>
+                                    <input type="text" value="{$block_user_id}" disabled>
+                                </div>
 
-                    <label>Fingerprint</label>
-                    <input type="text" value="{$block_fingerprint}" disabled>
+                                <div class="admin-field">
+                                    <label>IP</label>
+                                    <input type="text" value="{$block_ip}" disabled>
+                                </div>
+                            </div>
 
-                    <label>Reason</label>
-                    <input type="text" name="reason" value="{$block_reason}">
+                            <div class="admin-field">
+                                <label>Fingerprint</label>
+                                <input type="text" value="{$block_fingerprint}" disabled>
+                            </div>
 
-                    <label>Expires At (YYYY-MM-DD HH:MM:SS, blank = permanent)</label>
-                    <input type="text" name="expires_at" value="{$block_expires_at}">
+                            <div class="admin-field">
+                                <label>Reason</label>
+                                <input type="text" name="reason" value="{$block_reason}">
+                            </div>
 
-                    <button type="submit">Save</button>
-                </form>
+                            <div class="admin-field">
+                                <label>Expires At (YYYY-MM-DD HH:MM:SS, blank = permanent)</label>
+                                <input type="text" name="expires_at" value="{$block_expires_at}">
+                            </div>
 
-                <div style="margin-top: 14px;">
-                    <a href="/admin/security/blocks">Back to Block List</a>
-                </div>
+                            <div class="admin-form-footer">
+                                <button type="submit" class="admin-btn admin-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+                                <a href="/admin/security/blocks" class="admin-btn admin-btn-secondary">Back</a>
+                            </div>
+                        </form>
+                    </div>
+                </section>
             </div>
         </div>
     </main>

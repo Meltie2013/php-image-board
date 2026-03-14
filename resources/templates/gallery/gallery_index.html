@@ -1,54 +1,82 @@
 {include file="global/header.html"}
 
-    {if $is_logged_in}
-    <div class="gallery-actions-wrapper">
-        <div class="gallery-actions">
-            <a href="/gallery/upload-image" class="gallery-btn" title="Upload Image">
-                <i class="fa-solid fa-upload"></i>
-            </a>
-            <a href="#" class="gallery-btn danger" title="File DMCA Report">
-                <i class="fa-solid fa-file-circle-exclamation"></i>
-            </a>
-        </div>
-    </div>
-    {/if}
-    <main class="gallery-container">
-    {if !empty($images)}
-        <div class="gallery-grid">
-            {foreach $images as list($img_display_path, $img_url, $img_views)}
-            <div class="gallery-item">
-                <a href="{$img_url}">
-                    <span class="gallery-thumb-meta" title="Views">
-                        <i class="fa-solid fa-eye"></i>
-                        {$img_views}
-                    </span>
+    <main class="gallery-container gallery-index-shell">
+        {if !empty($images)}
+        <section class="gallery-index-board gallery-index-board-stream">
+            <div class="gallery-index-board-header gallery-index-board-header-actions">
+                <div class="gallery-index-board-intro">
+                    <span class="gallery-panel-kicker">Premium Gallery</span>
+                    <h3>View images posted by users</h3>
+                </div>
 
-                    <img src="{$img_display_path}" loading="lazy" decoding="async">
-                </a>
+                {if $is_logged_in}
+                <div class="gallery-index-board-actions">
+                    <a href="/gallery/upload-image" class="gallery-hero-btn is-primary">
+                        <i class="fa-solid fa-upload"></i>
+                        Upload Image
+                    </a>
+
+                    <a href="#" class="gallery-hero-btn">
+                        <i class="fa-solid fa-file-circle-exclamation"></i>
+                        File DMCA Report
+                    </a>
+                </div>
+                {/if}
             </div>
-            {/foreach}
-        </div>
 
-        {if $pagination_prev || $pagination_next}
-        <div class="gallery-pagination">
-            {if $pagination_prev}
-            <a href="{$pagination_prev}">Prev</a>
+            <div class="gallery-grid">
+                {foreach $images as list($img_display_path, $img_url, $img_views)}
+                <article class="gallery-item">
+                    <a href="{$img_url}" class="gallery-card-link" aria-label="Open image view">
+                        <span class="gallery-thumb-meta" title="Views">
+                            <i class="fa-solid fa-eye"></i>
+                            {$img_views}
+                        </span>
+
+                        <span class="gallery-thumb-overlay">
+                            <span class="gallery-thumb-overlay-text">Open Image</span>
+                        </span>
+
+                        <img src="{$img_display_path}" loading="lazy" decoding="async" alt="Gallery image preview">
+                    </a>
+                </article>
+                {/foreach}
+            </div>
+
+            {if $pagination_prev || $pagination_next}
+            <div class="gallery-pagination">
+                {if $pagination_prev}
+                <a href="{$pagination_prev}">Prev</a>
+                {/if}
+
+                {foreach $pagination_pages as list($page_url, $page_number, $current)}
+                {if $page_url}
+                <a href="{$page_url}" class="{if $current}current{/if}">
+                    {$page_number}
+                </a>
+                {else}
+                <a class="disabled">
+                    {$page_number}
+                </a>
+                {/if}
+                {/foreach}
+
+                {if $pagination_next}
+                <a href="{$pagination_next}">Next</a>
+                {/if}
+            </div>
             {/if}
-
-            {foreach $pagination_pages as list($page_url, $page_number, $current)}
-            <a href="{$page_url}" class="{if $current}current{/if}">
-                {$page_number}
-            </a>
-            {/foreach}
-
-            {if $pagination_next}
-            <a href="{$pagination_next}">Next</a>
-            {/if}
-        </div>
+        </section>
+        {else}
+        <section class="gallery-empty-state">
+            <div class="gallery-empty-state-icon">
+                <i class="fa-regular fa-image"></i>
+            </div>
+            <span class="gallery-panel-kicker">Premium Gallery</span>
+            <h2>No images found</h2>
+            <p>No approved uploads are available yet. Once images are approved, they will appear here automatically.</p>
+        </section>
         {/if}
-    {else}
-        <p style="text-align: center;">No images found or have not been approved yet!</p>
-    {/if}
     </main>
 
 {include file="global/footer.html"}

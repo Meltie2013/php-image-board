@@ -14,56 +14,8 @@
  * - Database for querying and inserting user records
  * - TemplateEngine for rendering views
  */
-class AuthController
+class AuthController extends BaseController
 {
-    /**
-     * Cached config for controller usage.
-     *
-     * Stored statically so config is loaded once per request and reused across
-     * controller methods (login/register/logout) without repeated disk reads.
-     *
-     * @var array
-     */
-    private static array $config;
-
-    /**
-     * Load and cache config once per request.
-     *
-     * The config file is read on first use, then retained for subsequent calls.
-     * This keeps controller methods focused on request logic rather than setup.
-     *
-     * @return array
-     */
-    private static function getConfig(): array
-    {
-        if (empty(self::$config))
-        {
-            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require CONFIG_PATH . '/config.php');
-        }
-
-        return self::$config;
-    }
-
-    /**
-     * Initialize template engine with optional cache clearing.
-     *
-     * Creates a TemplateEngine instance pointed at the project's resources/templates and storage/cache
-     * directories. When template caching is disabled in config, the compiled cache
-     * is cleared to ensure changes are reflected immediately (development-friendly).
-     *
-     * @return TemplateEngine
-     */
-    private static function initTemplate(): TemplateEngine
-    {
-        $config = self::getConfig();
-        $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
-        if (!empty($config['template']['disable_cache']))
-        {
-            $template->clearCache();
-        }
-
-        return $template;
-    }
 
     /**
      * Handle user login requests.

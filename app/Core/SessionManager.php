@@ -123,7 +123,7 @@ class SessionManager
         $acceptLanguage = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
         $platformHint = $_SERVER['HTTP_SEC_CH_UA_PLATFORM'] ?? '';
         $mobileHint = $_SERVER['HTTP_SEC_CH_UA_MOBILE'] ?? '';
-        $normalizedIp = self::normalizeIp($ip);
+        $normalizedIp = IpHelper::normalizeForGrouping($ip);
 
         // Stable per-browser id (cookie) to reduce false positives and improve guest tracking.
         $deviceId = self::getDeviceId();
@@ -230,30 +230,6 @@ class SessionManager
         return $val;
     }
 
-    /**
-     * Normalize an IP address for fingerprinting (intentionally lenient).
-     *
-     * - IPv4: zeros the last octet (e.g., 203.0.113.42 -> 203.0.113.0)
-     * - IPv6: keeps only the first 4 hextets (e.g., 2001:db8:abcd:0012::)
-     *
-     * This reduces false positives for users behind NAT, carriers, or networks
-     * that rotate addresses frequently.
-     */
-    private static function normalizeIp(string $ip): string
-    {
-        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4))
-        {
-            $parts = explode('.', $ip);
-            return "{$parts[0]}.{$parts[1]}.{$parts[2]}.0";
-        }
-        else if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6))
-        {
-            $parts = explode(':', $ip);
-            return implode(':', array_slice($parts, 0, 4)) . '::';
-        }
-
-        return $ip;
-    }
 
     /**
      * Determine whether the current request is being served over HTTPS.

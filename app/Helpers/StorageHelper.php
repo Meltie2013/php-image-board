@@ -40,15 +40,7 @@ class StorageHelper
     {
         if (empty(self::$config))
         {
-            // Prefer SettingsManager (merged config + DB overrides) when available.
-            if (class_exists('SettingsManager') && SettingsManager::isInitialized())
-            {
-                self::$config = SettingsManager::getConfig();
-            }
-            else
-            {
-                self::$config = require CONFIG_PATH . '/config.php';
-            }
+            self::$config = AppConfig::get();
 
             // Ensure gallery section exists with safe defaults
             if (empty(self::$config['gallery']) || !is_array(self::$config['gallery']))

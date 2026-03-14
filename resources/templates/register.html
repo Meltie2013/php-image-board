@@ -1,44 +1,110 @@
-    {include file="global/header.html"}
+{include file="global/header.html"}
 
-    <main>
-        <h1>Register</h1>
+    <main class="auth-page auth-page-register">
+        <section class="auth-shell auth-shell-register">
+            <aside class="auth-brand-panel">
+                <div class="auth-brand-eyebrow">Create Account</div>
+                <h1>Join the Board</h1>
+                <p class="auth-brand-copy">
+                    Create your account to upload images, manage favorites, and participate in the gallery community.
+                </p>
 
-        {if $error}
-            <div class="alert alert-danger">
-                {foreach $error as $err}
-                    <b>Error:</b> {ucfirst($err)}
-                {/foreach}
-            </div>
-        {/if}
+                <div class="auth-feature-list">
+                    <div class="auth-feature-item">
+                        <span class="auth-feature-icon"><i class="fa-solid fa-upload"></i></span>
+                        <div>
+                            <strong>Upload & Organize</strong>
+                            <p>Submit new images, add descriptions, and manage your public gallery presence.</p>
+                        </div>
+                    </div>
 
-        {if $success}
-            <div class="alert alert-success">
-                <b>Success:</b> {$success}
-            </div>
-        {/if}
+                    <div class="auth-feature-item">
+                        <span class="auth-feature-icon"><i class="fa-regular fa-star"></i></span>
+                        <div>
+                            <strong>Track Favorites</strong>
+                            <p>Save images you enjoy and keep a cleaner personal workflow across the site.</p>
+                        </div>
+                    </div>
 
-        <form method="post" action="/user/register">
-            <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                    <div class="auth-feature-item">
+                        <span class="auth-feature-icon"><i class="fa-solid fa-user-check"></i></span>
+                        <div>
+                            <strong>Approval Aware</strong>
+                            <p>New registrations may require approval before full access is granted.</p>
+                        </div>
+                    </div>
+                </div>
+            </aside>
 
-            <label for="username">Username</label>
-            <input type="text" id="username" name="username" required>
+            <section class="auth-form-panel">
+                <div class="auth-panel-header">
+                    <div class="auth-panel-eyebrow">Account Registration</div>
+                    <h2>Register</h2>
+                    <p>Set up your account details below. Keep your email and password entries accurate before submitting.</p>
+                </div>
 
-            <label for="email">Email</label>
-            <input type="email" id="email" name="email" required>
+                {if $error}
+                    <div class="alert alert-danger auth-alert-stack">
+                        <div>
+                            {foreach $error as $err}
+                                <div><b>Error:</b> {ucfirst($err)}</div>
+                            {/foreach}
+                        </div>
+                    </div>
+                {/if}
 
-            <label for="email">Confirm Email</label>
-            <input type="email" id="confirm_email" name="confirm_email" required>
+                {if $success}
+                    <div class="alert alert-success auth-alert-stack">
+                        <div><b>Success:</b> {$success}</div>
+                    </div>
+                {/if}
 
-            <label for="password">Password</label>
-            <input type="password" id="password" name="password" required>
+                <form method="post" action="/user/register" class="auth-form">
+                    <input type="hidden" name="csrf_token" value="{$csrf_token}">
 
-            <label for="confirm_password">Confirm Password</label>
-            <input type="password" id="confirm_password" name="confirm_password" required>
+                    <div class="auth-field-grid auth-field-grid-two">
+                        <div class="auth-field-group">
+                            <label for="username">Username</label>
+                            <input type="text" id="username" name="username" autocomplete="username" required>
+                        </div>
 
-            <button type="submit">Register</button>
-        </form>
+                        <div class="auth-field-group">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" name="email" autocomplete="email" required>
+                        </div>
+                    </div>
 
-        <p>Already have an account? <a href="/user/login">Login here</a></p>
+                    <div class="auth-field-grid auth-field-grid-two">
+                        <div class="auth-field-group">
+                            <label for="confirm_email">Confirm Email</label>
+                            <input type="email" id="confirm_email" name="confirm_email" autocomplete="email" required>
+                        </div>
+
+                        <div class="auth-field-group">
+                            <label for="password">Password</label>
+                            <input type="password" id="password" name="password" autocomplete="new-password" required>
+                        </div>
+                    </div>
+
+                    <div class="auth-field-group">
+                        <div class="auth-label-row">
+                            <label for="confirm_password">Confirm Password</label>
+                            <span class="auth-label-helper">Minimum 8 characters</span>
+                        </div>
+                        <input type="password" id="confirm_password" name="confirm_password" autocomplete="new-password" required>
+                    </div>
+
+                    <button type="submit" class="auth-submit-button">
+                        <i class="fa-solid fa-user-plus"></i>
+                        Register
+                    </button>
+                </form>
+
+                <div class="auth-links">
+                    <p>Already have an account? <a href="/user/login">Login here</a></p>
+                </div>
+            </section>
+        </section>
     </main>
 
-    {include file="global/footer.html"}
+{include file="global/footer.html"}

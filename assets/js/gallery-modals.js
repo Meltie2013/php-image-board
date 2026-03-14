@@ -2,11 +2,11 @@
 {
     function bindModal(openSelector, overlaySelector, closeSelector, autoOpenCheck)
     {
-        const openBtn = document.querySelector(openSelector);
+        const openButtons = document.querySelectorAll(openSelector);
         const overlay = document.querySelector(overlaySelector);
         const closeBtn = document.querySelector(closeSelector);
 
-        if (!openBtn || !overlay || !closeBtn)
+        if (!openButtons.length || !overlay || !closeBtn)
             return;
 
         function openModal(e)
@@ -26,7 +26,10 @@
             document.body.style.overflow = '';
         }
 
-        openBtn.addEventListener('click', openModal);
+        openButtons.forEach(function (openBtn)
+        {
+            openBtn.addEventListener('click', openModal);
+        });
         closeBtn.addEventListener('click', closeModal);
 
         overlay.addEventListener('click', function (e)

@@ -1,13 +1,60 @@
 {include file="global/header.html"}
 
-    <div class="error-container">
-        <h2>{$title}</h2>
-        <p>{$message}</p>
-        {if isset($link) && $link}
-        <a href="{$link}">Back to Image</a>
-        {else}
-        <a href="/">Go Back Home</a>
-        {/if}
-    </div>
+    <main class="system-page system-page-error">
+        <section class="system-shell">
+            <aside class="system-status-panel">
+                <div class="system-eyebrow">System Response</div>
+                <div class="system-icon-badge" aria-hidden="true">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                </div>
+                <h1>{$title}</h1>
+
+                <div class="system-meta-list">
+                    <div class="system-meta-item">
+                        <span>Category</span>
+                        <strong>Application Error</strong>
+                    </div>
+
+                    <div class="system-meta-item">
+                        <span>Status</span>
+                        <strong>Request Blocked</strong>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="system-content-panel">
+                <div class="system-panel-header">
+                    <div class="system-eyebrow">Error Details</div>
+                    <div class="system-code-badge">Attention Required</div>
+                </div>
+
+                <div class="system-message-card">
+                    <h2>{$title}</h2>
+                    <p>{$message}</p>
+                </div>
+
+                <div class="system-note">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span>
+                        If this happened during a protected action, the request may have been blocked by a permission, validation, or security rule.
+                    </span>
+                </div>
+
+                <div class="system-actions">
+                    {if isset($link) && $link}
+                    <a href="{$link}" class="system-action-primary">
+                        <i class="fa-solid fa-arrow-left"></i>
+                        <span>Back to Image</span>
+                    </a>
+                    {else}
+                    <a href="/index.php" class="system-action-primary">
+                        <i class="fa-solid fa-house"></i>
+                        <span>Go Back Home</span>
+                    </a>
+                    {/if}
+                </div>
+            </section>
+        </section>
+    </main>
 
 {include file="global/footer.html"}

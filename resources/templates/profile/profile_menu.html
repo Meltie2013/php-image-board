@@ -1,17 +1,98 @@
-        <aside class="profile-menu">
-            <h2>User Profile Menu</h2>
-            <ul>
-                <li><a href="/profile/overview"><b>Profile Overview</b></a></li>
-                <li><a href="/profile/avatar">Change Avatar</a></li>
-                <li><a href="#">Change Display Name</a></li>
-                <li><a href="/profile/email">Change Email Address</a></li>
-                <li><a href="/profile/change-password">Change Password</a></li>
-                <li><a href="/profile/dob">Update Date of Birth</a></li>
-            </ul>
+        <aside class="profile-sidebar">
+            <div class="profile-sidebar-inner">
+                <div class="profile-menu profile-menu-shell">
+                    <div class="profile-menu-top">
+                        <div class="profile-menu-kicker">Account Center</div>
+                        <div class="profile-menu-user">
+                            <div class="profile-menu-avatar-wrap">
+                                {if $profile_avatar_path}
+                                <img src="{$profile_avatar_path}" alt="{$profile_display_name}" class="profile-menu-avatar">
+                                {else}
+                                <div class="profile-menu-avatar profile-menu-avatar-placeholder">
+                                    <i class="fa-regular fa-user"></i>
+                                </div>
+                                {/if}
+                            </div>
 
-            <h2>User Settings Menu</h2>
-            <ul>
-                <li><a href="#">Update Page Display</a></li>
-                <li><a href="#">Update Time Zone</a></li>
-            </ul>
+                            <div class="profile-menu-user-copy">
+                                <h3>{$profile_display_name}</h3>
+                                <p>@{$profile_username}</p>
+                            </div>
+                        </div>
+
+                        <div class="profile-menu-badges">
+                            <span class="profile-badge">{$profile_role_name}</span>
+                            <span class="profile-badge profile-badge-muted">{$profile_status}</span>
+                        </div>
+                    </div>
+
+                    <div class="profile-menu-group">
+                        <span class="profile-menu-group-title">Overview</span>
+                        <div class="profile-menu-links">
+                            <a href="/profile/overview" class="profile-menu-link{if $current_profile_nav == 'overview'} is-active{/if}">
+                                <span class="profile-menu-link-icon"><i class="fa-regular fa-id-card"></i></span>
+                                <span class="profile-menu-link-copy">
+                                    <strong>Profile Overview</strong>
+                                    <small>Identity, activity, and account visibility.</small>
+                                </span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="profile-menu-group">
+                        <span class="profile-menu-group-title">Account</span>
+                        <div class="profile-menu-links">
+                            <a href="/profile/avatar" class="profile-menu-link{if $current_profile_nav == 'avatar'} is-active{/if}">
+                                <span class="profile-menu-link-icon"><i class="fa-regular fa-image"></i></span>
+                                <span class="profile-menu-link-copy">
+                                    <strong>Avatar</strong>
+                                    <small>Refresh your visual identity badge.</small>
+                                </span>
+                            </a>
+
+                            <span class="profile-menu-link is-disabled">
+                                <span class="profile-menu-link-icon"><i class="fa-regular fa-pen-to-square"></i></span>
+                                <span class="profile-menu-link-copy">
+                                    <strong>Display Name</strong>
+                                    <small>Reserved for the next account rollout.</small>
+                                </span>
+                            </span>
+
+                            <a href="/profile/email" class="profile-menu-link{if $current_profile_nav == 'email'} is-active{/if}">
+                                <span class="profile-menu-link-icon"><i class="fa-regular fa-envelope"></i></span>
+                                <span class="profile-menu-link-copy">
+                                    <strong>Email Address</strong>
+                                    <small>Recovery and verification destination.</small>
+                                </span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="profile-menu-group">
+                        <span class="profile-menu-group-title">Security</span>
+                        <div class="profile-menu-links">
+                            <a href="/profile/change-password" class="profile-menu-link{if $current_profile_nav == 'change_password'} is-active{/if}">
+                                <span class="profile-menu-link-icon"><i class="fa-solid fa-key"></i></span>
+                                <span class="profile-menu-link-copy">
+                                    <strong>Password</strong>
+                                    <small>Rotate credentials and session security.</small>
+                                </span>
+                            </a>
+
+                            <a href="/profile/dob" class="profile-menu-link{if $current_profile_nav == 'dob'} is-active{/if}">
+                                <span class="profile-menu-link-icon"><i class="fa-regular fa-calendar"></i></span>
+                                <span class="profile-menu-link-copy">
+                                    <strong>Date of Birth</strong>
+                                    <small>Age gate and sensitive-content access.</small>
+                                </span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="profile-menu-footer">
+                        <div class="profile-menu-footer-title">Member since</div>
+                        <div class="profile-menu-footer-value">{$profile_member_since}</div>
+                    </div>
+                </div>
+            </div>
         </aside>

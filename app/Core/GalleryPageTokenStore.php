@@ -20,7 +20,7 @@ class GalleryPageTokenStore
     /**
      * Directory used to persist short-lived gallery page tokens.
      */
-    private static string $cacheDir = CACHE_PATH . '/gallery_pages';
+    private static string $cacheDir = CACHE_PATH . '/tokens';
 
     /**
      * Maximum lifetime for one page token in seconds.

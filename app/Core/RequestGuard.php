@@ -186,7 +186,7 @@ class RequestGuard
         $ip = self::ip();
         if ($ip !== '' && self::distinctFingerprintsForIp($ip, $ipEscalationWindow) >= $ipEscalationFingerprints)
         {
-            $ipKey = 'ip|' . self::normalizeIp($ip);
+            $ipKey = 'ip|' . IpHelper::normalizeForGrouping($ip);
             if (self::hitLimit('img_ip', $ipKey, $window, $ipLimit))
             {
                 self::applyDecision('jailed', 'image_rate_limit_ip_escalation', $cooldown, $hash, true);
@@ -265,7 +265,7 @@ class RequestGuard
         $ip = self::ip();
         if ($ip !== '')
         {
-            $ipKey = 'ip|' . self::normalizeIp($ip);
+            $ipKey = 'ip|' . IpHelper::normalizeForGrouping($ip);
             if (self::hitLimit('auth_' . $action . '_ip', $ipKey, $window, $ipLimit))
             {
                 $reason = 'auth_rate_limit_' . $action . '_ip';
@@ -324,7 +324,7 @@ class RequestGuard
         $ip = self::ip();
         if ($ip !== '')
         {
-            $ipKey = 'ip|' . self::normalizeIp($ip);
+            $ipKey = 'ip|' . IpHelper::normalizeForGrouping($ip);
             if (self::hitLimit('gallery_page_ip', $ipKey, $window, $limitIp))
             {
                 self::applyDecision('rate_limited', 'gallery_page_rate_limit_ip', $cooldown, '', true);
@@ -435,7 +435,7 @@ class RequestGuard
         $ip = self::ip();
         if ($ip !== '')
         {
-            $ipKey = 'ip|' . self::normalizeIp($ip);
+            $ipKey = 'ip|' . IpHelper::normalizeForGrouping($ip);
             if (self::hitLimit('act_' . $action . '_ip', $ipKey, $window, $limitIp))
             {
                 self::applyDecision('rate_limited', 'interactive_action_' . $action . '_ip', $cooldown, '', true);
@@ -674,7 +674,7 @@ class RequestGuard
         else if ($scope === 'ip')
         {
             $ipStore = inet_pton($ip);
-            $valueHash = hash('sha256', 'ip|' . self::normalizeIp($ip));
+            $valueHash = hash('sha256', 'ip|' . IpHelper::normalizeForGrouping($ip));
         }
         else if ($scope === 'device_fingerprint')
         {
@@ -1106,31 +1106,6 @@ class RequestGuard
         return TypeHelper::toString($_SERVER['REMOTE_ADDR'] ?? '', allowEmpty: true) ?? '';
     }
 
-    /**
-     * Normalize an IP address for broader grouping during escalation logic.
-     *
-     * Normalization strategy:
-     * - IPv4: zero the final octet
-     * - IPv6: keep the first four segments and compress the remainder
-     *
-     * @param string $ip Raw IP address.
-     * @return string Normalized IP grouping key.
-     */
-    private static function normalizeIp(string $ip): string
-    {
-        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4))
-        {
-            $parts = explode('.', $ip);
-            return "{$parts[0]}.{$parts[1]}.{$parts[2]}.0";
-        }
-        else if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6))
-        {
-            $parts = explode(':', $ip);
-            return implode(':', array_slice($parts, 0, 4)) . '::';
-        }
-
-        return $ip;
-    }
 
     /**
      * Detect obvious automation tooling names from the user agent.

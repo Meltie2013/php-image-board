@@ -1,14 +1,54 @@
 {include file="global/header.html"}
 
-    <div class="error-container">
-        <h1>{$title}</h1>
-        <p>{$message}</p>
-        {if !empty($submessage)}
-            <p>{$submessage}</p>
-        {/if}
-        <div class="error-actions">
-            <a href="/" class="btn btn-primary">Try Again</a>
-        </div>
-    </div>
+    <main class="system-page system-page-maintenance">
+        <section class="system-shell system-shell-maintenance">
+            <aside class="system-status-panel system-status-panel-maintenance">
+                <div class="system-eyebrow">Service Window</div>
+                <div class="system-icon-badge system-icon-badge-maintenance" aria-hidden="true">
+                    <i class="fa-solid fa-screwdriver-wrench"></i>
+                </div>
+                <h1>{$title}</h1>
+                <p class="system-status-copy">
+                    The platform is temporarily unavailable.
+                </p>
+
+                <div class="system-meta-list">
+                    <div class="system-meta-item">
+                        <span>Availability</span>
+                        <strong>Temporarily Limited</strong>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="system-content-panel">
+                <div class="system-panel-header">
+                    <div class="system-eyebrow">Service Notice</div>
+                    <div class="system-code-badge system-code-badge-maintenance">Please Check Back Soon</div>
+                </div>
+
+                <div class="system-message-card">
+                    <h2>{$title}</h2>
+                    <p>{$message}</p>
+                    {if !empty($submessage)}
+                        <p class="system-submessage">{$submessage}</p>
+                    {/if}
+                </div>
+
+                <div class="system-note">
+                    <i class="fa-solid fa-clock"></i>
+                    <span>
+                        Active maintenance helps keep uploads, moderation tools, and account features stable as the site continues to grow.
+                    </span>
+                </div>
+
+                <div class="system-actions">
+                    <a href="/index.php" class="system-action-primary">
+                        <i class="fa-solid fa-rotate-right"></i>
+                        <span>Try Again</span>
+                    </a>
+                </div>
+            </section>
+        </section>
+    </main>
 
 {include file="global/footer.html"}

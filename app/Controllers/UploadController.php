@@ -21,55 +21,23 @@
  * - Blocks executable/script file extensions
  * - Randomized storage names to prevent predictable paths and overwrites
  */
-class UploadController
+class UploadController extends BaseController
 {
     /**
-     * Cached config for controller usage.
-     *
-     * Stored statically so configuration is loaded once per request and reused
-     * across controller actions without repeated disk reads.
+     * Static template variables assigned for all upload templates.
      *
      * @var array
      */
-    private static array $config;
+    protected static array $templateAssignments = [
+        'is_gallery_page' => 1,
+    ];
 
     /**
-     * Load and cache config once per request.
+     * Upload templates require a CSRF token for form submission.
      *
-     * @return array
+     * @var bool
      */
-    private static function getConfig(): array
-    {
-        if (empty(self::$config))
-        {
-            self::$config = SettingsManager::isInitialized() ? SettingsManager::getConfig() : (require CONFIG_PATH . '/config.php');
-        }
-
-        return self::$config;
-    }
-
-    /**
-     * Initialize template engine with optional cache clearing.
-     *
-     * Also injects a CSRF token into the template scope so the upload form can
-     * submit safely and all state-changing actions remain CSRF-protected.
-     *
-     * @return TemplateEngine
-     */
-    private static function initTemplate(): TemplateEngine
-    {
-        $config = self::getConfig();
-        $template = new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, $config);
-        if (!empty($config['template']['disable_cache']))
-        {
-            $template->clearCache();
-        }
-
-
-        $template->assign('is_gallery_page', 1);
-        $template->assign('csrf_token', Security::generateCsrfToken());
-        return $template;
-    }
+    protected static bool $templateUsesCsrf = true;
 
     /**
      * Base directory where uploaded files are stored.
