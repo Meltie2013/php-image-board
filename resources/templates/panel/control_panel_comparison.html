@@ -4,21 +4,23 @@
         <div class="moderation-shell moderation-layout">
             <div class="moderation-sidebar">
                 <div class="moderation-sidebar-inner moderation-menu">
-                    {include file="moderation/moderation_menu.html"}
+                    {include file="panel/control_panel_menu.html"}
                 </div>
             </div>
 
             <div class="moderation-content moderation-dashboard">
                 <div class="moderation-page-header">
                     <div>
-                        <div class="moderation-kicker">Moderation Control Panel</div>
-                        <h2>{$moderation_page_title}</h2>
-                        <p>{$moderation_page_description}</p>
+                        <div class="moderation-kicker">Control Panel</div>
+                        <h2>{$control_panel_page_title}</h2>
+                        <p>{$control_panel_page_description}</p>
                     </div>
 
                     <div class="moderation-page-actions">
-                        <a href="/moderation/image-pending" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-clock"></i> Pending Queue</a>
-                        <a href="/moderation/image-rehash" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-arrows-rotate"></i> Rehash</a>
+                        <a href="/panel/image-pending" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-clock"></i> Pending Queue</a>
+                        {if $cp_can_rehash_images}
+                        <a href="/panel/image-rehash" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-arrows-rotate"></i> Rehash</a>
+                        {/if}
                     </div>
                 </div>
 

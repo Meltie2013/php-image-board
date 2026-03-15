@@ -4,21 +4,21 @@
         <div class="moderation-shell moderation-layout">
             <div class="moderation-sidebar">
                 <div class="moderation-sidebar-inner moderation-menu">
-                    {include file="moderation/moderation_menu.html"}
+                    {include file="panel/control_panel_menu.html"}
                 </div>
             </div>
 
             <div class="moderation-content moderation-dashboard">
                 <div class="moderation-page-header">
                     <div>
-                        <div class="moderation-kicker">Moderation Control Panel</div>
-                        <h2>{$moderation_page_title}</h2>
-                        <p>{$moderation_page_description}</p>
+                        <div class="moderation-kicker">Control Panel</div>
+                        <h2>{$control_panel_page_title}</h2>
+                        <p>{$control_panel_page_description}</p>
                     </div>
 
                     <div class="moderation-page-actions">
-                        <a href="/moderation/dashboard" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-gauge-high"></i> Dashboard</a>
-                        <a href="/moderation/image-comparison" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-code-compare"></i> Compare</a>
+                        <a href="/panel/dashboard" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-gauge-high"></i> Dashboard</a>
+                        <a href="/panel/image-comparison" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-code-compare"></i> Compare</a>
                     </div>
                 </div>
 
@@ -53,12 +53,12 @@
                                                     <span class="hover-preview">
                                                         <a
                                                             class="btn-view moderation-preview-trigger"
-                                                            href="/moderation/image-pending/{$image_hash}"
+                                                            href="/panel/image-pending/{$image_hash}"
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             aria-label="View Image"
-                                                            data-preview-href="/moderation/image-pending/{$image_hash}"
-                                                            data-preview-src="/moderation/image-pending/{$image_hash}"
+                                                            data-preview-href="/panel/image-pending/{$image_hash}"
+                                                            data-preview-src="/panel/image-pending/{$image_hash}"
                                                         >
                                                             <i class="fa-solid fa-eye"></i>
                                                         </a>
@@ -66,17 +66,17 @@
 
                                                     <button class="btn-edit" type="button" aria-label="Edit Image"><i class="fa-solid fa-pen"></i></button>
 
-                                                    <form method="POST" action="/moderation/image-pending/approve/{$image_hash}" class="moderation-inline-form">
+                                                    <form method="POST" action="/panel/image-pending/approve/{$image_hash}" class="moderation-inline-form">
                                                         <input type="hidden" name="csrf_token" value="{$csrf_token}">
                                                         <button type="submit" class="btn-approve" aria-label="Approve Image"><i class="fa-solid fa-check"></i></button>
                                                     </form>
 
-                                                    <form method="POST" action="/moderation/image-pending/approve/sensitive/{$image_hash}" class="moderation-inline-form" onsubmit="return confirm('Mark this image as sensitive?');">
+                                                    <form method="POST" action="/panel/image-pending/approve/sensitive/{$image_hash}" class="moderation-inline-form" onsubmit="return confirm('Mark this image as sensitive?');">
                                                         <input type="hidden" name="csrf_token" value="{$csrf_token}">
                                                         <button type="submit" class="btn-warning" aria-label="Approve Sensitive Image"><i class="fa-solid fa-exclamation"></i></button>
                                                     </form>
 
-                                                    <form method="POST" action="/moderation/image-pending/reject/{$image_hash}" class="moderation-inline-form" onsubmit="return confirm('Reject this image?');">
+                                                    <form method="POST" action="/panel/image-pending/reject/{$image_hash}" class="moderation-inline-form" onsubmit="return confirm('Reject this image?');">
                                                         <input type="hidden" name="csrf_token" value="{$csrf_token}">
                                                         <button type="submit" class="btn-reject" aria-label="Reject Image"><i class="fa-solid fa-xmark"></i></button>
                                                     </form>
@@ -119,7 +119,7 @@
         </div>
     </main>
 
-    <script src="/assets/js/moderation-pending-preview.js"></script>
+    <script src="/assets/js/panel-pending-preview.js"></script>
 
 
 {include file="global/footer.html"}

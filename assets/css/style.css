@@ -2,8 +2,8 @@
  * Main Image Board Style Sheet
  *
  * This entry point only loads styles shared across the public site.
- * Page-specific stylesheets are loaded from the global header so admin,
- * moderation, gallery, and profile rules remain scoped to the pages
+ * Page-specific stylesheets are loaded from the global header so control
+ * panel, gallery, and profile rules remain scoped to the pages
  * that actually use them.
  */
 

@@ -4,20 +4,20 @@
         <div class="admin-shell admin-layout">
             <div class="admin-sidebar">
                 <div class="admin-sidebar-inner admin-menu">
-                    {include file="admin/admin_menu.html"}
+                    {include file="panel/control_panel_menu.html"}
                 </div>
             </div>
 
             <div class="admin-content admin-dashboard">
                 <div class="admin-page-header">
                     <div>
-                        <div class="admin-kicker">Administration Control Panel</div>
-                        <h2>{$admin_page_title}: #{$block_id}</h2>
-                        <p>{$admin_page_description}</p>
+                        <div class="admin-kicker">Control Panel</div>
+                        <h2>{$control_panel_page_title}: #{$block_id}</h2>
+                        <p>{$control_panel_page_description}</p>
                     </div>
 
                     <div class="admin-page-actions">
-                        <a href="/admin/security/blocks" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back to Block List</a>
+                        <a href="/panel/security/blocks" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back to Block List</a>
                     </div>
                 </div>
 
@@ -45,7 +45,7 @@
                     </div>
 
                     <div class="admin-panel-body">
-                        <form method="POST" action="/admin/security/blocks/edit/{$block_id}" class="admin-form">
+                        <form method="POST" action="/panel/security/blocks/edit/{$block_id}" class="admin-form">
                             <input type="hidden" name="csrf_token" value="{$csrf_token}">
 
                             <div class="admin-form-grid-two">
@@ -94,7 +94,7 @@
 
                             <div class="admin-form-footer">
                                 <button type="submit" class="admin-btn admin-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
-                                <a href="/admin/security/blocks" class="admin-btn admin-btn-secondary">Back</a>
+                                <a href="/panel/security/blocks" class="admin-btn admin-btn-secondary">Back</a>
                             </div>
                         </form>
                     </div>

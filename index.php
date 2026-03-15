@@ -189,10 +189,11 @@ $router->setNotFound(function ()
 $image_hash = '([0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5}-[0-9a-zA-Z]{5})';
 $gallery_page_token = '([a-f0-9]{32})';
 $router->add([
+    ["/image/$image_hash/token/$gallery_page_token", function ($hash, $token) { GalleryController::servePageImage($token, $hash); }, ['GET']],
+
     ['/gallery', [GalleryController::class, 'index'], ['GET']],
     ['/gallery/upload-image', [UploadController::class, 'upload'], ['GET', 'POST']],
     ['/gallery/page/(\d+)', [GalleryController::class, 'index'], ['GET']],
-    ["/image/$image_hash/token/$gallery_page_token", function ($hash, $token) { GalleryController::servePageImage($token, $hash); }, ['GET']],
     ["/gallery/$image_hash", [GalleryController::class, 'view'], ['GET']],
     ["/gallery/original/$image_hash", function ($hash) { GalleryController::serveImage($hash); }, ['GET']],
 
@@ -206,34 +207,28 @@ $router->add([
     ['/profile/dob', [ProfileController::class, 'dob'], ['GET', 'POST']],
     ['/profile/change-password', [ProfileController::class, 'change_password'], ['GET', 'POST']],
 
-    ['/moderation/dashboard', [ModerationController::class, 'dashboard'], ['GET']],
-    ['/moderation/image-comparison', [ModerationController::class, 'comparison'], ['GET', 'POST']],
-    ['/moderation/image-rehash', [ModerationController::class, 'rehash'], ['GET', 'POST']],
-
-    ['/admin', [AdminController::class, 'dashboard'], ['GET']],
-    ['/admin/dashboard', [AdminController::class, 'dashboard'], ['GET']],
-    ['/admin/users', [AdminController::class, 'users'], ['GET']],
-    ['/admin/users/create', [AdminController::class, 'userCreate'], ['GET', 'POST']],
-    ['/admin/users/edit/(\d+)', function ($id) { AdminController::userEdit((int)$id); }, ['GET', 'POST']],
-
-    ['/admin/settings', [AdminController::class, 'settings'], ['GET']],
-    ['/admin/settings/save', [AdminController::class, 'settingsSave'], ['POST']],
-
-    ['/admin/security/logs', [AdminController::class, 'securityLogs'], ['GET']],
-    ['/admin/security/logs/view', [AdminController::class, 'securityLogView'], ['GET']],
-    ['/admin/security/blocks', [AdminController::class, 'blockList'], ['GET']],
-    ['/admin/security/blocks/create', [AdminController::class, 'blockCreate'], ['POST']],
-    ['/admin/security/blocks/edit/(\d+)', function ($id) { AdminController::blockEdit((int)$id); }, ['GET', 'POST']],
-    ['/admin/security/blocks/remove/(\d+)', function ($id) { AdminController::blockRemove((int)$id); }, ['POST']],
-    ['/admin/security/blocks/remove-match', [AdminController::class, 'blockRemoveMatch'], ['POST']],
-
-    ["/moderation/image-pending/approve/$image_hash", function ($hash) { ModerationController::approveImage($hash); }, ['POST']],
-    ["/moderation/image-pending/approve/sensitive/$image_hash", function ($hash) { ModerationController::approveImageSensitive($hash); }, ['POST']],
-    ["/moderation/image-pending/reject/$image_hash", function ($hash) { ModerationController::rejectImage($hash); }, ['POST']],
-
-    ['/moderation/image-pending', [ModerationController::class, 'pending'], ['GET']],
-    ['/moderation/image-pending/page/(\d+)', [ModerationController::class, 'pending'], ['GET']],
-    ["/moderation/image-pending/$image_hash", function ($hash) { ModerationController::servePendingImage($hash); }, ['GET']],
+    ['/panel', [ControlPanelController::class, 'dashboard'], ['GET']],
+    ['/panel/dashboard', [ControlPanelController::class, 'dashboard'], ['GET']],
+    ['/panel/users', [ControlPanelController::class, 'users'], ['GET']],
+    ['/panel/users/create', [ControlPanelController::class, 'userCreate'], ['GET', 'POST']],
+    ['/panel/users/edit/(\d+)', function ($id) { ControlPanelController::userEdit((int)$id); }, ['GET', 'POST']],
+    ['/panel/settings', [ControlPanelController::class, 'settings'], ['GET']],
+    ['/panel/settings/save', [ControlPanelController::class, 'settingsSave'], ['POST']],
+    ['/panel/security/logs', [ControlPanelController::class, 'securityLogs'], ['GET']],
+    ['/panel/security/logs/view', [ControlPanelController::class, 'securityLogView'], ['GET']],
+    ['/panel/security/blocks', [ControlPanelController::class, 'blockList'], ['GET']],
+    ['/panel/security/blocks/create', [ControlPanelController::class, 'blockCreate'], ['POST']],
+    ['/panel/security/blocks/edit/(\d+)', function ($id) { ControlPanelController::blockEdit((int)$id); }, ['GET', 'POST']],
+    ['/panel/security/blocks/remove/(\d+)', function ($id) { ControlPanelController::blockRemove((int)$id); }, ['POST']],
+    ['/panel/security/blocks/remove-match', [ControlPanelController::class, 'blockRemoveMatch'], ['POST']],
+    ["/panel/image-pending/approve/$image_hash", function ($hash) { ControlPanelController::approveImage($hash); }, ['POST']],
+    ["/panel/image-pending/approve/sensitive/$image_hash", function ($hash) { ControlPanelController::approveImageSensitive($hash); }, ['POST']],
+    ["/panel/image-pending/reject/$image_hash", function ($hash) { ControlPanelController::rejectImage($hash); }, ['POST']],
+    ['/panel/image-pending', [ControlPanelController::class, 'pending'], ['GET']],
+    ['/panel/image-pending/page/(\d+)', [ControlPanelController::class, 'pending'], ['GET']],
+    ["/panel/image-pending/$image_hash", function ($hash) { ControlPanelController::servePendingImage($hash); }, ['GET']],
+    ['/panel/image-comparison', [ControlPanelController::class, 'comparison'], ['GET', 'POST']],
+    ['/panel/image-rehash', [ControlPanelController::class, 'rehash'], ['GET', 'POST']],
 
     ["/gallery/$image_hash/edit", function ($hash) { GalleryController::edit($hash); }, ['POST']],
     ["/gallery/$image_hash/upvote", function ($hash) { GalleryController::upvote($hash); }, ['POST']],

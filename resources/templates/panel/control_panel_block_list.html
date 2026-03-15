@@ -4,27 +4,27 @@
         <div class="admin-shell admin-layout">
             <div class="admin-sidebar">
                 <div class="admin-sidebar-inner admin-menu">
-                    {include file="admin/admin_menu.html"}
+                    {include file="panel/control_panel_menu.html"}
                 </div>
             </div>
 
             <div class="admin-content admin-dashboard">
                 <div class="admin-page-header">
                     <div>
-                        <div class="admin-kicker">Administration Control Panel</div>
-                        <h2>{$admin_page_title}</h2>
-                        <p>{$admin_page_description}</p>
+                        <div class="admin-kicker">Control Panel</div>
+                        <h2>{$control_panel_page_title}</h2>
+                        <p>{$control_panel_page_description}</p>
                     </div>
 
                     <div class="admin-page-actions">
-                        <a href="/admin/security/logs" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-shield-halved"></i> Security Logs</a>
+                        <a href="/panel/security/logs" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-shield-halved"></i> Security Logs</a>
                     </div>
                 </div>
 
-                {if !empty($admin_notice)}
-                    <div class="admin-notice admin-notice-{$admin_notice_type}">
-                        <i class="fa-solid {if $admin_notice_type == 'success'}fa-circle-check{else}fa-circle-exclamation{/if}"></i>
-                        <p>{$admin_notice}</p>
+                {if !empty($control_panel_notice)}
+                    <div class="admin-notice admin-notice-{$control_panel_notice_type}">
+                        <i class="fa-solid {if $control_panel_notice_type == 'success'}fa-circle-check{else}fa-circle-exclamation{/if}"></i>
+                        <p>{$control_panel_notice}</p>
                     </div>
                 {/if}
 
@@ -37,7 +37,7 @@
                     </div>
 
                     <div class="admin-panel-body">
-                        <form method="GET" action="/admin/security/blocks" class="admin-form">
+                        <form method="GET" action="/panel/security/blocks" class="admin-form">
                             <div class="admin-form-grid-two">
                                 <div class="admin-field">
                                     <label>IP</label>
@@ -70,7 +70,7 @@
 
                             <div class="admin-form-footer">
                                 <button type="submit" class="admin-btn admin-btn-primary"><i class="fa-solid fa-filter"></i> Apply Filters</button>
-                                <a href="/admin/security/blocks" class="admin-btn admin-btn-secondary">Reset</a>
+                                <a href="/panel/security/blocks" class="admin-btn admin-btn-secondary">Reset</a>
                             </div>
                         </form>
                     </div>
@@ -85,7 +85,7 @@
                     </div>
 
                     <div class="admin-panel-body">
-                        <form method="POST" action="/admin/security/blocks/create" class="admin-form">
+                        <form method="POST" action="/panel/security/blocks/create" class="admin-form">
                             <input type="hidden" name="csrf_token" value="{$csrf_token}">
 
                             <div class="admin-form-grid-two">
@@ -176,18 +176,18 @@
                                             <td>{$b_expires_at}</td>
                                             <td>
                                                 <div class="admin-row-actions">
-                                                    <a href="/admin/security/blocks/edit/{$b_id}" class="admin-btn admin-btn-secondary admin-btn-icon" title="Edit" aria-label="Edit">
+                                                    <a href="/panel/security/blocks/edit/{$b_id}" class="admin-btn admin-btn-secondary admin-btn-icon" title="Edit" aria-label="Edit">
                                                         <i class="fa-solid fa-pen-to-square"></i>
                                                     </a>
 
-                                                    <form method="POST" action="/admin/security/blocks/remove/{$b_id}">
+                                                    <form method="POST" action="/panel/security/blocks/remove/{$b_id}">
                                                         <input type="hidden" name="csrf_token" value="{$csrf_token}">
                                                         <button type="submit" class="admin-btn admin-btn-secondary admin-btn-icon" title="Remove" aria-label="Remove">
                                                             <i class="fa-solid fa-trash"></i>
                                                         </button>
                                                     </form>
 
-                                                    <form method="POST" action="/admin/security/blocks/remove-match">
+                                                    <form method="POST" action="/panel/security/blocks/remove-match">
                                                         <input type="hidden" name="csrf_token" value="{$csrf_token}">
                                                         <input type="hidden" name="user_id" value="{$b_user_id}">
                                                         <button type="submit" class="admin-btn admin-btn-secondary admin-btn-icon" {if empty($b_user_id)}disabled{/if} title="Remove by User" aria-label="Remove by User">
@@ -195,7 +195,7 @@
                                                         </button>
                                                     </form>
 
-                                                    <form method="POST" action="/admin/security/blocks/remove-match">
+                                                    <form method="POST" action="/panel/security/blocks/remove-match">
                                                         <input type="hidden" name="csrf_token" value="{$csrf_token}">
                                                         <input type="hidden" name="ip" value="{$b_ip}">
                                                         <button type="submit" class="admin-btn admin-btn-secondary admin-btn-icon" {if empty($b_ip)}disabled{/if} title="Remove by IP" aria-label="Remove by IP">
@@ -203,7 +203,7 @@
                                                         </button>
                                                     </form>
 
-                                                    <form method="POST" action="/admin/security/blocks/remove-match">
+                                                    <form method="POST" action="/panel/security/blocks/remove-match">
                                                         <input type="hidden" name="csrf_token" value="{$csrf_token}">
                                                         <input type="hidden" name="fingerprint" value="{$b_fingerprint}">
                                                         <button type="submit" class="admin-btn admin-btn-secondary admin-btn-icon" {if empty($b_fingerprint)}disabled{/if} title="Remove by Fingerprint" aria-label="Remove by Fingerprint">

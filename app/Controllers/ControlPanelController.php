@@ -1,31 +1,44 @@
 <?php
 
 /**
- * AdminController
+ * ControlPanelController
  *
- * Provides an Administrator Control Panel for:
- * - Viewing security logs and block list entries
- * - Managing users (add/edit/remove)
- * - Managing application settings (app_settings)
+ * Provides the merged Control Panel for both administrators and moderators.
+ *
+ * Responsibilities:
+ * - Render the shared dashboard and permission-aware navigation
+ * - Handle moderation queue and image tooling pages
+ * - Handle administrator-only users, settings, logs, and enforcement pages
  *
  * Security considerations:
- * - Administrator role required
+ * - Staff access required for the control panel shell
+ * - Administrator role required for administrative modules
  * - CSRF validation for all state-changing actions
  */
-class AdminController extends BaseController
+class ControlPanelController extends BaseController
 {
     /**
-     * Static template variables assigned for all admin templates.
+     * Static template variables assigned for all control panel templates.
      *
      * @var array
      */
     protected static array $templateAssignments = [
         'is_gallery_page' => 1,
-        'is_admin_panel' => 1,
+        'is_control_panel' => 1,
     ];
 
     /**
-     * Assign shared administration page metadata used by the menu and page hero.
+     * Control panel templates require CSRF support for the shared header and
+     * multiple inline action forms.
+     *
+     * @var bool
+     */
+    protected static bool $templateUsesCsrf = true;
+
+    /**
+     * Assign shared control panel page metadata used by the merged menu and page hero.
+     *
+     * All unified control panel templates consume these shared assignments.
      *
      * @param TemplateEngine $template Active template engine instance.
      * @param string $nav Current navigation key for sidebar highlighting.
@@ -34,93 +47,174 @@ class AdminController extends BaseController
      * @param string $section Current sidebar section key.
      * @return void
      */
-    private static function assignAdminPage(TemplateEngine $template, string $nav, string $title, string $description, string $section = ''): void
+    private static function assignPanelPage(TemplateEngine $template, string $nav, string $title, string $description, string $section = ''): void
     {
-        $template->assign('current_admin_nav', $nav);
-        $template->assign('current_admin_section', $section);
-        $template->assign('admin_page_title', $title);
-        $template->assign('admin_page_description', $description);
+        $role = self::getCurrentRole();
+        $isAdmin = $role === 'administrator';
+        $isModerator = $role === 'moderator';
+        $isStaff = $isAdmin || $isModerator;
+
+        $template->assign('current_control_panel_nav', $nav);
+        $template->assign('current_control_panel_section', $section);
+        $template->assign('control_panel_page_title', $title);
+        $template->assign('control_panel_page_description', $description);
+        $template->assign('control_panel_role', $role);
+        $template->assign('cp_is_admin', $isAdmin ? 1 : 0);
+        $template->assign('cp_is_moderator', $isModerator ? 1 : 0);
+        $template->assign('cp_is_staff', $isStaff ? 1 : 0);
+        $template->assign('cp_can_manage_users', $isAdmin ? 1 : 0);
+        $template->assign('cp_can_manage_settings', $isAdmin ? 1 : 0);
+        $template->assign('cp_can_view_security', $isAdmin ? 1 : 0);
+        $template->assign('cp_can_manage_blocks', $isAdmin ? 1 : 0);
+        $template->assign('cp_can_moderate_images', $isStaff ? 1 : 0);
+        $template->assign('cp_can_compare_images', $isStaff ? 1 : 0);
+        $template->assign('cp_can_rehash_images', $isAdmin ? 1 : 0);
+
     }
 
+    /**
+     * Get the normalized current control panel role from session data.
+     *
+     * @return string
+     */
+    private static function getCurrentRole(): string
+    {
+        return strtolower(TypeHelper::toString(SessionManager::get('user_role'), allowEmpty: true) ?? '');
+    }
 
     /**
-     * Enforce administrator authorization for the current request.
+     * Enforce staff authorization for the merged control panel.
      *
-     * Reads session user_id and user_role. If the user is not an administrator,
-     * respond with a 403 page and terminate the request.
-     *
+     * @param TemplateEngine|null $template Optional prepared template instance.
      * @return void
      */
-    private static function requireAdmin(): void
+    private static function requirePanelAccess(?TemplateEngine $template = null): void
     {
-        $userId = TypeHelper::toInt(SessionManager::get('user_id'));
-        $role = TypeHelper::toString(SessionManager::get('user_role'), allowEmpty: true) ?? '';
-
-        if (!$userId || $role !== 'Administrator')
-        {
-            $template = self::initTemplate();
-            self::renderErrorPage(403, 'Access Denied', 'Administrator access required.', $template);
-            exit();
-        }
+        $template = $template ?: self::initTemplate();
+        RoleHelper::requireLogin();
+        RoleHelper::requireRole(['administrator', 'moderator'], $template);
     }
 
     /**
-     * Render the admin dashboard.
+     * Enforce administrator authorization for administrative modules.
      *
-     * Provides basic counts and recent security activity for quick visibility.
+     * @param TemplateEngine|null $template Optional prepared template instance.
+     * @return void
+     */
+    private static function requirePanelAdmin(?TemplateEngine $template = null): void
+    {
+        $template = $template ?: self::initTemplate();
+        RoleHelper::requireLogin();
+        RoleHelper::requireRole(['administrator'], $template);
+    }
+
+    /**
+     * Render the merged control panel dashboard.
+     *
+     * Administrators receive the broader operational overview while moderators
+     * see the focused image and queue statistics they need most.
      *
      * @return void
      */
     public static function dashboard(): void
     {
-        self::requireAdmin();
-
         $template = self::initTemplate();
+        self::requirePanelAccess($template);
 
-        $totalUsers = Database::fetch("SELECT COUNT(*) AS total FROM app_users WHERE status != 'deleted'")['total'] ?? 0;
+        $role = self::getCurrentRole();
+        $isAdmin = $role === 'administrator';
+
+        $totalUsers = 0;
         $activeBlocks = 0;
         $recentLogs = [];
 
-        try
+        if ($isAdmin)
         {
-            $row = Database::fetch("SELECT COUNT(*) AS total FROM app_block_list WHERE expires_at IS NULL OR expires_at > NOW()") ?? [];
-            $activeBlocks = TypeHelper::toInt($row['total'] ?? 0);
-        }
-        catch (Throwable $e)
-        {
-            $activeBlocks = 0;
-        }
-
-        try
-        {
-            $rows = Database::fetchAll("SELECT id, user_id, category, message, created_at FROM app_security_logs ORDER BY id DESC LIMIT 5");
-            foreach ($rows as $r)
+            try
             {
-                $recentLogs[] = [
-                    TypeHelper::toString(DateHelper::date_only_format($r['created_at']) ?? ''),
-                    TypeHelper::toString($r['category'] ?? ''),
-                    TypeHelper::toString($r['message'] ?? ''),
-                    TypeHelper::toString(ucfirst(self::getUsernameById($r['user_id'])) ?? ''),
-                ];
+                $row = Database::fetch("SELECT COUNT(*) AS total FROM app_users WHERE status != 'deleted'") ?? [];
+                $totalUsers = TypeHelper::toInt($row['total'] ?? 0) ?? 0;
+            }
+            catch (Throwable $e)
+            {
+                $totalUsers = 0;
+            }
+
+            try
+            {
+                $row = Database::fetch("SELECT COUNT(*) AS total FROM app_block_list WHERE expires_at IS NULL OR expires_at > NOW()") ?? [];
+                $activeBlocks = TypeHelper::toInt($row['total'] ?? 0) ?? 0;
+            }
+            catch (Throwable $e)
+            {
+                $activeBlocks = 0;
+            }
+
+            try
+            {
+                $rows = Database::fetchAll("SELECT id, user_id, category, message, created_at FROM app_security_logs ORDER BY id DESC LIMIT 5");
+                foreach ($rows as $r)
+                {
+                    $recentLogs[] = [
+                        TypeHelper::toString(DateHelper::date_only_format($r['created_at']) ?? ''),
+                        TypeHelper::toString($r['category'] ?? ''),
+                        TypeHelper::toString($r['message'] ?? ''),
+                        TypeHelper::toString(ucfirst(self::getUsernameById(TypeHelper::toInt($r['user_id'] ?? 0) ?? 0)) ?? ''),
+                    ];
+                }
+            }
+            catch (Throwable $e)
+            {
+                $recentLogs = [];
             }
         }
-        catch (Throwable $e)
-        {
-            $recentLogs = [];
-        }
 
-        self::assignAdminPage(
+        $totalImagesResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status IN ('approved', 'pending', 'deleted', 'rejected')");
+        $approvedCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'approved'");
+        $pendingCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'pending'");
+        $removedCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'deleted'");
+        $rejectedCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'rejected'");
+        $viewsCountResult = Database::fetch("SELECT COALESCE(SUM(views), 0) AS total_views FROM app_images WHERE status = 'approved';");
+
+        $totalImages = TypeHelper::toInt($totalImagesResult['cnt'] ?? null) ?? 0;
+        $approvedCount = TypeHelper::toInt($approvedCountResult['cnt'] ?? null) ?? 0;
+        $pendingCount = TypeHelper::toInt($pendingCountResult['cnt'] ?? null) ?? 0;
+        $removedCount = TypeHelper::toInt($removedCountResult['cnt'] ?? null) ?? 0;
+        $rejectedCount = TypeHelper::toInt($rejectedCountResult['cnt'] ?? null) ?? 0;
+        $combinedCount = TypeHelper::toInt($viewsCountResult['total_views'] ?? null) ?? 0;
+
+        $storageUsed = StorageHelper::getUsedStorageReadable();
+        $storageRemaining = StorageHelper::getRemainingStorageReadable();
+        $storageTotal = StorageHelper::getMaxStorageReadable();
+        $storagePercent = StorageHelper::getStorageUsagePercent();
+        $storageUsagePercent = StorageHelper::getStorageUsagePercent(2);
+
+        self::assignPanelPage(
             $template,
             'dashboard',
             'Dashboard',
-            'Central visibility for users, moderation pressure, and recent security activity.',
+            'Central visibility for users, security, moderation queues, and image volume across the platform.',
             'overview'
         );
 
-        $template->assign('total_users', $totalUsers);
-        $template->assign('active_blocks', $activeBlocks);
+        $template->assign('total_users', NumericalHelper::formatCount($totalUsers));
+        $template->assign('active_blocks', NumericalHelper::formatCount($activeBlocks));
         $template->assign('recent_logs', $recentLogs);
-        $template->render('admin/admin_dashboard.html');
+
+        $template->assign('total_images', NumericalHelper::formatCount($totalImages));
+        $template->assign('approved_count', NumericalHelper::formatCount($approvedCount));
+        $template->assign('pending_count', NumericalHelper::formatCount($pendingCount));
+        $template->assign('removed_count', NumericalHelper::formatCount($removedCount));
+        $template->assign('rejected_count', NumericalHelper::formatCount($rejectedCount));
+        $template->assign('total_view_count', NumericalHelper::formatCount($combinedCount));
+
+        $template->assign('storage_used', $storageUsed);
+        $template->assign('storage_remaining', $storageRemaining);
+        $template->assign('storage_total', $storageTotal);
+        $template->assign('storage_percent', $storagePercent);
+        $template->assign('storage_usage_percent', $storageUsagePercent);
+
+        $template->render('panel/control_panel_dashboard.html');
     }
 
     /**
@@ -133,7 +227,7 @@ class AdminController extends BaseController
      */
     public static function users(): void
     {
-        self::requireAdmin();
+        self::requirePanelAdmin();
 
         $template = self::initTemplate();
 
@@ -168,7 +262,7 @@ class AdminController extends BaseController
             ];
         }
 
-        self::assignAdminPage(
+        self::assignPanelPage(
             $template,
             'users',
             'User Management',
@@ -179,7 +273,7 @@ class AdminController extends BaseController
         $template->assign('users', $users);
         $template->assign('roles', $roles);
         $template->assign('csrf_token', Security::generateCsrfToken());
-        $template->render('admin/admin_users.html');
+        $template->render('panel/control_panel_users.html');
     }
 
     /**
@@ -192,7 +286,7 @@ class AdminController extends BaseController
      */
     public static function userCreate(): void
     {
-        self::requireAdmin();
+        self::requirePanelAdmin();
 
         $errors = [];
         $success = '';
@@ -261,7 +355,7 @@ class AdminController extends BaseController
             ];
         }
 
-        self::assignAdminPage(
+        self::assignPanelPage(
             $template,
             'users_create',
             'Create User',
@@ -273,7 +367,7 @@ class AdminController extends BaseController
         $template->assign('csrf_token', Security::generateCsrfToken());
         $template->assign('error', $errors);
         $template->assign('success', $success);
-        $template->render('admin/admin_user_create.html');
+        $template->render('panel/control_panel_user_create.html');
     }
 
     /**
@@ -287,7 +381,7 @@ class AdminController extends BaseController
      */
     public static function userEdit(int $id): void
     {
-        self::requireAdmin();
+        self::requirePanelAdmin();
 
         $errors = [];
         $success = '';
@@ -387,7 +481,7 @@ class AdminController extends BaseController
             ];
         }
 
-        self::assignAdminPage(
+        self::assignPanelPage(
             $template,
             'users',
             'Edit User',
@@ -406,7 +500,7 @@ class AdminController extends BaseController
         $template->assign('csrf_token', Security::generateCsrfToken());
         $template->assign('error', $errors);
         $template->assign('success', $success);
-        $template->render('admin/admin_user_edit.html');
+        $template->render('panel/control_panel_user_edit.html');
     }
 
     /**
@@ -418,7 +512,7 @@ class AdminController extends BaseController
      */
     public static function settings(): void
     {
-        self::requireAdmin();
+        self::requirePanelAdmin();
 
         $template = self::initTemplate();
 
@@ -464,7 +558,7 @@ class AdminController extends BaseController
             ];
         }
 
-        self::assignAdminPage(
+        self::assignPanelPage(
             $template,
             'settings',
             'Application Settings',
@@ -474,9 +568,9 @@ class AdminController extends BaseController
 
         $template->assign('settings', $settings);
         $template->assign('csrf_token', Security::generateCsrfToken());
-        $template->assign('admin_notice', $notice);
-        $template->assign('admin_notice_type', $noticeType);
-        $template->render('admin/admin_settings.html');
+        $template->assign('control_panel_notice', $notice);
+        $template->assign('control_panel_notice_type', $noticeType);
+        $template->render('panel/control_panel_settings.html');
     }
 
     /**
@@ -488,18 +582,18 @@ class AdminController extends BaseController
      */
     public static function settingsSave(): void
     {
-        self::requireAdmin();
+        self::requirePanelAdmin();
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST')
         {
-            header('Location: /admin/settings');
+            header('Location: /panel/settings');
             exit();
         }
 
         $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
         if (!Security::verifyCsrfToken($csrf))
         {
-            header('Location: /admin/settings?error=csrf');
+            header('Location: /panel/settings?error=csrf');
             exit();
         }
 
@@ -509,7 +603,7 @@ class AdminController extends BaseController
 
         if ($key === '')
         {
-            header('Location: /admin/settings?error=key');
+            header('Location: /panel/settings?error=key');
             exit();
         }
 
@@ -530,7 +624,7 @@ class AdminController extends BaseController
             ]
         );
 
-        header('Location: /admin/settings?success=1');
+        header('Location: /panel/settings?success=1');
         exit();
     }
 
@@ -545,7 +639,7 @@ class AdminController extends BaseController
      */
     public static function securityLogs(): void
     {
-        self::requireAdmin();
+        self::requirePanelAdmin();
 
         $template = self::initTemplate();
 
@@ -694,7 +788,7 @@ class AdminController extends BaseController
                 TypeHelper::toString(DateHelper::date_only_format($l['created_at']) ?? ''),
                 TypeHelper::toString($l['category'] ?? ''),
                 TypeHelper::toString(ucfirst(self::getUsernameById($l['user_id'])) ?? ''),
-                '/admin/security/logs/view?id=' . $id,
+                '/panel/security/logs/view?id=' . $id,
             ];
         }
 
@@ -745,7 +839,7 @@ class AdminController extends BaseController
             $queryParams['q'] = $filters['q'];
         }
 
-        $baseUrl = '/admin/security/logs';
+        $baseUrl = '/panel/security/logs';
         $buildUrl = function (int $p) use ($baseUrl, $queryParams): string
         {
             $params = $queryParams;
@@ -793,7 +887,7 @@ class AdminController extends BaseController
             $pagination_pages[] = [$buildUrl($totalPages), $totalPages, false];
         }
 
-        self::assignAdminPage(
+        self::assignPanelPage(
             $template,
             'security_logs',
             'Security Logs',
@@ -813,7 +907,7 @@ class AdminController extends BaseController
         $template->assign('pagination_next', $pagination_next);
         $template->assign('pagination_pages', $pagination_pages);
 
-        $template->render('admin/admin_security_logs.html');
+        $template->render('panel/control_panel_security_logs.html');
     }
 
     /**
@@ -825,12 +919,12 @@ class AdminController extends BaseController
      */
     public static function securityLogView(): void
     {
-        self::requireAdmin();
+        self::requirePanelAdmin();
 
         $id = TypeHelper::toInt($_GET['id'] ?? 0) ?? 0;
         if ($id < 1)
         {
-            header('Location: /admin/security/logs');
+            header('Location: /panel/security/logs');
             exit();
         }
 
@@ -854,11 +948,11 @@ class AdminController extends BaseController
 
         if (empty($log))
         {
-            header('Location: /admin/security/logs');
+            header('Location: /panel/security/logs');
             exit();
         }
 
-        self::assignAdminPage(
+        self::assignPanelPage(
             $template,
             'security_logs',
             'Security Log Details',
@@ -877,7 +971,7 @@ class AdminController extends BaseController
         $userId = TypeHelper::toInt($log['user_id'] ?? 0) ?? 0;
         $template->assign('log_user', TypeHelper::toString(ucfirst(self::getUsernameById($userId)) ?? ''));
 
-        $template->render('admin/admin_security_log_view.html');
+        $template->render('panel/control_panel_security_log_view.html');
     }
 
     /**
@@ -889,7 +983,7 @@ class AdminController extends BaseController
      */
     public static function blockList(): void
     {
-        self::requireAdmin();
+        self::requirePanelAdmin();
 
         $template = self::initTemplate();
 
@@ -995,7 +1089,7 @@ class AdminController extends BaseController
             ];
         }
 
-        self::assignAdminPage(
+        self::assignPanelPage(
             $template,
             'block_list',
             'Block List',
@@ -1004,14 +1098,14 @@ class AdminController extends BaseController
         );
 
         $template->assign('blocks', $blocks);
-        $template->assign('admin_notice', $notice);
-        $template->assign('admin_notice_type', $noticeType);
+        $template->assign('control_panel_notice', $notice);
+        $template->assign('control_panel_notice_type', $noticeType);
         $template->assign('filter_ip', TypeHelper::toString($filters['ip']));
         $template->assign('filter_fingerprint', TypeHelper::toString($filters['fingerprint']));
         $template->assign('filter_user_id', TypeHelper::toString($filters['user_id']));
         $template->assign('filter_status', TypeHelper::toString($filters['status']));
         $template->assign('csrf_token', Security::generateCsrfToken());
-        $template->render('admin/admin_block_list.html');
+        $template->render('panel/control_panel_block_list.html');
     }
 
     /**
@@ -1024,18 +1118,18 @@ class AdminController extends BaseController
      */
     public static function blockCreate(): void
     {
-        self::requireAdmin();
+        self::requirePanelAdmin();
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST')
         {
-            header('Location: /admin/security/blocks');
+            header('Location: /panel/security/blocks');
             exit();
         }
 
         $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
         if (!Security::verifyCsrfToken($csrf))
         {
-            header('Location: /admin/security/blocks?error=csrf');
+            header('Location: /panel/security/blocks?error=csrf');
             exit();
         }
 
@@ -1095,7 +1189,7 @@ class AdminController extends BaseController
 
         if ($scope === '')
         {
-            header('Location: /admin/security/blocks?error=scope');
+            header('Location: /panel/security/blocks?error=scope');
             exit();
         }
 
@@ -1118,7 +1212,7 @@ class AdminController extends BaseController
             ]
         );
 
-        header('Location: /admin/security/blocks?created=1');
+        header('Location: /panel/security/blocks?created=1');
         exit();
     }
 
@@ -1132,7 +1226,7 @@ class AdminController extends BaseController
      */
     public static function blockEdit(int $id): void
     {
-        self::requireAdmin();
+        self::requirePanelAdmin();
 
         $errors = [];
         $success = '';
@@ -1209,7 +1303,7 @@ class AdminController extends BaseController
         }
 
         $template = self::initTemplate();
-        self::assignAdminPage(
+        self::assignPanelPage(
             $template,
             'block_list',
             'Edit Block Entry',
@@ -1227,7 +1321,7 @@ class AdminController extends BaseController
         $template->assign('csrf_token', Security::generateCsrfToken());
         $template->assign('error', $errors);
         $template->assign('success', $success);
-        $template->render('admin/admin_block_edit.html');
+        $template->render('panel/control_panel_block_edit.html');
     }
 
     /**
@@ -1240,18 +1334,18 @@ class AdminController extends BaseController
      */
     public static function blockRemoveMatch(): void
     {
-        self::requireAdmin();
+        self::requirePanelAdmin();
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST')
         {
-            header('Location: /admin/security/blocks');
+            header('Location: /panel/security/blocks');
             exit();
         }
 
         $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
         if (!Security::verifyCsrfToken($csrf))
         {
-            header('Location: /admin/security/blocks?error=csrf');
+            header('Location: /panel/security/blocks?error=csrf');
             exit();
         }
 
@@ -1282,7 +1376,7 @@ class AdminController extends BaseController
 
         if (empty($where))
         {
-            header('Location: /admin/security/blocks?error=match');
+            header('Location: /panel/security/blocks?error=match');
             exit();
         }
 
@@ -1291,7 +1385,7 @@ class AdminController extends BaseController
             $params
         );
 
-        header('Location: /admin/security/blocks?removed=1');
+        header('Location: /panel/security/blocks?removed=1');
         exit();
     }
 
@@ -1305,24 +1399,670 @@ class AdminController extends BaseController
      */
     public static function blockRemove(int $id): void
     {
-        self::requireAdmin();
+        self::requirePanelAdmin();
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST')
         {
-            header('Location: /admin/security/blocks');
+            header('Location: /panel/security/blocks');
             exit();
         }
 
         $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
         if (!Security::verifyCsrfToken($csrf))
         {
-            header('Location: /admin/security/blocks?error=csrf');
+            header('Location: /panel/security/blocks?error=csrf');
             exit();
         }
 
         Database::query("DELETE FROM app_block_list WHERE id = :id", ['id' => $id]);
 
-        header('Location: /admin/security/blocks?removed=1');
+        header('Location: /panel/security/blocks?removed=1');
         exit();
+    }
+
+
+    public static function pending($page = null): void
+    {
+        $template = self::initTemplate();
+
+        // Require login and role check
+        self::requirePanelAccess($template);
+
+        $page = TypeHelper::toInt($page ?? null) ?? 1;
+        if ($page < 1)
+        {
+            $page = 1;
+        }
+        $perPage = 15; // number of images per page
+        $offset = ($page - 1) * $perPage;
+
+        // Fetch total pending images count
+        $totalCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'pending'");
+        $totalCount = TypeHelper::toInt($totalCountResult['cnt'] ?? null) ?? 0;
+
+        // Fetch paginated pending images
+        $rows = Database::fetchAll("
+            SELECT 
+                image_hash,
+                user_id,
+                age_sensitive,
+                mime_type,
+                created_at
+            FROM app_images
+            WHERE status = 'pending'
+            ORDER BY created_at DESC
+            LIMIT :offset, :perpage
+        ", [
+            'offset' => $offset,
+            'perpage' => $perPage
+        ]);
+
+        // Flatten each row for template engine
+        $flattenedRows = [];
+        foreach ($rows as $row)
+        {
+            $flattenedRows[] = [
+                $row['image_hash'],
+                self::getUsernameById($row['user_id']),
+                DateHelper::format($row['created_at']),
+            ];
+        }
+
+        // Assign template variables
+        $template->assign('pending_rows', $flattenedRows);
+        $template->assign('pending_count', count($flattenedRows));
+
+        // Pagination calculation
+        $totalPages = (int)ceil($totalCount / $perPage);
+
+        $paginationPages = [];
+        for ($i = 1; $i <= $totalPages; $i++)
+        {
+            $paginationPages[] = [
+                "/panel/image-pending/page/{$i}",
+                $i,
+                $i === $page // current
+            ];
+        }
+
+        $paginationPrev = $page > 1 ? "/panel/image-pending/page/" . ($page - 1) : null;
+        $paginationNext = $page < $totalPages ? "/panel/image-pending/page/" . ($page + 1) : null;
+
+        $template->assign('pagination_pages', $paginationPages);
+        $template->assign('pagination_prev', $paginationPrev);
+        $template->assign('pagination_next', $paginationNext);
+
+        self::assignPanelPage(
+            $template,
+            'pending',
+            'Pending Images',
+            'Review queued uploads, inspect previews, and approve or reject submissions with a faster moderation flow.',
+            'queue'
+        );
+
+        $template->render('panel/control_panel_pending.html');
+    }
+
+    /**
+     * Approve a pending image from the control panel.
+     *
+     * This action is POST-only and requires a valid CSRF token.
+     * Only images in "pending" status may be approved.
+     *
+     * @param string $hash The image hash identifier from the route.
+     * @return void
+     */
+    public static function approveImage(string $hash): void
+    {
+        $template = self::initTemplate();
+
+        // Require login and role check
+        self::requirePanelAccess($template);
+
+        // Approve requests must be POST-only (prevents accidental approvals from URL visits)
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            http_response_code(405);
+            $template->assign('title', 'Method Not Allowed');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $csrfToken = $_POST['csrf_token'] ?? '';
+
+        // Verify CSRF token to prevent cross-site request forgery
+        if (!Security::verifyCsrfToken($csrfToken))
+        {
+            self::renderInvalidRequest($template);
+            return;
+        }
+
+        // Ensure a valid hash is provided
+        // (The router passes the hash from the URL, but we still validate it here.)
+        $hash = TypeHelper::toString($hash);
+        if ($hash === '')
+        {
+            self::renderErrorPage(404, '404 Not Found', 'Oops! We couldn’t find that image.', $template);
+            return;
+        }
+
+        // Find the target image and confirm moderation state
+        // (We only allow approving images that are currently pending.)
+        $sql = "SELECT image_hash, status
+                FROM app_images
+                WHERE image_hash = :hash LIMIT 1";
+        $image = Database::fetch($sql, [':hash' => $hash]);
+
+        if (!$image)
+        {
+            self::renderImageNotFound($template);
+            return;
+        }
+
+        // Only pending images can be approved
+        // (If it has already been moderated, just return back to the pending list.)
+        if (($image['status'] ?? '') !== 'pending')
+        {
+            header('Location: /panel/image-pending');
+            exit;
+        }
+
+        // Approve image
+        // - Record the moderator user id for audit/history tracking
+        // - Store moderation timestamps for UI / reporting
+        $appUserId = SessionManager::get('user_id');
+        $sql = "UPDATE app_images
+                SET status = 'approved',
+                    approved_by = $appUserId,
+                    moderated_at = NOW(),
+                    updated_at = NOW()
+                WHERE image_hash = :hash
+                AND status = 'pending'";
+        Database::execute($sql, [':hash' => $hash]);
+
+        // Redirect back to the pending list after action completes
+        header('Location: /panel/image-pending');
+        exit;
+    }
+
+    /**
+     * Approve a pending image from the control panel.
+     *
+     * This action is POST-only and requires a valid CSRF token.
+     * Only images in "pending" status may be approved.
+     *
+     * @param string $hash The image hash identifier from the route.
+     * @return void
+     */
+    public static function approveImageSensitive(string $hash): void
+    {
+        $template = self::initTemplate();
+
+        // Require login and role check
+        self::requirePanelAccess($template);
+
+        // Approve requests must be POST-only (prevents accidental approvals from URL visits)
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            http_response_code(405);
+            $template->assign('title', 'Method Not Allowed');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $csrfToken = $_POST['csrf_token'] ?? '';
+
+        // Verify CSRF token to prevent cross-site request forgery
+        if (!Security::verifyCsrfToken($csrfToken))
+        {
+            self::renderInvalidRequest($template);
+            return;
+        }
+
+        // Ensure a valid hash is provided
+        // (The router passes the hash from the URL, but we still validate it here.)
+        $hash = TypeHelper::toString($hash);
+        if ($hash === '')
+        {
+            self::renderErrorPage(404, '404 Not Found', 'Oops! We couldn’t find that image.', $template);
+            return;
+        }
+
+        // Find the target image and confirm moderation state
+        // (We only allow approving images that are currently pending.)
+        $sql = "SELECT image_hash, status
+                FROM app_images
+                WHERE image_hash = :hash LIMIT 1";
+        $image = Database::fetch($sql, [':hash' => $hash]);
+
+        if (!$image)
+        {
+            self::renderImageNotFound($template);
+            return;
+        }
+
+        // Only pending images can be approved
+        // (If it has already been moderated, just return back to the pending list.)
+        if (($image['status'] ?? '') !== 'pending')
+        {
+            header('Location: /panel/image-pending');
+            exit;
+        }
+
+        // Approve image
+        // - Record the moderator user id for audit/history tracking
+        // - Store moderation timestamps for UI / reporting
+        $appUserId = SessionManager::get('user_id');
+        $sql = "UPDATE app_images
+                SET age_sensitive = 1,
+                    status = 'approved',
+                    approved_by = $appUserId,
+                    moderated_at = NOW(),
+                    updated_at = NOW()
+                WHERE image_hash = :hash
+                AND status = 'pending'";
+        Database::execute($sql, [':hash' => $hash]);
+
+        // Redirect back to the pending list after action completes
+        header('Location: /panel/image-pending');
+        exit;
+    }
+
+    /**
+     * Reject a pending image from the control panel.
+     *
+     * This action is POST-only and requires a valid CSRF token.
+     * Only images in "pending" status may be rejected.
+     *
+     * @param string $hash The image hash identifier from the route.
+     * @return void
+     */
+    public static function rejectImage(string $hash): void
+    {
+        $template = self::initTemplate();
+
+        // Require login and role check
+        self::requirePanelAccess($template);
+
+        // Reject requests must be POST-only (prevents accidental rejections from URL visits)
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            http_response_code(405);
+            $template->assign('title', 'Method Not Allowed');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $csrfToken = $_POST['csrf_token'] ?? '';
+
+        // Verify CSRF token to prevent cross-site request forgery
+        if (!Security::verifyCsrfToken($csrfToken))
+        {
+            self::renderInvalidRequest($template);
+            return;
+        }
+
+        // Ensure a valid hash is provided
+        // (The router passes the hash from the URL, but we still validate it here.)
+        $hash = TypeHelper::toString($hash);
+        if ($hash === '')
+        {
+            self::renderErrorPage(404, '404 Not Found', 'Oops! We couldn’t find that image.', $template);
+            return;
+        }
+
+        // Find the target image and confirm moderation state
+        // (We only allow rejecting images that are currently pending.)
+        $sql = "SELECT image_hash, status
+                FROM app_images
+                WHERE image_hash = :hash LIMIT 1";
+        $image = Database::fetch($sql, [':hash' => $hash]);
+
+        if (!$image)
+        {
+            self::renderImageNotFound($template);
+            return;
+        }
+
+        // Only pending images can be rejected
+        // (If it has already been moderated, just return back to the pending list.)
+        if (($image['status'] ?? '') !== 'pending')
+        {
+            header('Location: /panel/image-pending');
+            exit;
+        }
+
+        // Reject image
+        // - Record the moderator user id for audit/history tracking
+        // - Store moderation timestamps for UI / reporting
+        $rejUserId = SessionManager::get('user_id');
+        $sql = "UPDATE app_images
+                SET status = 'rejected',
+                    rejected_by = $rejUserId,
+                    moderated_at = NOW(),
+                    updated_at = NOW()
+                WHERE image_hash = :hash
+                AND status = 'pending'";
+        Database::execute($sql, [':hash' => $hash]);
+
+        // Redirect back to the pending list after action completes
+        header('Location: /panel/image-pending');
+        exit;
+    }
+
+    /**
+     * Image comparison tool.
+     *
+     * Allows moderators to select two images and calculate similarity
+     * distances using aHash, pHash, and dHash. Assigns results to template.
+     *
+     * Fetches all approved image hashes for dropdown selection.
+     */
+    public static function comparison(): void
+    {
+        $template = self::initTemplate();
+
+        // Require login and role check
+        self::requirePanelAccess($template);
+
+        $comparisonResult  = null;      // Stores calculated hash distances
+        $selectedImage1    = null;      // First selected image
+        $selectedImage2    = null;      // Second selected image
+        $similarityPercent = 0;         // Overall similarity percentage
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST')
+        {
+            $csrfToken = $_POST['csrf_token'] ?? '';
+
+            // Verify CSRF token to prevent cross-site request forgery
+            if (!Security::verifyCsrfToken($csrfToken))
+            {
+                http_response_code(403);
+                $template->assign('title', 'Access Denied');
+                $template->assign('message', 'Invalid request.');
+                $template->render('errors/error_page.html');
+                return;
+            }
+
+            $hash1 = $_POST['image1_hash'] ?? '';
+            $hash2 = $_POST['image2_hash'] ?? '';
+
+            if ($hash1 && $hash2)
+            {
+                // Fetch image hash data for both selected images
+                $selectedImage1 = Database::fetch("SELECT * FROM app_image_hashes WHERE image_hash = :hash LIMIT 1", ['hash' => $hash1]);
+                $selectedImage2 = Database::fetch("SELECT * FROM app_image_hashes WHERE image_hash = :hash LIMIT 1", ['hash' => $hash2]);
+
+                if ($selectedImage1 && $selectedImage2)
+                {
+                    // Calculate aHash distance
+                    $ahashDistance = HashingHelper::hammingDistance($selectedImage1['ahash'], $selectedImage2['ahash']);
+                    // Calculate dHash distance
+                    $dhashDistance = HashingHelper::hammingDistance($selectedImage1['dhash'], $selectedImage2['dhash']);
+
+                    // Calculate average pHash distance over all 16 blocks
+                    $phashDistanceTotal = 0;
+                    for ($i = 0; $i <= 15; $i++)
+                    {
+                        $block1 = $selectedImage1["phash_block_$i"] ?? '';
+                        $block2 = $selectedImage2["phash_block_$i"] ?? '';
+                        $phashDistanceTotal += HashingHelper::hammingDistance($block1, $block2);
+                    }
+                    $phashDistanceAvg = round($phashDistanceTotal / 16);
+
+                    $comparisonResult = [
+                        'ahash_distance' => $ahashDistance,
+                        'phash_distance' => $phashDistanceAvg,
+                        'dhash_distance' => $dhashDistance,
+                    ];
+                }
+            }
+        }
+
+        // Fetch all approved image hashes for dropdown selection
+        $imageHashes = Database::fetchAll("SELECT image_hash FROM app_images WHERE status IN ('approved') ORDER BY id DESC");
+        $flatImageHashes = array_column($imageHashes, 'image_hash');
+
+        // Calculate similarity percentage if comparison was performed
+        if ($comparisonResult)
+        {
+            $maxDistance = 100;
+            $avgDistance = ($comparisonResult['ahash_distance'] + $comparisonResult['phash_distance'] + $comparisonResult['dhash_distance']) / 2;
+            $similarityPercent = max(0, 100 - round(($avgDistance / $maxDistance) * 100));
+        }
+
+        // Assign results and selections to template
+        $template->assign('ahash_distance', $comparisonResult['ahash_distance'] ?? null);
+        $template->assign('phash_distance', $comparisonResult['phash_distance'] ?? null);
+        $template->assign('dhash_distance', $comparisonResult['dhash_distance'] ?? null);
+        $template->assign('similarity_percent', $similarityPercent);
+
+        $template->assign('image_hashes', $flatImageHashes);
+        $template->assign('selected_image1_hash', $selectedImage1['image_hash'] ?? '');
+        $template->assign('selected_image1_original_path', !empty($selectedImage1['image_hash']) ? '/gallery/original/' . $selectedImage1['image_hash'] : '');
+        $template->assign('selected_image2_hash', $selectedImage2['image_hash'] ?? '');
+        $template->assign('selected_image2_original_path', !empty($selectedImage2['image_hash']) ? '/gallery/original/' . $selectedImage2['image_hash'] : '');
+
+        self::assignPanelPage(
+            $template,
+            'comparison',
+            'Image Comparison',
+            'Compare two approved uploads side-by-side and review hash similarity before taking moderation action.',
+            'tools'
+        );
+
+        $template->render('panel/control_panel_comparison.html');
+    }
+
+    /**
+     * Image rehash tool.
+     *
+     * Allows moderators to recalculate aHash, pHash, and dHash values for a
+     * single image or a batch of images that have not been rehashed yet.
+     *
+     * Uses same image fetching logic as comparison for single image selection.
+     * Updates hashes in database and marks image as rehashed.
+     */
+    public static function rehash(): void
+    {
+        $template = self::initTemplate();
+
+        // Require login and role check
+        self::requirePanelAdmin($template);
+
+        $message = '';
+        $processedImages = [];
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST')
+        {
+            $csrfToken = $_POST['csrf_token'] ?? '';
+
+            // Verify CSRF token to prevent cross-site request forgery
+            if (!Security::verifyCsrfToken($csrfToken))
+            {
+                http_response_code(403);
+                $template->assign('title', 'Access Denied');
+                $template->assign('message', 'Invalid request.');
+                $template->render('errors/error_page.html');
+                return;
+            }
+
+            $mode = $_POST['rehash_mode'] ?? 'single';
+            $imageHash = $_POST['image_hash'] ?? null;
+
+            // Fetch images to rehash
+            if ($mode === 'single' && $imageHash)
+            {
+                // Check both tables for existence
+                $image = Database::fetch("SELECT * FROM app_images WHERE image_hash = :hash AND status IN ('approved') LIMIT 1", ['hash' => $imageHash]);
+                $hashRow = Database::fetch("SELECT * FROM app_image_hashes WHERE image_hash = :hash LIMIT 1", ['hash' => $imageHash]);
+
+                if (!$image || !$hashRow)
+                {
+                    $message = "Error: Image hash missing in " . (!$image ? 'app_images' : 'app_image_hashes') . ". Cannot rehash.";
+                    $images = [];
+                }
+                else
+                {
+                    $images = [$image];
+                }
+            }
+            elseif ($mode === 'batch')
+            {
+                // Batch: select images not yet rehashed
+                $images = Database::fetchAll("SELECT * FROM app_images WHERE rehashed = 0 OR rehashed_on IS NULL AND status IN ('approved')  ORDER BY id ASC LIMIT 10");
+            }
+            else
+            {
+                $images = [];
+            }
+
+            // Recalculate hashes for each selected image
+            foreach ($images as $img)
+            {
+                $imgPath = IMAGE_PATH . '/' . str_replace("images/", "", $img['original_path']);
+
+                if (file_exists($imgPath))
+                {
+                    // Generate hashes
+                    $newPhash = HashingHelper::pHash($imgPath, 32, 16);
+                    $newAhash = HashingHelper::aHash($imgPath, 16);
+                    $newDhash = HashingHelper::dHash($imgPath, 17, 16);
+
+                    // Split pHash into 16 blocks
+                    $phashBlocks = [];
+                    for ($i = 0; $i < 16; $i++)
+                    {
+                        $phashBlocks["phash_block_$i"] = substr($newPhash, $i * 4, 4);
+                    }
+
+                    // Insert or update app_image_hashes
+                    Database::execute("
+                        INSERT INTO app_image_hashes (image_hash, ahash, dhash, phash, phash_block_0, phash_block_1, phash_block_2, phash_block_3,
+                                                     phash_block_4, phash_block_5, phash_block_6, phash_block_7,
+                                                     phash_block_8, phash_block_9, phash_block_10, phash_block_11,
+                                                     phash_block_12, phash_block_13, phash_block_14, phash_block_15)
+                        VALUES (:image_hash, :ahash, :dhash, :phash,
+                                :phash_block_0, :phash_block_1, :phash_block_2, :phash_block_3,
+                                :phash_block_4, :phash_block_5, :phash_block_6, :phash_block_7,
+                                :phash_block_8, :phash_block_9, :phash_block_10, :phash_block_11,
+                                :phash_block_12, :phash_block_13, :phash_block_14, :phash_block_15)
+                        ON DUPLICATE KEY UPDATE
+                            ahash = VALUES(ahash),
+                            dhash = VALUES(dhash),
+                            phash = VALUES(phash),
+                            phash_block_0 = VALUES(phash_block_0),
+                            phash_block_1 = VALUES(phash_block_1),
+                            phash_block_2 = VALUES(phash_block_2),
+                            phash_block_3 = VALUES(phash_block_3),
+                            phash_block_4 = VALUES(phash_block_4),
+                            phash_block_5 = VALUES(phash_block_5),
+                            phash_block_6 = VALUES(phash_block_6),
+                            phash_block_7 = VALUES(phash_block_7),
+                            phash_block_8 = VALUES(phash_block_8),
+                            phash_block_9 = VALUES(phash_block_9),
+                            phash_block_10 = VALUES(phash_block_10),
+                            phash_block_11 = VALUES(phash_block_11),
+                            phash_block_12 = VALUES(phash_block_12),
+                            phash_block_13 = VALUES(phash_block_13),
+                            phash_block_14 = VALUES(phash_block_14),
+                            phash_block_15 = VALUES(phash_block_15)
+                    ", array_merge([
+                        'image_hash' => $img['image_hash'],
+                        'ahash' => $newAhash,
+                        'dhash' => $newDhash,
+                        'phash' => $newPhash,
+                    ], $phashBlocks));
+
+                    // Mark image as rehashed in app_images
+                    Database::execute("
+                        UPDATE app_images SET
+                            rehashed = 1,
+                            rehashed_on = NOW()
+                        WHERE id = :id
+                    ", [
+                        'id' => $img['id']
+                    ]);
+
+                    $processedImages[] = $img['image_hash'];
+                }
+            }
+
+            $count = count($processedImages);
+            $message = $message ?: "Rehashed {$count} image" . ($count === 1 ? '' : 's') . " successfully.";
+        }
+
+        // Fetch all image hashes for selection dropdown
+        $imageHashes = Database::fetchAll("SELECT image_hash FROM app_images WHERE status IN ('approved') ORDER BY id DESC");
+        $flatImageHashes = array_column($imageHashes, 'image_hash');
+
+        // Assign template variables
+        $template->assign('image_hashes', $flatImageHashes);
+        $template->assign('processed_images', $processedImages);
+        $template->assign('message', $message);
+
+        self::assignPanelPage(
+            $template,
+            'rehash',
+            'Image Rehashing',
+            'Rebuild perceptual hash data for approved uploads when legacy records need to be refreshed or repaired.',
+            'tools'
+        );
+
+        // Render control panel template with the rehash tool.
+        $template->render('panel/control_panel_rehash.html');
+    }
+
+    /**
+     * Serve an image file directly from the uploads directory.
+     *
+     * @param string $hash Unique hash identifier for the image.
+     * @return void
+     */
+    public static function servePendingImage(string $hash): void
+    {
+        $template = self::initTemplate();
+
+        // Require login and role check
+        self::requirePanelAccess($template);
+
+        $sql = "
+            SELECT
+                original_path,
+                mime_type,
+                age_sensitive
+            FROM app_images
+            WHERE image_hash = :hash
+              AND (status = 'pending')
+            LIMIT 1
+        ";
+        $image = Database::fetch($sql, ['hash' => $hash]);
+
+        if (!$image)
+        {
+            self::renderImageNotFound($template);
+            return;
+        }
+
+        $baseDir = realpath(IMAGE_PATH);
+        $fullPath = realpath($baseDir . '/' . ltrim(str_replace("images/", "", $image['original_path']), '/'));
+
+        if (!$fullPath || strpos($fullPath, $baseDir) !== 0 || !file_exists($fullPath))
+        {
+            self::renderImageNotFound($template);
+            return;
+        }
+
+        header('Content-Type: ' . $image['mime_type']);
+        header('Content-Length: ' . filesize($fullPath));
+        header('Cache-Control: private, no-store, max-age=0');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        header('Vary: Cookie');
+        readfile($fullPath);
+        exit;
     }
 }

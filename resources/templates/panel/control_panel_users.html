@@ -4,20 +4,20 @@
         <div class="admin-shell admin-layout">
             <div class="admin-sidebar">
                 <div class="admin-sidebar-inner admin-menu">
-                    {include file="admin/admin_menu.html"}
+                    {include file="panel/control_panel_menu.html"}
                 </div>
             </div>
 
             <div class="admin-content admin-dashboard">
                 <div class="admin-page-header">
                     <div>
-                        <div class="admin-kicker">Administration Control Panel</div>
-                        <h2>{$admin_page_title}</h2>
-                        <p>{$admin_page_description}</p>
+                        <div class="admin-kicker">Control Panel</div>
+                        <h2>{$control_panel_page_title}</h2>
+                        <p>{$control_panel_page_description}</p>
                     </div>
 
                     <div class="admin-page-actions">
-                        <a href="/admin/users/create" class="admin-btn admin-btn-primary"><i class="fa-solid fa-user-plus"></i> Create User</a>
+                        <a href="/panel/users/create" class="admin-btn admin-btn-primary"><i class="fa-solid fa-user-plus"></i> Create User</a>
                     </div>
                 </div>
 
@@ -58,7 +58,7 @@
                                             <td><span class="admin-status admin-status-{$u_status}">{$u_status}</span></td>
                                             <td>{$u_created_at}</td>
                                             <td>
-                                                <a href="/admin/users/edit/{$u_id}" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-pen-to-square"></i> Edit</a>
+                                                <a href="/panel/users/edit/{$u_id}" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-pen-to-square"></i> Edit</a>
                                             </td>
                                         </tr>
                                         {/foreach}

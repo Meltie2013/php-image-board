@@ -1,0 +1,250 @@
+{include file="global/header.html"}
+
+    <main class="admin-container">
+        <div class="admin-shell admin-layout">
+            <div class="admin-sidebar">
+                <div class="admin-sidebar-inner admin-menu">
+                    {include file="panel/control_panel_menu.html"}
+                </div>
+            </div>
+
+            <div class="admin-content admin-dashboard">
+                <div class="admin-page-header">
+                    <div>
+                        <div class="admin-kicker">Control Panel</div>
+                        <h2>{$control_panel_page_title}</h2>
+                        <p>{$control_panel_page_description}</p>
+                    </div>
+
+                    <div class="admin-page-actions">
+                        {if $cp_can_moderate_images}
+                        <a href="/panel/image-pending" class="admin-btn admin-btn-primary"><i class="fa-solid fa-clock"></i> Review Queue</a>
+                        <a href="/panel/image-comparison" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-code-compare"></i> Compare Images</a>
+                        {/if}
+
+                        {if $cp_can_rehash_images}
+                        <a href="/panel/image-rehash" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-arrows-rotate"></i> Rehash Tool</a>
+                        {/if}
+
+                        {if $cp_can_manage_users}
+                        <a href="/panel/users" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-users"></i> Manage Users</a>
+                        {/if}
+
+                        {if $cp_can_manage_settings}
+                        <a href="/panel/settings" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-sliders"></i> Settings</a>
+                        {/if}
+
+                        {if $cp_can_view_security}
+                        <a href="/panel/security/logs" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-shield-halved"></i> View Logs</a>
+                        {/if}
+                    </div>
+                </div>
+
+                <div class="admin-split-panels">
+                    <section class="admin-panel">
+                        <div class="admin-panel-heading">
+                            <div>
+                                <h3>System Overview</h3>
+                                <p>Image and platform statistics are surfaced here based on the current staff role.</p>
+                            </div>
+                        </div>
+
+                        <div class="admin-panel-body">
+                            <div class="admin-stat-grid">
+                                {if $cp_is_admin}
+                                <article class="admin-stat-card">
+                                    <div class="admin-stat-card-label"><i class="fa-solid fa-user-group"></i> Total Users</div>
+                                    <div class="admin-stat-card-value">{$total_users}</div>
+                                    <p>All non-deleted user accounts currently available to the platform.</p>
+                                </article>
+
+                                <article class="admin-stat-card">
+                                    <div class="admin-stat-card-label"><i class="fa-solid fa-lock"></i> Active Blocks / Jails</div>
+                                    <div class="admin-stat-card-value">{$active_blocks}</div>
+                                    <p>Current enforcement records that are still active or permanent.</p>
+                                </article>
+                                {/if}
+
+                                <article class="admin-stat-card">
+                                    <div class="admin-stat-card-label"><i class="fa-solid fa-images"></i> Total Images</div>
+                                    <div class="admin-stat-card-value total">{$total_images}</div>
+                                    <p>All image records currently tracked by the platform.</p>
+                                </article>
+
+                                <article class="admin-stat-card">
+                                    <div class="admin-stat-card-label"><i class="fa-solid fa-check"></i> Approved</div>
+                                    <div class="admin-stat-card-value approved">{$approved_count}</div>
+                                    <p>Uploads that are currently visible and fully approved.</p>
+                                </article>
+
+                                <article class="admin-stat-card">
+                                    <div class="admin-stat-card-label"><i class="fa-solid fa-hourglass-half"></i> Pending</div>
+                                    <div class="admin-stat-card-value pending">{$pending_count}</div>
+                                    <p>Uploads still waiting for a moderator decision.</p>
+                                </article>
+
+                                {if $cp_is_admin}
+                                <article class="admin-stat-card">
+                                    <div class="admin-stat-card-label"><i class="fa-solid fa-trash"></i> Deleted</div>
+                                    <div class="admin-stat-card-value removed">{$removed_count}</div>
+                                    <p>Images removed from active circulation but retained as records.</p>
+                                </article>
+
+                                <article class="admin-stat-card">
+                                    <div class="admin-stat-card-label"><i class="fa-solid fa-xmark"></i> Rejected</div>
+                                    <div class="admin-stat-card-value removed">{$rejected_count}</div>
+                                    <p>Uploads explicitly denied during moderation review.</p>
+                                </article>
+
+                                <article class="admin-stat-card">
+                                    <div class="admin-stat-card-label"><i class="fa-solid fa-chart-line"></i> Combined Views</div>
+                                    <div class="admin-stat-card-value total">{$total_view_count}</div>
+                                    <p>Total approved-image views recorded across the gallery.</p>
+                                </article>
+                                {/if}
+                            </div>
+                        </div>
+                    </section>
+
+                    <div class="admin-shell-grid">
+                        <section class="admin-panel">
+                            <div class="admin-panel-heading">
+                                <div>
+                                    <h3>Quick Modules</h3>
+                                    <p>Jump directly into the sections that matter for your current role.</p>
+                                </div>
+                            </div>
+
+                            <div class="admin-panel-body">
+                                <div class="admin-shortcuts-grid">
+                                    {if $cp_can_moderate_images}
+                                    <article class="admin-shortcut-card">
+                                        <h4>Review Queue</h4>
+                                        <p>Open the pending uploads queue and resolve moderation decisions quickly.</p>
+                                        <a href="/panel/image-pending" class="admin-btn admin-btn-secondary">Open Queue</a>
+                                    </article>
+
+                                    <article class="admin-shortcut-card">
+                                        <h4>Image Comparison</h4>
+                                        <p>Measure similarity between approved images before moderation decisions.</p>
+                                        <a href="/panel/image-comparison" class="admin-btn admin-btn-secondary">Open Comparison</a>
+                                    </article>
+                                    {/if}
+
+                                    {if $cp_can_rehash_images}
+                                    <article class="admin-shortcut-card">
+                                        <h4>Rehashing</h4>
+                                        <p>Refresh perceptual hash records when legacy image data needs repair.</p>
+                                        <a href="/panel/image-rehash" class="admin-btn admin-btn-secondary">Open Rehash Tool</a>
+                                    </article>
+                                    {/if}
+
+                                    {if $cp_can_manage_users}
+                                    <article class="admin-shortcut-card">
+                                        <h4>User Administration</h4>
+                                        <p>Inspect member roles, statuses, and account access.</p>
+                                        <a href="/panel/users" class="admin-btn admin-btn-secondary">Open Users</a>
+                                    </article>
+                                    {/if}
+
+                                    {if $cp_can_manage_settings}
+                                    <article class="admin-shortcut-card">
+                                        <h4>Configuration</h4>
+                                        <p>Manage the application settings surface for gallery, security, and future modules.</p>
+                                        <a href="/panel/settings" class="admin-btn admin-btn-secondary">Open Settings</a>
+                                    </article>
+                                    {/if}
+
+                                    {if $cp_can_view_security}
+                                    <article class="admin-shortcut-card">
+                                        <h4>Audit Visibility</h4>
+                                        <p>Review the security events feeding your moderation and abuse workflows.</p>
+                                        <a href="/panel/security/logs" class="admin-btn admin-btn-secondary">Open Logs</a>
+                                    </article>
+
+                                    <article class="admin-shortcut-card">
+                                        <h4>Enforcement</h4>
+                                        <p>Manage blocks, bans, jail states, and rate-limit escalations.</p>
+                                        <a href="/panel/security/blocks" class="admin-btn admin-btn-secondary">Open Block List</a>
+                                    </article>
+                                    {/if}
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="admin-panel">
+                            <div class="admin-panel-heading">
+                                <div>
+                                    <h3>Storage &amp; Workflow</h3>
+                                    <p>Quick visibility into capacity pressure and the image workload still ahead.</p>
+                                </div>
+                            </div>
+
+                            <div class="admin-panel-body moderation-panel-stack">
+                                <article class="moderation-storage-card">
+                                    <div class="moderation-stat-card-label"><i class="fa-solid fa-hard-drive"></i> Storage Usage</div>
+                                    <div class="storage-meter" style="--used-percent: {$storage_usage_percent};">
+                                        <div class="storage-meter-summary">
+                                            <div class="storage-meter-amount">{$storage_used} <span>of {$storage_total}</span></div>
+                                            <div class="storage-meter-percent">{$storage_percent}</div>
+                                        </div>
+
+                                        <div class="storage-meter-track">
+                                            <div class="storage-meter-fill"></div>
+                                        </div>
+                                    </div>
+                                    <p>{$storage_percent} used with {$storage_remaining} remaining before the configured limit is reached.</p>
+                                </article>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                {if $cp_can_view_security}
+                <section class="admin-panel">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <h3>Recent Security Events</h3>
+                            <p>Latest audit entries for quick triage before drilling into the full log pages.</p>
+                        </div>
+
+                        <a href="/panel/security/logs" class="admin-btn admin-btn-secondary">See Full Log</a>
+                    </div>
+
+                    <div class="admin-panel-body">
+                        {if empty($recent_logs)}
+                            <div class="admin-empty-state">
+                                <p>No security events are available to display right now.</p>
+                            </div>
+                        {else}
+                            <div class="pending-images-wrapper">
+                                <table class="pending-images-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Category</th>
+                                            <th>Message</th>
+                                            <th>User</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {foreach $recent_logs as list($log_created_at, $log_category, $log_message, $log_user_id)}
+                                        <tr>
+                                            <td>{$log_created_at}</td>
+                                            <td><span class="admin-pill">{$log_category}</span></td>
+                                            <td class="is-wrap">{$log_message}</td>
+                                            <td>{$log_user_id}</td>
+                                        </tr>
+                                        {/foreach}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {/if}
+                    </div>
+                </section>
+                {/if}
+            </div>
+        </div>
+    </main>
+
+{include file="global/footer.html"}

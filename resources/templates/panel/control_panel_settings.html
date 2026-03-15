@@ -4,23 +4,23 @@
         <div class="admin-shell admin-layout">
             <div class="admin-sidebar">
                 <div class="admin-sidebar-inner admin-menu">
-                    {include file="admin/admin_menu.html"}
+                    {include file="panel/control_panel_menu.html"}
                 </div>
             </div>
 
             <div class="admin-content admin-dashboard">
                 <div class="admin-page-header">
                     <div>
-                        <div class="admin-kicker">Administration Control Panel</div>
-                        <h2>{$admin_page_title}</h2>
-                        <p>{$admin_page_description}</p>
+                        <div class="admin-kicker">Control Panel</div>
+                        <h2>{$control_panel_page_title}</h2>
+                        <p>{$control_panel_page_description}</p>
                     </div>
                 </div>
 
-                {if !empty($admin_notice)}
-                    <div class="admin-notice admin-notice-{$admin_notice_type}">
-                        <i class="fa-solid {if $admin_notice_type == 'success'}fa-circle-check{else}fa-circle-exclamation{/if}"></i>
-                        <p>{$admin_notice}</p>
+                {if !empty($control_panel_notice)}
+                    <div class="admin-notice admin-notice-{$control_panel_notice_type}">
+                        <i class="fa-solid {if $control_panel_notice_type == 'success'}fa-circle-check{else}fa-circle-exclamation{/if}"></i>
+                        <p>{$control_panel_notice}</p>
                     </div>
                 {/if}
 
@@ -55,7 +55,7 @@
                                             <td><span class="admin-status admin-status-{$s_type}">{$s_type}</span></td>
                                             <td>{$s_updated_at}</td>
                                             <td class="admin-cell-edit">
-                                                <form method="POST" action="/admin/settings/save" class="admin-settings-editor">
+                                                <form method="POST" action="/panel/settings/save" class="admin-settings-editor">
                                                     <input type="hidden" name="csrf_token" value="{$csrf_token}">
                                                     <input type="hidden" name="key" value="{$s_key_attr}">
                                                     <input type="text" name="value" value="{$s_value_attr}" class="admin-input" aria-label="Value">
@@ -86,7 +86,7 @@
                     </div>
 
                     <div class="admin-panel-body">
-                        <form method="POST" action="/admin/settings/save" class="admin-form-grid admin-form-grid-settings-add">
+                        <form method="POST" action="/panel/settings/save" class="admin-form-grid admin-form-grid-settings-add">
                             <input type="hidden" name="csrf_token" value="{$csrf_token}">
                             <input type="text" name="key" placeholder="key" class="admin-input" required>
                             <input type="text" name="value" placeholder="value" class="admin-input" required>

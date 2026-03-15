@@ -4,20 +4,20 @@
         <div class="admin-shell admin-layout">
             <div class="admin-sidebar">
                 <div class="admin-sidebar-inner admin-menu">
-                    {include file="admin/admin_menu.html"}
+                    {include file="panel/control_panel_menu.html"}
                 </div>
             </div>
 
             <div class="admin-content admin-dashboard">
                 <div class="admin-page-header">
                     <div>
-                        <div class="admin-kicker">Administration Control Panel</div>
-                        <h2>{$admin_page_title}: {ucfirst($user_username)} (#{$user_id})</h2>
-                        <p>{$admin_page_description}</p>
+                        <div class="admin-kicker">Control Panel</div>
+                        <h2>{$control_panel_page_title}</h2>
+                        <p>{$control_panel_page_description}</p>
                     </div>
 
                     <div class="admin-page-actions">
-                        <a href="/admin/users" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back to Users</a>
+                        <a href="/panel/users" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back to Users</a>
                     </div>
                 </div>
 
@@ -39,36 +39,36 @@
                 <section class="admin-panel">
                     <div class="admin-panel-heading">
                         <div>
-                            <h3>User Profile Controls</h3>
-                            <p>Update identity data, access level, and account lifecycle controls.</p>
+                            <h3>Account Details</h3>
+                            <p>Provision a user with the correct identity, role, and initial account state.</p>
                         </div>
                     </div>
 
                     <div class="admin-panel-body">
-                        <form method="POST" action="/admin/users/edit/{$user_id}" class="admin-form">
+                        <form method="POST" action="/panel/users/create" class="admin-form">
                             <input type="hidden" name="csrf_token" value="{$csrf_token}">
 
                             <div class="admin-form-grid-two">
                                 <div class="admin-field">
                                     <label>Username</label>
-                                    <input type="text" name="username" value="{$user_username}" required>
+                                    <input type="text" name="username" required>
                                 </div>
 
                                 <div class="admin-field">
                                     <label>Display Name</label>
-                                    <input type="text" name="display_name" value="{$user_display_name}">
+                                    <input type="text" name="display_name">
                                 </div>
                             </div>
 
                             <div class="admin-form-grid-two">
                                 <div class="admin-field">
                                     <label>Email</label>
-                                    <input type="email" name="email" value="{$user_email}" required>
+                                    <input type="email" name="email" required>
                                 </div>
 
                                 <div class="admin-field">
-                                    <label>New Password (optional)</label>
-                                    <input type="password" name="password">
+                                    <label>Password</label>
+                                    <input type="password" name="password" required>
                                 </div>
                             </div>
 
@@ -77,7 +77,7 @@
                                     <label>Role</label>
                                     <select name="role_id">
                                         {foreach $roles as list($r_id, $r_name)}
-                                            <option value="{$r_id}" {if $r_id == $user_role_id}selected{/if}>{$r_name}</option>
+                                            <option value="{$r_id}">{$r_name}</option>
                                         {/foreach}
                                     </select>
                                 </div>
@@ -85,17 +85,16 @@
                                 <div class="admin-field">
                                     <label>Status</label>
                                     <select name="status">
-                                        <option value="active" {if $user_status == 'active'}selected{/if}>active</option>
-                                        <option value="pending" {if $user_status == 'pending'}selected{/if}>pending</option>
-                                        <option value="suspended" {if $user_status == 'suspended'}selected{/if}>suspended</option>
-                                        <option value="deleted" {if $user_status == 'deleted'}selected{/if}>deleted</option>
+                                        <option value="active">active</option>
+                                        <option value="pending">pending</option>
+                                        <option value="suspended">suspended</option>
                                     </select>
                                 </div>
                             </div>
 
                             <div class="admin-form-footer">
-                                <button type="submit" class="admin-btn admin-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
-                                <a href="/admin/users" class="admin-btn admin-btn-secondary">Back</a>
+                                <button type="submit" class="admin-btn admin-btn-primary"><i class="fa-solid fa-user-plus"></i> Create User</button>
+                                <a href="/panel/users" class="admin-btn admin-btn-secondary">Cancel</a>
                             </div>
                         </form>
                     </div>
