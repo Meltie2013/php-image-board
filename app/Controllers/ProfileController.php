@@ -136,13 +136,14 @@ class ProfileController extends BaseController
         switch ($mimeType)
         {
             case 'image/jpeg':
-                return strncmp($header, "ÿØÿ", 3) === 0;
+                return strlen($header) >= 3 && strncmp($header, "\xFF\xD8\xFF", 3) === 0;
 
             case 'image/png':
-                return strncmp($header, "PNG\r\n\x1A\n", 8) === 0;
+                return strlen($header) >= 8 && strncmp($header, "\x89PNG\r\n\x1A\n", 8) === 0;
 
             case 'image/gif':
-                return strncmp($header, 'GIF87a', 6) === 0 || strncmp($header, 'GIF89a', 6) === 0;
+                return strlen($header) >= 6
+                    && (strncmp($header, 'GIF87a', 6) === 0 || strncmp($header, 'GIF89a', 6) === 0);
 
             default:
                 return false;
