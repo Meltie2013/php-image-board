@@ -200,7 +200,7 @@ body.installer-page main {
 
 /* Authenticated pages get a wider working area */
 body.installer-page main.installer-authenticated {
-    max-width: 1100px;
+    max-width: 1680px;
 
     /* Match the main site's container look (surface card + top accent) */
     margin: clamp(18px, 4vh, 44px) auto 34px;
@@ -232,60 +232,211 @@ body.installer-page main.installer-authenticated h1 {
 }
 
 /* =========================================================
-   AUTH-LIKE CONTAINER (LOGIN / SETUP)
-
-   Match the main site's auth container styling so the installer
-   login feels identical to /user/login (without register links).
+   AUTH SHELL (INSTALLER LOGIN / SETUP)
 ========================================================= */
-body.installer-page main:not(.installer-authenticated) {
+body.installer-page main.installer-auth {
     width: 100%;
-    max-width: 460px;
-    margin: clamp(28px, 7vh, 70px) auto 0;
-    padding: 32px 28px 26px;
-
-    background: var(--color-surface);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-strong), 0 0 0 1px rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-
-    position: relative;
+    max-width: 1220px;
+    margin: clamp(24px, 6vh, 72px) auto 0;
+    padding: 24px 20px 28px;
 }
 
-body.installer-page main:not(.installer-authenticated)::before {
+body.installer-page .installer-auth-shell {
+    display: grid;
+    grid-template-columns: minmax(260px, 330px) minmax(0, 1fr);
+    gap: 18px;
+    align-items: stretch;
+}
+
+body.installer-page .installer-auth-shell-login {
+    max-width: 980px;
+    margin: 0 auto;
+}
+
+body.installer-page .installer-auth-shell-setup {
+    max-width: 1080px;
+    margin: 0 auto;
+}
+
+body.installer-page .installer-auth-brand-panel,
+body.installer-page .installer-auth-form-panel {
+    position: relative;
+    background: linear-gradient(180deg, rgba(31, 33, 38, 0.94), rgba(24, 26, 30, 0.96));
+    border-radius: 20px;
+    border: 1px solid rgba(84, 98, 255, 0.34);
+    box-shadow:
+        0 16px 38px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    overflow: hidden;
+}
+
+body.installer-page .installer-auth-brand-panel::before,
+body.installer-page .installer-auth-form-panel::before {
     content: "";
     position: absolute;
     inset: 0;
-    border-radius: inherit;
-    border-top: 3px solid rgba(114, 119, 255, 0.9);
     pointer-events: none;
+    background: linear-gradient(135deg, rgba(110, 116, 255, 0.12), rgba(154, 99, 255, 0.05) 38%, transparent 70%);
 }
 
-body.installer-page main:not(.installer-authenticated) > h1 {
-    text-align: center;
-    font-size: 26px;
-    margin: 0 0 22px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+body.installer-page .installer-auth-brand-panel {
+    padding: 26px 22px;
 }
 
-body.installer-page main:not(.installer-authenticated) > p {
-    text-align: left;
-    color: var(--color-text-muted);
-    font-size: 13px;
+body.installer-page .installer-auth-form-panel {
+    padding: 28px 26px;
 }
 
-body.installer-page main:not(.installer-authenticated) form {
-    gap: 8px;
-}
-
-body.installer-page main:not(.installer-authenticated) form button {
-    width: 100%;
-    margin-top: 6px;
+body.installer-page .installer-auth-brand-eyebrow,
+body.installer-page .installer-auth-panel-eyebrow {
     margin-bottom: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #d3d7ff;
 }
 
+body.installer-page .installer-auth-brand-panel h1,
+body.installer-page .installer-auth-form-panel h2 {
+    margin: 0;
+    font-size: clamp(1.65rem, 2vw, 2.2rem);
+    line-height: 1.08;
+}
+
+body.installer-page .installer-auth-form-panel h2 {
+    font-size: clamp(1.45rem, 1.9vw, 1.9rem);
+}
+
+body.installer-page .installer-auth-brand-copy,
+body.installer-page .installer-auth-panel-header p,
+body.installer-page .installer-auth-feature-item p,
+body.installer-page .installer-auth-links p {
+    color: rgba(227, 230, 242, 0.78);
+}
+
+body.installer-page .installer-auth-brand-copy {
+    margin: 14px 0 0;
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+body.installer-page .installer-auth-panel-header {
+    margin-bottom: 18px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+body.installer-page .installer-auth-panel-header p {
+    margin: 10px 0 0;
+    font-size: 0.92rem;
+    line-height: 1.65;
+}
+
+body.installer-page .installer-auth-alert-stack {
+    margin-bottom: 16px;
+}
+
+body.installer-page .installer-auth-feature-list {
+    display: grid;
+    gap: 14px;
+    margin-top: 24px;
+}
+
+body.installer-page .installer-auth-feature-item {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 12px;
+    align-items: flex-start;
+    padding: 13px 14px;
+    border-radius: 14px;
+    background: rgba(13, 16, 22, 0.34);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+body.installer-page .installer-auth-feature-icon {
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(110, 116, 255, 0.2), rgba(154, 99, 255, 0.16));
+    border: 1px solid rgba(130, 135, 255, 0.25);
+    color: #f5f6ff;
+    font-size: 0.95rem;
+}
+
+body.installer-page .installer-auth-feature-item strong {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 0.94rem;
+    color: #ffffff;
+}
+
+body.installer-page .installer-auth-feature-item p {
+    margin: 0;
+    font-size: 0.84rem;
+    line-height: 1.6;
+}
+
+body.installer-page .installer-auth-form {
+    display: grid;
+    gap: 14px;
+}
+
+body.installer-page .installer-auth-field-grid {
+    display: grid;
+    gap: 14px;
+}
+
+body.installer-page .installer-auth-field-grid-two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body.installer-page .installer-auth-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+body.installer-page .installer-auth-field-group label {
+    margin: 0;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #eceefe;
+}
+
+body.installer-page .installer-auth-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+body.installer-page .installer-auth-label-helper {
+    font-size: 0.74rem;
+    color: rgba(201, 205, 220, 0.65);
+}
+
+body.installer-page .installer-auth-submit-button {
+    width: 100%;
+    min-height: 48px;
+    margin-top: 4px;
+    font-size: 0.92rem;
+}
+
+body.installer-page .installer-auth-links {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+body.installer-page .installer-auth-links p {
+    margin: 0;
+    font-size: 0.86rem;
+    line-height: 1.6;
+}
 
 /* =========================================================
    FORMS
@@ -304,6 +455,7 @@ body.installer-page select {
 
 body.installer-page .installer-input,
 body.installer-page select {
+    min-height: 46px;
     padding: 10px 12px;
     border-radius: var(--radius-md);
     border: 1px solid var(--color-border-strong);
@@ -464,7 +616,25 @@ body.installer-page .installer-security-reminder {
 /* =========================================================
    RESPONSIVE
 ========================================================= */
+@media (max-width: 980px) {
+    body.installer-page .installer-auth-shell,
+    body.installer-page .installer-auth-shell-login,
+    body.installer-page .installer-auth-shell-setup {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media (max-width: 640px) {
+    body.installer-page .installer-auth-field-grid-two {
+        grid-template-columns: 1fr;
+    }
+
+    body.installer-page .installer-label-row,
+    body.installer-page .installer-auth-label-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
     body.installer-page header {
         flex-direction: column;
         align-items: flex-start;
@@ -540,6 +710,44 @@ body.installer-page .installer-subnav__item.is-active {
     color: #ffffff;
 }
 
+
+body.installer-page .installer-subnav__item.is-disabled {
+    opacity: 0.55;
+    cursor: default;
+    pointer-events: none;
+}
+
+body.installer-page .installer-step-pill,
+body.installer-page .installer-step-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+body.installer-page .installer-step-pill {
+    margin-left: auto;
+}
+
+body.installer-page .installer-step-pill.is-complete,
+body.installer-page .installer-step-status.is-complete {
+    background: rgba(61, 220, 151, 0.16);
+    border: 1px solid rgba(61, 220, 151, 0.30);
+    color: #cffff0;
+}
+
+body.installer-page .installer-step-pill.is-pending,
+body.installer-page .installer-step-status.is-pending {
+    background: rgba(255, 193, 7, 0.16);
+    border: 1px solid rgba(255, 193, 7, 0.30);
+    color: #fff1c0;
+}
+
 /* =========================================================
    CARDS / GRID
 ========================================================= */
@@ -547,6 +755,10 @@ body.installer-page .installer-card-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
+}
+
+body.installer-page .installer-card-grid--steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 @media (max-width: 820px) {
@@ -561,6 +773,12 @@ body.installer-page .installer-card {
     border-radius: var(--radius-lg);
     padding: 16px;
     box-shadow: var(--shadow-soft);
+}
+
+body.installer-page .installer-card--step {
+    display: grid;
+    align-content: start;
+    gap: 12px;
 }
 
 body.installer-page .installer-card h2 {
@@ -661,11 +879,11 @@ body.installer-page button.installer-button--secondary:hover {
 body.installer-page .installer-config-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    gap: 14px;
     margin-top: 14px;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1120px) {
     body.installer-page .installer-config-grid {
         grid-template-columns: 1fr;
     }
@@ -675,6 +893,11 @@ body.installer-page .installer-card--padded {
     padding: 18px;
 }
 
+body.installer-page .installer-card--config {
+    background: linear-gradient(180deg, rgba(27, 29, 34, 0.98), rgba(18, 20, 25, 0.98));
+    border-color: rgba(92, 103, 255, 0.22);
+}
+
 body.installer-page .installer-card-title {
     margin: 0 0 12px 0;
     font-size: 16px;
@@ -682,37 +905,97 @@ body.installer-page .installer-card-title {
     text-transform: uppercase;
 }
 
+body.installer-page .installer-card-description {
+    margin: -2px 0 14px;
+    color: var(--color-text-muted);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+body.installer-page .installer-config-card-body {
+    display: grid;
+    gap: 20px;
+}
+
+body.installer-page .installer-config-subsection {
+    display: grid;
+    gap: 14px;
+}
+
 body.installer-page .installer-config-subheading {
-    margin: 16px 0 10px 0;
+    margin: 4px 0 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     font-size: 14px;
     letter-spacing: 0.02em;
     text-transform: none;
     color: #ffffff;
 }
 
-body.installer-page .installer-config-subheading:first-child {
-    margin-top: 0;
+body.installer-page .installer-config-subgroup {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 18px;
+    padding: 18px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(7, 9, 13, 0.34);
 }
 
-body.installer-page .installer-config-subgroup {
-    padding-left: 10px;
-    border-left: 2px solid rgba(255, 255, 255, 0.06);
+body.installer-page .installer-config-subgroup--flat {
+    margin-bottom: 18px;
+}
+
+body.installer-page .installer-config-subgroup > .installer-config-subsection,
+body.installer-page .installer-config-subgroup > .installer-config-subheading,
+body.installer-page .installer-config-subgroup > .installer-card-description {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 820px) {
+    body.installer-page .installer-config-subgroup {
+        grid-template-columns: 1fr;
+    }
 }
 
 body.installer-page .installer-field {
-    margin: 10px 0;
+    margin: 0;
+    display: grid;
+    gap: 8px;
+    align-content: start;
+}
+
+body.installer-page .installer-field + .installer-field {
+    margin-top: 2px;
+}
+
+body.installer-page .installer-label-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
 }
 
 body.installer-page .installer-label {
     display: block;
-    margin-bottom: 6px;
+    margin: 0;
     color: #ffffff;
+}
+
+body.installer-page .installer-label-helper {
+    max-width: 300px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: rgba(201, 205, 220, 0.70);
+    text-align: right;
 }
 
 body.installer-page .installer-checkbox {
     display: inline-flex;
     align-items: center;
     gap: 10px;
+    min-height: 46px;
+    padding: 0 2px;
     color: var(--color-text-muted);
     user-select: none;
 }
@@ -758,6 +1041,11 @@ body.installer-page .installer-button--secondary {
     background: rgba(0, 0, 0, 0.18);
 }
 
+body.installer-page .installer-button.is-disabled {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
 
 /* Key list used by Config Merge page */
 .installer-key-list {
@@ -777,4 +1065,678 @@ body.installer-page .installer-button--secondary {
     background: rgba(0,0,0,0.25);
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     font-size: 12px;
+}
+
+
+/* Key list used by Config Merge page */
+.installer-key-list {
+    margin: 10px 0 0 0;
+    padding-left: 18px;
+}
+
+.installer-key-list li {
+    margin: 6px 0;
+}
+
+.installer-key-list code {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(0,0,0,0.25);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 12px;
+}
+
+/* =========================================================
+   MERGED INSTALLER / UPDATER SHELL
+========================================================= */
+body.installer-page .installer-hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 18px;
+    padding: 18px 20px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(111, 116, 255, 0.14), rgba(154, 99, 255, 0.08) 55%, rgba(255, 255, 255, 0.02));
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+body.installer-page .installer-hero__eyebrow,
+body.installer-page .installer-sidebar__label,
+body.installer-page .installer-stat-card__eyebrow {
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #c9cbff;
+}
+
+body.installer-page .installer-hero__content {
+    max-width: 700px;
+}
+
+body.installer-page .installer-hero__content h1,
+body.installer-page .installer-hero__content h2 {
+    margin-bottom: 8px;
+}
+
+body.installer-page .installer-hero__content p {
+    margin-bottom: 0;
+    color: var(--color-text-muted);
+}
+
+body.installer-page .installer-hero__actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+body.installer-page .installer-shell {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 18px;
+}
+
+body.installer-page .installer-sidebar,
+body.installer-page .installer-content {
+    background: rgba(0, 0, 0, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 18px;
+}
+
+body.installer-page .installer-sidebar {
+    align-self: start;
+    position: sticky;
+    top: 84px;
+}
+
+body.installer-page .installer-sidebar__helper,
+body.installer-page .installer-helper-text {
+    margin-top: 14px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--color-text-muted);
+}
+
+body.installer-page .installer-field .installer-helper-text {
+    margin-top: 0;
+}
+
+body.installer-page .installer-subnav--stacked {
+    flex-direction: column;
+}
+
+body.installer-page .installer-subnav--stacked .installer-subnav__item {
+    width: 100%;
+    justify-content: space-between;
+}
+
+body.installer-page .installer-subnav--stacked .installer-subnav__item span {
+    flex: 1;
+}
+
+body.installer-page .installer-status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 78px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+body.installer-page .installer-status-badge.is-complete {
+    background: rgba(61, 220, 151, 0.12);
+    border-color: rgba(61, 220, 151, 0.28);
+    color: #bff7dc;
+}
+
+body.installer-page .installer-status-badge.is-pending {
+    background: rgba(255, 193, 7, 0.12);
+    border-color: rgba(255, 193, 7, 0.26);
+    color: #ffe9a3;
+}
+
+body.installer-page .installer-progress-grid,
+body.installer-page .installer-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+body.installer-page .installer-progress-card,
+body.installer-page .installer-stat-card {
+    padding: 16px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+body.installer-page .installer-progress-card.is-active {
+    border-color: rgba(111, 116, 255, 0.38);
+    box-shadow: inset 0 0 0 1px rgba(111, 116, 255, 0.16);
+}
+
+body.installer-page .installer-progress-card__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+body.installer-page .installer-progress-card__title,
+body.installer-page .installer-card-title {
+    color: #ffffff;
+    font-weight: 800;
+}
+
+body.installer-page .installer-progress-card p,
+body.installer-page .installer-stat-card p {
+    margin-bottom: 0;
+    color: var(--color-text-muted);
+}
+
+body.installer-page .installer-stat-card__value {
+    font-size: 28px;
+    font-weight: 800;
+    color: #ffffff;
+    margin-bottom: 8px;
+}
+
+body.installer-page a.installer-button {
+    width: 100%;
+}
+
+@media (max-width: 980px) {
+    body.installer-page .installer-shell {
+        grid-template-columns: 1fr;
+    }
+
+    body.installer-page .installer-sidebar {
+        position: static;
+        top: auto;
+    }
+}
+
+@media (max-width: 820px) {
+    body.installer-page .installer-progress-grid,
+    body.installer-page .installer-stat-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 720px) {
+    body.installer-page .installer-hero {
+        flex-direction: column;
+    }
+
+    body.installer-page .installer-hero__actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
+
+/* =========================================================
+   VISUAL POLISH REFINEMENTS
+========================================================= */
+:root {
+    --installer-glow: rgba(111, 116, 255, 0.16);
+    --installer-glow-strong: rgba(154, 99, 255, 0.20);
+    --installer-panel: linear-gradient(180deg, rgba(28, 31, 37, 0.96), rgba(17, 19, 24, 0.98));
+    --installer-panel-alt: linear-gradient(180deg, rgba(20, 22, 28, 0.96), rgba(12, 14, 18, 0.98));
+}
+
+body.installer-page {
+    position: relative;
+}
+
+body.installer-page::before,
+body.installer-page::after {
+    content: "";
+    position: fixed;
+    inset: auto;
+    pointer-events: none;
+    z-index: 0;
+    filter: blur(90px);
+    opacity: 0.45;
+}
+
+body.installer-page::before {
+    width: 360px;
+    height: 360px;
+    top: 92px;
+    left: -80px;
+    background: radial-gradient(circle, rgba(111, 116, 255, 0.32) 0%, rgba(111, 116, 255, 0.04) 62%, transparent 76%);
+}
+
+body.installer-page::after {
+    width: 420px;
+    height: 420px;
+    right: -140px;
+    bottom: 24px;
+    background: radial-gradient(circle, rgba(154, 99, 255, 0.24) 0%, rgba(154, 99, 255, 0.04) 62%, transparent 76%);
+}
+
+body.installer-page header,
+body.installer-page main {
+    position: relative;
+    z-index: 1;
+}
+
+body.installer-page header {
+    padding: 14px 22px;
+    background: rgba(8, 10, 14, 0.9);
+    border-bottom-color: rgba(255, 255, 255, 0.05);
+    box-shadow: 0 18px 32px rgba(0, 0, 0, 0.22);
+}
+
+body.installer-page header .logo {
+    font-size: 17px;
+    letter-spacing: 0.14em;
+}
+
+body.installer-page main.installer-authenticated {
+    max-width: 1480px;
+    margin: clamp(22px, 4vh, 46px) auto 38px;
+    padding: 30px 28px 28px;
+    background: linear-gradient(180deg, rgba(30, 33, 40, 0.95), rgba(18, 20, 25, 0.98));
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow:
+        0 24px 58px rgba(0, 0, 0, 0.58),
+        0 0 0 1px rgba(255, 255, 255, 0.02),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+body.installer-page .installer-hero {
+    position: relative;
+    overflow: hidden;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 22px 24px;
+    border-radius: 18px;
+    background:
+        linear-gradient(135deg, rgba(111, 116, 255, 0.18), rgba(154, 99, 255, 0.10) 50%, rgba(255, 255, 255, 0.025) 100%),
+        linear-gradient(180deg, rgba(31, 34, 40, 0.98), rgba(20, 22, 27, 0.98));
+    border: 1px solid rgba(112, 118, 255, 0.18);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.04),
+        0 14px 28px rgba(0, 0, 0, 0.22);
+}
+
+body.installer-page .installer-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.06), transparent 22%, transparent 78%, rgba(255, 255, 255, 0.03));
+    pointer-events: none;
+}
+
+body.installer-page .installer-hero__content {
+    max-width: 820px;
+}
+
+body.installer-page .installer-hero__content h1,
+body.installer-page .installer-hero__content h2 {
+    margin-bottom: 10px;
+    font-size: clamp(2rem, 3vw, 2.5rem);
+    letter-spacing: 0.06em;
+}
+
+body.installer-page .installer-hero__content p {
+    font-size: 1rem;
+    line-height: 1.75;
+    color: rgba(225, 228, 240, 0.72);
+}
+
+body.installer-page .installer-topnav__item {
+    min-height: 44px;
+    padding: 10px 16px;
+    font-weight: 700;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+body.installer-page .installer-topnav__item.is-active {
+    background: linear-gradient(135deg, rgba(111, 116, 255, 0.80), rgba(154, 99, 255, 0.80));
+    border-color: rgba(185, 162, 255, 0.28);
+    box-shadow: 0 10px 20px rgba(84, 61, 180, 0.28);
+}
+
+body.installer-page .installer-shell {
+    gap: 20px;
+}
+
+body.installer-page .installer-sidebar,
+body.installer-page .installer-content {
+    background: var(--installer-panel);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow:
+        0 16px 36px rgba(0, 0, 0, 0.26),
+        inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+body.installer-page .installer-sidebar {
+    padding: 18px 16px 20px;
+}
+
+body.installer-page .installer-content {
+    padding: 20px;
+}
+
+body.installer-page .installer-content > h2 {
+    margin-bottom: 10px;
+    font-size: clamp(1.65rem, 2vw, 2rem);
+    letter-spacing: 0.02em;
+}
+
+body.installer-page .installer-content > p {
+    margin-bottom: 18px;
+    max-width: 900px;
+    color: rgba(214, 217, 229, 0.78);
+    line-height: 1.72;
+}
+
+body.installer-page .installer-sidebar__label {
+    margin-bottom: 12px;
+}
+
+body.installer-page .installer-subnav {
+    gap: 12px;
+}
+
+body.installer-page .installer-subnav__item {
+    position: relative;
+    min-height: 46px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: rgba(8, 11, 16, 0.42);
+    border-color: rgba(255, 255, 255, 0.07);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+body.installer-page .installer-subnav__item i {
+    width: 18px;
+    text-align: center;
+    color: rgba(225, 229, 245, 0.78);
+}
+
+body.installer-page .installer-subnav__item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+    transform: translateY(-1px);
+}
+
+body.installer-page .installer-subnav__item.is-active {
+    background: linear-gradient(135deg, rgba(99, 107, 255, 0.24), rgba(154, 99, 255, 0.12));
+    border-color: rgba(111, 116, 255, 0.34);
+    box-shadow: inset 0 0 0 1px rgba(111, 116, 255, 0.08), 0 10px 20px rgba(27, 24, 71, 0.22);
+}
+
+body.installer-page .installer-sidebar__helper,
+body.installer-page .installer-helper-text,
+body.installer-page .installer-card-description,
+body.installer-page .installer-progress-card p,
+body.installer-page .installer-stat-card p {
+    color: rgba(198, 203, 218, 0.72);
+}
+
+body.installer-page .installer-security-reminder {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    align-items: start;
+    margin-top: 12px;
+    margin-bottom: 20px;
+    padding: 16px 18px;
+}
+
+body.installer-page .installer-security-reminder::before {
+    display: none;
+}
+
+body.installer-page .installer-security-reminder__icon {
+    width: 42px;
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #fff3cf;
+    flex: 0 0 auto;
+}
+
+body.installer-page .installer-security-reminder__title {
+    margin: 0 0 5px;
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #fff5d1;
+}
+
+body.installer-page .installer-security-reminder__content p {
+    margin: 0;
+    line-height: 1.7;
+}
+
+body.installer-page .installer-progress-grid,
+body.installer-page .installer-stat-grid,
+body.installer-page .installer-card-grid,
+body.installer-page .installer-config-grid {
+    gap: 16px;
+}
+
+body.installer-page .installer-progress-card,
+body.installer-page .installer-stat-card,
+body.installer-page .installer-card {
+    background: var(--installer-panel-alt);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow:
+        0 14px 28px rgba(0, 0, 0, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+body.installer-page .installer-card,
+body.installer-page .installer-progress-card,
+body.installer-page .installer-stat-card,
+body.installer-page .installer-config-subgroup,
+body.installer-page .installer-table,
+body.installer-page .installer-auth-brand-panel,
+body.installer-page .installer-auth-form-panel,
+body.installer-page .installer-sidebar,
+body.installer-page .installer-content,
+body.installer-page .installer-hero {
+    transition: border-color 0.16s ease, box-shadow 0.18s ease, transform 0.16s ease;
+}
+
+body.installer-page .installer-progress-card.is-active,
+body.installer-page .installer-card:hover,
+body.installer-page .installer-progress-card:hover,
+body.installer-page .installer-stat-card:hover {
+    border-color: rgba(111, 116, 255, 0.22);
+    box-shadow:
+        0 18px 34px rgba(0, 0, 0, 0.22),
+        inset 0 0 0 1px rgba(111, 116, 255, 0.08);
+}
+
+body.installer-page .installer-progress-card__top {
+    margin-bottom: 12px;
+}
+
+body.installer-page .installer-progress-card__title,
+body.installer-page .installer-card-title {
+    font-size: 0.98rem;
+    letter-spacing: 0.04em;
+}
+
+body.installer-page .installer-status-badge {
+    min-width: 84px;
+    padding: 5px 11px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+body.installer-page .installer-stat-card__value {
+    font-size: clamp(1.9rem, 3vw, 2.3rem);
+    line-height: 1;
+}
+
+body.installer-page .installer-table {
+    margin-top: 12px;
+    background: rgba(8, 10, 14, 0.35);
+}
+
+body.installer-page .installer-table th {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.03));
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(238, 240, 248, 0.94);
+}
+
+body.installer-page .installer-table td {
+    color: rgba(233, 236, 245, 0.88);
+}
+
+body.installer-page .installer-table tr:nth-child(even) td {
+    background: rgba(255, 255, 255, 0.015);
+}
+
+body.installer-page .installer-table tr:hover td {
+    background: rgba(111, 116, 255, 0.05);
+}
+
+body.installer-page .installer-config-grid {
+    margin-top: 18px;
+}
+
+body.installer-page .installer-card--config {
+    background: linear-gradient(180deg, rgba(30, 33, 39, 0.98), rgba(17, 19, 24, 0.99));
+    border-color: rgba(94, 105, 255, 0.22);
+}
+
+body.installer-page .installer-config-card-body {
+    gap: 24px;
+}
+
+body.installer-page .installer-config-subsection {
+    gap: 16px;
+}
+
+body.installer-page .installer-config-subheading {
+    margin: 0;
+    padding-bottom: 10px;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+    font-size: 15px;
+    font-weight: 800;
+}
+
+body.installer-page .installer-config-subgroup {
+    gap: 18px 18px;
+    padding: 20px;
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(9, 11, 16, 0.44), rgba(5, 7, 10, 0.34));
+    border-color: rgba(255, 255, 255, 0.07);
+}
+
+body.installer-page .installer-config-card-body > .installer-field,
+body.installer-page .installer-config-subgroup > .installer-field {
+    padding: 14px 14px 12px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+body.installer-page .installer-field {
+    gap: 9px;
+}
+
+body.installer-page .installer-label {
+    font-size: 0.95rem;
+}
+
+body.installer-page .installer-helper-text,
+body.installer-page .installer-label-helper {
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+body.installer-page .installer-input,
+body.installer-page textarea,
+body.installer-page select {
+    border-color: rgba(255, 255, 255, 0.09);
+    background: linear-gradient(180deg, rgba(5, 8, 12, 0.52), rgba(0, 0, 0, 0.28));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+body.installer-page .installer-input:hover,
+body.installer-page select:hover,
+body.installer-page textarea:hover {
+    border-color: rgba(255, 255, 255, 0.13);
+}
+
+body.installer-page .installer-checkbox {
+    min-height: 44px;
+    padding: 2px 4px;
+}
+
+body.installer-page .installer-textarea-code {
+    background: linear-gradient(180deg, rgba(8, 10, 14, 0.64), rgba(0, 0, 0, 0.34));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+body.installer-page .installer-button-row {
+    gap: 12px;
+    margin-top: 16px;
+}
+
+body.installer-page button,
+body.installer-page .installer-button {
+    min-height: 48px;
+    padding: 12px 16px;
+    box-shadow: 0 12px 22px rgba(38, 20, 91, 0.18);
+}
+
+body.installer-page .installer-button {
+    background: linear-gradient(135deg, rgba(111, 116, 255, 0.82), rgba(154, 99, 255, 0.78));
+    border-color: rgba(176, 163, 255, 0.18);
+}
+
+body.installer-page .installer-button--secondary,
+body.installer-page button.installer-button--secondary {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+body.installer-page .installer-auth-brand-panel,
+body.installer-page .installer-auth-form-panel {
+    border-color: rgba(107, 114, 255, 0.28);
+}
+
+@media (max-width: 820px) {
+    body.installer-page main.installer-authenticated {
+        padding: 22px 18px 20px;
+    }
+
+    body.installer-page .installer-content,
+    body.installer-page .installer-sidebar,
+    body.installer-page .installer-hero {
+        padding: 16px;
+    }
+
+    body.installer-page .installer-security-reminder {
+        grid-template-columns: 1fr;
+    }
 }

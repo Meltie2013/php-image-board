@@ -19,6 +19,11 @@
 /tools
 
 # -------------------------
+# ignore tools and install folder
+# -------------------------
+/install/**/installer.lock
+
+# -------------------------
 # storage/cache
 # keep index.html files
 # -------------------------

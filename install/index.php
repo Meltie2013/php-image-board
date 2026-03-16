@@ -65,6 +65,7 @@ define('UPDATES_DIR', APP_ROOT . '/database/updates');
 define('INSTALLER_CSS', '/assets/css/installer.css');
 define('INSTALLER_LOCK_FILE', __DIR__ . '/installer.lock');
 define('INSTALLER_RATE_LIMIT_FILE', rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'php_image_board_installer_rate_limit_' . hash('sha256', APP_ROOT) . '.json');
+define('INSTALLER_PACKAGE_DIR', APP_ROOT . '/storage/packages/updater');
 
 // -------------------------------------------------
 // Minimal security helpers (standalone)
@@ -575,11 +576,14 @@ function installer_write_config_from_dist(array $finalConfig): array
 function installer_required_dirs(): array
 {
     return [
-        APP_ROOT . '/cache',
+        APP_ROOT . '/storage/cache',
         APP_ROOT . '/storage/cache/images',
         APP_ROOT . '/storage/cache/templates',
+        APP_ROOT . '/storage/packages',
+        INSTALLER_PACKAGE_DIR,
         APP_ROOT . '/images',
         APP_ROOT . '/images/original',
+        APP_ROOT . '/json',
     ];
 }
 
@@ -613,12 +617,6 @@ function installer_check_dirs(): array
         'writable' => is_dir(CONFIG_DIR) && is_writable(CONFIG_DIR),
     ];
 
-    $results[] = [
-        'path'     => CONFIG_FILE,
-        'exists'   => is_file(CONFIG_FILE),
-        'writable' => is_file(CONFIG_FILE) ? is_writable(CONFIG_FILE) : (is_dir(CONFIG_DIR) && is_writable(CONFIG_DIR)),
-    ];
-
     return $results;
 }
 
@@ -642,13 +640,326 @@ function installer_create_dirs(): array
     }
 
     // Ensure cache subfolders also have an index
-    installer_ensure_index_html(APP_ROOT . '/cache');
+    installer_ensure_index_html(APP_ROOT . '/storage/cache');
     installer_ensure_index_html(APP_ROOT . '/storage/cache/images');
     installer_ensure_index_html(APP_ROOT . '/storage/cache/templates');
+    installer_ensure_index_html(APP_ROOT . '/json');
 
     return ['created' => $created, 'errors' => $errors];
 }
 
+/**
+ * Collect installer requirement checks.
+ *
+ * Required checks block the install sequence when they fail.
+ * Optional checks are informational only.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function installer_collect_requirements(): array
+{
+    return [
+        [
+            'label' => 'PHP 8.1+',
+            'ok' => version_compare(PHP_VERSION, '8.1.0', '>='),
+            'required' => true,
+            'detail' => 'Current version: ' . PHP_VERSION,
+        ],
+        [
+            'label' => 'PDO MySQL',
+            'ok' => extension_loaded('pdo_mysql'),
+            'required' => true,
+            'detail' => 'Required for database installation and updater access.',
+        ],
+        [
+            'label' => 'Fileinfo',
+            'ok' => extension_loaded('fileinfo'),
+            'required' => true,
+            'detail' => 'Required for upload MIME detection.',
+        ],
+        [
+            'label' => 'GD',
+            'ok' => extension_loaded('gd'),
+            'required' => true,
+            'detail' => 'Required for image processing features.',
+        ],
+        [
+            'label' => 'Imagick',
+            'ok' => (extension_loaded('imagick') && class_exists('Imagick')),
+            'required' => false,
+            'detail' => 'Optional but recommended for stronger image tooling.',
+        ],
+    ];
+}
+
+function installer_requirements_passed(): bool
+{
+    foreach (installer_collect_requirements() as $requirement) {
+        if (!empty($requirement['required']) && empty($requirement['ok'])) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Determine whether config.php exists and contains enough DB data to continue.
+ */
+function installer_config_ready(): bool
+{
+    $config = installer_load_config_existing();
+    if (empty($config['db']) || !is_array($config['db'])) {
+        return false;
+    }
+
+    $db = $config['db'];
+
+    return trim((string) ($db['host'] ?? '')) !== ''
+        && trim((string) ($db['dbname'] ?? '')) !== ''
+        && trim((string) ($db['user'] ?? '')) !== '';
+}
+
+/**
+ * Determine whether the base schema appears to be installed.
+ */
+function installer_database_ready(): bool
+{
+    $config = installer_load_config_existing();
+    if (empty($config)) {
+        return false;
+    }
+
+    $pdo = installer_pdo_from_config($config);
+    if (!$pdo) {
+        return false;
+    }
+
+    try {
+        $stmt = $pdo->query("SHOW TABLES LIKE 'app_roles'");
+        $row = $stmt ? $stmt->fetch() : false;
+        return !empty($row);
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/**
+ * Collect the current installer step state.
+ *
+ * @return array<string, array<string, mixed>>
+ */
+function installer_get_install_state(): array
+{
+    $dirChecks = installer_check_dirs();
+    $filesystemReady = true;
+
+    foreach ($dirChecks as $check) {
+        if (empty($check['exists']) || empty($check['writable'])) {
+            $filesystemReady = false;
+            break;
+        }
+    }
+
+    return [
+        'requirements' => [
+            'label' => 'Requirements',
+            'ok' => installer_requirements_passed(),
+            'detail' => 'Validate PHP version and required extensions.',
+        ],
+        'filesystem' => [
+            'label' => 'Filesystem',
+            'ok' => $filesystemReady,
+            'detail' => 'Create and verify writable runtime directories.',
+        ],
+        'config' => [
+            'label' => 'Configuration',
+            'ok' => installer_config_ready(),
+            'detail' => 'Write config/config.php with valid database settings.',
+        ],
+        'database' => [
+            'label' => 'Database Install',
+            'ok' => installer_database_ready(),
+            'detail' => 'Install the base schema into the configured database.',
+        ],
+        'lock' => [
+            'label' => 'Installer Lock',
+            'ok' => is_file(INSTALLER_LOCK_FILE),
+            'detail' => 'Lock first-run install pages after the base install is complete.',
+        ],
+    ];
+}
+
+/**
+ * @return string[]
+ */
+function installer_install_step_order(): array
+{
+    return ['requirements', 'filesystem', 'config', 'database'];
+}
+
+/**
+ * Determine the next incomplete installer step.
+ */
+function installer_next_install_step(array $state): string
+{
+    foreach (installer_install_step_order() as $step) {
+        if (empty($state[$step]['ok'])) {
+            return $step;
+        }
+    }
+
+    return 'overview';
+}
+
+/**
+ * Enforce installer step order.
+ */
+function installer_resolve_install_page(string $page, array $state): string
+{
+    if ($page === 'overview') {
+        return $page;
+    }
+
+    $requestedIndex = array_search($page, installer_install_step_order(), true);
+    if ($requestedIndex === false) {
+        return 'overview';
+    }
+
+    foreach (installer_install_step_order() as $index => $step) {
+        if ($index >= $requestedIndex) {
+            break;
+        }
+
+        if (empty($state[$step]['ok'])) {
+            return $step;
+        }
+    }
+
+    return $page;
+}
+
+/**
+ * Validate whether a filename is an allowed updater package archive.
+ */
+function installer_is_allowed_package_name(string $filename): bool
+{
+    $filename = strtolower(trim($filename));
+    if ($filename === '') {
+        return false;
+    }
+
+    $allowed = [
+        '.zip',
+        '.tar',
+        '.tar.gz',
+        '.tgz',
+    ];
+
+    foreach ($allowed as $extension) {
+        if (str_ends_with($filename, $extension)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @return array<int, array<string, mixed>>
+ */
+function installer_list_package_files(): array
+{
+    if (!is_dir(INSTALLER_PACKAGE_DIR)) {
+        return [];
+    }
+
+    $paths = glob(INSTALLER_PACKAGE_DIR . '/*') ?: [];
+    usort($paths, static function (string $a, string $b): int {
+        return filemtime($b) <=> filemtime($a);
+    });
+
+    $files = [];
+    foreach ($paths as $path) {
+        if (!is_file($path)) {
+            continue;
+        }
+
+        $files[] = [
+            'filename' => basename($path),
+            'size_bytes' => (int) filesize($path),
+            'modified_at' => date('Y-m-d H:i:s', (int) filemtime($path)),
+        ];
+    }
+
+    return $files;
+}
+
+/**
+ * Stage an uploaded updater package on disk.
+ */
+function installer_store_uploaded_package(array $upload): array
+{
+    if (!is_dir(INSTALLER_PACKAGE_DIR)) {
+        $created = installer_create_dirs();
+        if (!empty($created['errors']) || !is_dir(INSTALLER_PACKAGE_DIR)) {
+            return ['ok' => false, 'error' => 'Updater package storage directory could not be created.'];
+        }
+    }
+
+    $name = (string) ($upload['name'] ?? '');
+    $tmp = (string) ($upload['tmp_name'] ?? '');
+    $size = (int) ($upload['size'] ?? 0);
+
+    if ($name === '' || $tmp === '' || !is_uploaded_file($tmp)) {
+        return ['ok' => false, 'error' => 'No valid package upload was received.'];
+    }
+
+    if (!installer_is_allowed_package_name($name)) {
+        return ['ok' => false, 'error' => 'Allowed package formats are zip, tar, tar.gz, and tgz.'];
+    }
+
+    if ($size < 1) {
+        return ['ok' => false, 'error' => 'Uploaded package is empty.'];
+    }
+
+    if ($size > (25 * 1024 * 1024)) {
+        return ['ok' => false, 'error' => 'Uploaded package exceeds the 25 MB staging limit.'];
+    }
+
+    $clean = preg_replace('/[^A-Za-z0-9._-]+/', '-', basename($name));
+    $clean = trim((string) $clean, '-');
+    if ($clean === '') {
+        $clean = 'update-package';
+    }
+
+    $target = INSTALLER_PACKAGE_DIR . '/' . date('Ymd_His') . '__' . $clean;
+
+    if (!@move_uploaded_file($tmp, $target)) {
+        return ['ok' => false, 'error' => 'Failed to move the uploaded package into staging.'];
+    }
+
+    @chmod($target, 0640);
+
+    return ['ok' => true, 'error' => '', 'filename' => basename($target)];
+}
+
+/**
+ * Format bytes into a small human-readable string.
+ */
+function installer_format_bytes(int $bytes): string
+{
+    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    $value = max(0, $bytes);
+    $unit = 0;
+
+    while ($value >= 1024 && $unit < (count($units) - 1)) {
+        $value /= 1024;
+        $unit++;
+    }
+
+    return number_format($value, ($unit === 0 ? 0 : 2)) . ' ' . $units[$unit];
+}
 function installer_pdo_from_config(array $config): ?PDO
 {
     if (empty($config['db']) || !is_array($config['db'])) {
@@ -917,6 +1228,265 @@ function installer_overlay_config(array $base, array $overlay): array
     return $base;
 }
 
+/**
+ * Top-level configuration sections required for the initial installer flow.
+ *
+ * @return string[]
+ */
+function installer_install_config_sections(): array
+{
+    return ['timezone', 'db'];
+}
+
+/**
+ * Top-level configuration sections edited from the updater portal.
+ *
+ * @param array $dist
+ * @return string[]
+ */
+function installer_updater_config_sections(array $dist): array
+{
+    $installSections = array_fill_keys(installer_install_config_sections(), true);
+    $sections = [];
+
+    foreach (array_keys($dist) as $key) {
+        $key = (string) $key;
+        if (!isset($installSections[$key])) {
+            $sections[] = $key;
+        }
+    }
+
+    return $sections;
+}
+
+/**
+ * Top-level configuration sections primarily managed by the live board through
+ * the Control Panel and app_settings.
+ *
+ * These values remain in config.php as fallback placeholders only. When the
+ * board can read app_settings successfully, those live values take priority.
+ *
+ * @return string[]
+ */
+function installer_placeholder_config_sections(): array
+{
+    return [
+        'site',
+        'template',
+        'gallery',
+        'profile',
+        'debugging',
+        'upload',
+    ];
+}
+
+/**
+ * Top-level updater configuration sections that reflect the live board state.
+ *
+ * @param array $dist
+ * @return string[]
+ */
+function installer_live_config_sections(array $dist): array
+{
+    $excluded = array_fill_keys(installer_install_config_sections(), true);
+
+    foreach (installer_placeholder_config_sections() as $section) {
+        $excluded[(string) $section] = true;
+    }
+
+    $sections = [];
+
+    foreach (array_keys($dist) as $key) {
+        $key = (string) $key;
+        if (!isset($excluded[$key])) {
+            $sections[] = $key;
+        }
+    }
+
+    return $sections;
+}
+
+/**
+ * Top-level updater configuration sections that only exist as config.php
+ * placeholders when the live Control Panel settings are unavailable.
+ *
+ * @param array $dist
+ * @return string[]
+ */
+function installer_placeholder_config_sections_for_dist(array $dist): array
+{
+    $sections = [];
+    $allowed = array_fill_keys(installer_placeholder_config_sections(), true);
+
+    foreach (array_keys($dist) as $key) {
+        $key = (string) $key;
+        if (isset($allowed[$key])) {
+            $sections[] = $key;
+        }
+    }
+
+    return $sections;
+}
+
+/**
+ * Filter a list of dot-notation key paths by their top-level section.
+ *
+ * @param string[] $paths
+ * @param string[] $sections
+ * @return string[]
+ */
+function installer_filter_key_paths_by_sections(array $paths, array $sections): array
+{
+    $allowed = array_fill_keys(array_map('strval', $sections), true);
+    $filtered = [];
+
+    foreach ($paths as $path) {
+        $path = (string) $path;
+        if ($path === '') {
+            continue;
+        }
+
+        $topLevel = explode('.', $path, 2)[0] ?? '';
+        if ($topLevel !== '' && isset($allowed[$topLevel])) {
+            $filtered[] = $path;
+        }
+    }
+
+    return $filtered;
+}
+
+/**
+ * Filter a configuration array down to the requested top-level sections.
+ *
+ * @param array $config
+ * @param string[] $sections
+ * @return array
+ */
+function installer_filter_config_sections(array $config, array $sections): array
+{
+    $filtered = [];
+
+    foreach ($sections as $section) {
+        $section = (string) $section;
+        if ($section === '' || !array_key_exists($section, $config)) {
+            continue;
+        }
+
+        $filtered[$section] = $config[$section];
+    }
+
+    return $filtered;
+}
+
+/**
+ * Convert config keys into cleaner display labels.
+ *
+ * @param string[] $path
+ * @return string
+ */
+function installer_humanize_config_key(array $path): string
+{
+    $joined = implode('.', $path);
+
+    $map = [
+        'timezone' => 'Timezone',
+        'db' => 'Database',
+        'db.host' => 'Database Host',
+        'db.dbname' => 'Database Name',
+        'db.user' => 'Database Username',
+        'db.pass' => 'Database Password',
+        'db.charset' => 'Database Charset',
+        'site' => 'Site',
+        'debugging' => 'Debugging',
+        'control_server' => 'Control Server',
+        'request_guard' => 'Request Guard',
+        'security' => 'Security',
+        'csrf_token_name' => 'CSRF Token Name',
+        'password_algo' => 'Password Algorithm',
+        'password_options' => 'Password Options',
+        'device_policy' => 'Device Policy',
+        'allowed_ips' => 'Allowed IP Addresses',
+        'auth_token' => 'Auth Token',
+        'public_host' => 'Public Host',
+        'public_scheme' => 'Public Scheme',
+        'public_path' => 'Public Path',
+        'bind_address' => 'Bind Address',
+        'allow_remote_clients' => 'Allow Remote Clients',
+        'allow_remote_control' => 'Allow Remote Control',
+        'heartbeat_file' => 'Heartbeat File',
+        'state_file' => 'State File',
+        'live_events_file' => 'Live Events File',
+        'heartbeat_timeout_seconds' => 'Heartbeat Timeout Seconds',
+        'tick_interval_seconds' => 'Tick Interval Seconds',
+        'verbose_logging' => 'Verbose Logging',
+        'log_retention_days' => 'Log Retention Days',
+        'comments_per_page' => 'Comments Per Page',
+        'images_displayed' => 'Images Displayed Per Page',
+        'pagination_range' => 'Pagination Range',
+        'upload_max_image_size' => 'Upload Max Image Size (MB)',
+        'upload_max_storage' => 'Upload Max Storage',
+        'timeout_minutes' => 'Session Timeout Minutes',
+        'device_cookie_name' => 'Device Cookie Name',
+        'avatar_size' => 'Avatar Size',
+    ];
+
+    if (isset($map[$joined])) {
+        return $map[$joined];
+    }
+
+    $last = (string) end($path);
+    if (isset($map[$last])) {
+        return $map[$last];
+    }
+
+    return ucwords(str_replace('_', ' ', $last));
+}
+
+/**
+ * Helper copy for common configuration fields.
+ *
+ * @param string[] $path
+ * @return string
+ */
+function installer_config_field_help(array $path): string
+{
+    $joined = implode('.', $path);
+
+    $map = [
+        'timezone' => 'Used for logs, timestamps, and default application date handling.',
+        'db.host' => 'Hostname or IP address for your MySQL / MariaDB server.',
+        'db.dbname' => 'Schema name that will receive the base install and future updates.',
+        'db.user' => 'Database account with permission to create tables, indexes, and update records.',
+        'db.pass' => 'Leave blank only when the database user truly has no password.',
+        'db.charset' => 'utf8mb4 is recommended for full Unicode and emoji support.',
+    ];
+
+    return $map[$joined] ?? '';
+}
+
+/**
+ * Describe each top-level config card.
+ */
+function installer_config_section_description(string $sectionKey): string
+{
+    $map = [
+        'timezone' => 'Set the default application timezone used for logs, dates, and scheduled tasks.',
+        'db' => 'Connection details used to install the schema and power the main application.',
+        'site' => 'Branding and version information displayed around the board.',
+        'session' => 'Browser session naming, timeout handling, and stable guest-device cookies.',
+        'debugging' => 'Developer-oriented flags for troubleshooting and test workflows.',
+        'template' => 'Template cache behavior and any explicitly allowed helper functions.',
+        'profile' => 'Profile-related defaults such as age gating and avatar presentation.',
+        'gallery' => 'Gallery pagination, upload, and storage defaults for the public site.',
+        'security' => 'Core CSRF, password, device, and audit policies.',
+        'control_server' => 'Background server heartbeat, runtime jobs, WebSocket, and control-socket settings.',
+        'request_guard' => 'Rate-limit and abuse-prevention rules for gallery, auth, and interactive actions.',
+    ];
+
+    return $map[$sectionKey] ?? '';
+}
+
+
 // Save config
 if ($action === 'save_config') {
     if (!InstallerSecurity::verifyCsrf($_POST['csrf_token'] ?? null)) {
@@ -998,10 +1568,7 @@ if ($action === 'save_config') {
     // Export DB-managed settings (app_settings)
     // -------------------------------------------------
 
-    $allowList = [];
-    if (!empty($distConfig['settings_manager']['override_allow_list']) && is_array($distConfig['settings_manager']['override_allow_list'])) {
-        $allowList = $distConfig['settings_manager']['override_allow_list'];
-    }
+    $allowList = installer_placeholder_config_sections_for_dist($distConfig);
 
     // Store installer-selected DB settings so the DB install step can insert them.
     $_SESSION['installer_app_settings_rows'] = installer_build_app_settings_rows($final, $allowList);
@@ -1025,7 +1592,8 @@ if ($action === 'save_config') {
         $_SESSION['config_write_fallback'] = $result['content'];
     }
 
-    installer_redirect('index.php?tab=install');
+    $rt = installer_safe_return_to((string) ($_POST['return_to'] ?? ''), 'index.php?tab=install&page=config');
+    installer_redirect($rt);
 }
 
 // DB test
@@ -1054,7 +1622,9 @@ if ($action === 'db_test') {
         installer_flash_add('danger', 'Database connection failed: ' . $res['error']);
     }
 
-    installer_redirect('index.php?tab=install');
+    $nextStep = installer_next_install_step(installer_get_install_state());
+    $targetPage = ($nextStep === 'overview') ? 'overview' : $nextStep;
+    installer_redirect('index.php?tab=install&page=' . $targetPage);
 }
 
 // Create directories
@@ -1079,8 +1649,9 @@ if ($action === 'fix_dirs') {
         installer_flash_add('success', 'All required directories already exist.');
     }
 
-    installer_redirect('index.php?tab=install');
+    installer_redirect('index.php?tab=install&page=config');
 }
+
 
 // Install base database
 if ($action === 'install_db') {
@@ -1093,13 +1664,13 @@ if ($action === 'install_db') {
     $config = installer_load_config_existing();
     if (empty($config)) {
         installer_flash_add('danger', 'Please write config/config.php before installing the database.');
-        installer_redirect('index.php?tab=install');
+        installer_redirect('index.php?tab=install&page=config');
     }
 
     $pdo = installer_pdo_from_config($config);
     if (!$pdo) {
         installer_flash_add('danger', 'Unable to connect using config/config.php database settings.');
-        installer_redirect('index.php?tab=install');
+        installer_redirect('index.php?tab=install&page=config');
     }
 
     $res = installer_apply_sql_file($pdo, INSTALL_SQL_FILE);
@@ -1112,10 +1683,7 @@ if ($action === 'install_db') {
         // -------------------------------------------------
 
         $distConfig = installer_load_config_dist();
-        $allowList = [];
-        if (!empty($distConfig['settings_manager']['override_allow_list']) && is_array($distConfig['settings_manager']['override_allow_list'])) {
-            $allowList = $distConfig['settings_manager']['override_allow_list'];
-        }
+        $allowList = installer_placeholder_config_sections_for_dist($distConfig);
 
         $rows = $_SESSION['installer_app_settings_rows'] ?? installer_build_app_settings_rows($distConfig, $allowList);
         $seed = installer_insert_app_settings($pdo, $rows);
@@ -1136,7 +1704,27 @@ if ($action === 'install_db') {
         installer_flash_add('danger', 'Database install failed: ' . $res['error']);
     }
 
-    installer_redirect('index.php?tab=install');
+    installer_redirect('index.php?tab=update&page=overview');
+}
+
+// Stage updater package
+if ($action === 'upload_package') {
+    if (!InstallerSecurity::verifyCsrf($_POST['csrf_token'] ?? null)) {
+        installer_flash_add('danger', 'Invalid CSRF token.');
+        $rt = installer_safe_return_to((string) ($_POST['return_to'] ?? ''), 'index.php?tab=update&page=packages');
+        installer_redirect($rt);
+    }
+
+    $result = installer_store_uploaded_package($_FILES['package_file'] ?? []);
+
+    if ($result['ok']) {
+        installer_flash_add('success', 'Update package staged successfully: ' . (string) ($result['filename'] ?? ''));
+    } else {
+        installer_flash_add('danger', 'Package upload failed: ' . (string) ($result['error'] ?? 'Unknown error.'));
+    }
+
+    $rt = installer_safe_return_to((string) ($_POST['return_to'] ?? ''), 'index.php?tab=update&page=packages');
+    installer_redirect($rt);
 }
 
 // Apply updates
@@ -1262,9 +1850,11 @@ function installer_render_header(string $title = 'Installer'): void
                 <i class="fa-regular fa-image"></i>
             </a>
 
+<?php if (installer_is_logged_in()) { ?>
             <a class="nav-icon" href="index.php?logout=1" aria-label="Logout" data-tooltip="Logout">
                 <i class="fa-solid fa-right-from-bracket"></i>
             </a>
+<?php } ?>
         </nav>
     </header>
 <?php
@@ -1273,7 +1863,7 @@ function installer_render_header(string $title = 'Installer'): void
 /**
  * Build app_settings rows from a config array.
  *
- * Only sections listed in settings_manager.override_allow_list are exported.
+ * Only placeholder fallback sections are exported for database-backed board settings.
  * Keys are stored using dot-notation (e.g. "gallery.images_displayed").
  *
  * Security note:
@@ -1418,17 +2008,31 @@ function installer_render_flash(): void
  */
 function installer_render_config_form_fields(array $config, array $dist, array $path = [], int $depth = 0): void
 {
+    $openedScalarGroup = false;
+
     foreach ($dist as $key => $default) {
         $current = $config[$key] ?? $default;
         $newPath = array_merge($path, [$key]);
 
         if (is_array($default)) {
-            $title = ucwords(str_replace('_', ' ', (string) $key));
+            if ($openedScalarGroup) {
+                echo '</div>';
+                $openedScalarGroup = false;
+            }
+
+            $title = installer_humanize_config_key($newPath);
+            echo '<div class="installer-config-subsection">';
             echo '<h3 class="installer-config-subheading">' . InstallerSecurity::e($title) . '</h3>';
             echo '<div class="installer-config-subgroup">';
             installer_render_config_form_fields((is_array($current) ? $current : []), $default, $newPath, $depth + 1);
             echo '</div>';
+            echo '</div>';
             continue;
+        }
+
+        if ($depth === 0 && !$openedScalarGroup) {
+            echo '<div class="installer-config-subgroup installer-config-subgroup--flat">';
+            $openedScalarGroup = true;
         }
 
         $name = 'config';
@@ -1436,20 +2040,22 @@ function installer_render_config_form_fields(array $config, array $dist, array $
             $name .= '[' . $p . ']';
         }
 
-        $label = ucwords(str_replace('_', ' ', (string) $key));
+        $label = installer_humanize_config_key($newPath);
+        $help = installer_config_field_help($newPath);
 
         $type = 'text';
-        if (is_int($default) || is_float($default)) $type = 'number';
-        if (is_bool($default)) $type = 'checkbox';
+        if (is_int($default) || is_float($default)) {
+            $type = 'number';
+        }
+        if (is_bool($default)) {
+            $type = 'checkbox';
+        }
 
-        // Hide DB password by default.
         $isPassword = (count($newPath) >= 2 && $newPath[count($newPath) - 2] === 'db' && $key === 'pass');
+        $isTimezone = ($key === 'timezone' && (is_string($default) || $default === null));
 
         echo '<div class="installer-field">';
         echo '<label class="installer-label"><b>' . InstallerSecurity::e($label) . '</b></label>';
-
-        // Timezone dropdown (prevents typos and enforces valid identifiers).
-        $isTimezone = ($key === 'timezone' && (is_string($default) || $default === null));
 
         if ($type === 'checkbox') {
             $checked = ($current === true) ? 'checked' : '';
@@ -1459,16 +2065,15 @@ function installer_render_config_form_fields(array $config, array $dist, array $
             echo '</label>';
         } elseif ($isTimezone) {
             $value = is_string($current) ? $current : (is_string($default) ? $default : 'UTC');
-            $all = DateTimeZone::listIdentifiers();
             $groups = [];
-
-            foreach ($all as $tz) {
+            foreach (DateTimeZone::listIdentifiers() as $tz) {
                 $parts = explode('/', $tz, 2);
                 $region = $parts[0] ?? 'Other';
-                if (!isset($groups[$region])) $groups[$region] = [];
+                if (!isset($groups[$region])) {
+                    $groups[$region] = [];
+                }
                 $groups[$region][] = $tz;
             }
-
             ksort($groups);
 
             echo '<select class="installer-input" name="' . InstallerSecurity::e($name) . '">';
@@ -1486,6 +2091,14 @@ function installer_render_config_form_fields(array $config, array $dist, array $
             echo '<input class="installer-input" type="' . ($isPassword ? 'password' : $type) . '" name="' . InstallerSecurity::e($name) . '" value="' . InstallerSecurity::e($value) . '">';
         }
 
+        if ($help !== '') {
+            echo '<div class="installer-helper-text">' . InstallerSecurity::e($help) . '</div>';
+        }
+
+        echo '</div>';
+    }
+
+    if ($openedScalarGroup) {
         echo '</div>';
     }
 }
@@ -1495,18 +2108,23 @@ function installer_render_config_cards(array $config, array $dist): void
     echo '<div class="installer-config-grid">';
 
     foreach ($dist as $sectionKey => $sectionDefault) {
-        $sectionTitle = ucwords(str_replace('_', ' ', (string) $sectionKey));
+        $sectionTitle = installer_humanize_config_key([(string) $sectionKey]);
         $sectionCurrent = $config[$sectionKey] ?? $sectionDefault;
+        $description = installer_config_section_description((string) $sectionKey);
 
-        echo '<section class="installer-card installer-card--padded">';
+        echo '<section class="installer-card installer-card--padded installer-card--config">';
         echo '<h2 class="installer-card-title">' . InstallerSecurity::e($sectionTitle) . '</h2>';
+        if ($description !== '') {
+            echo '<p class="installer-helper-text" style="margin-top: 0;">' . InstallerSecurity::e($description) . '</p>';
+        }
 
+        echo '<div class="installer-config-card-body">';
         if (is_array($sectionDefault)) {
             installer_render_config_form_fields((is_array($sectionCurrent) ? $sectionCurrent : []), $sectionDefault, [$sectionKey], 0);
         } else {
-            // Edge case: top-level scalar.
             installer_render_config_form_fields([$sectionKey => $sectionCurrent], [$sectionKey => $sectionDefault], [], 0);
         }
+        echo '</div>';
 
         echo '</section>';
     }
@@ -1517,8 +2135,217 @@ function installer_render_config_cards(array $config, array $dist): void
 function installer_render_security_reminder(): void
 {
     echo '<div class="alert alert-warning installer-security-reminder">';
-    echo '<b>Security Reminder:</b> After setup, remove or restrict access to the <b>/install</b> directory.';
+    echo '<div class="installer-security-reminder__icon"><i class="fa-solid fa-shield-halved"></i></div>';
+    echo '<div class="installer-security-reminder__content">';
+    echo '<div class="installer-security-reminder__title">Security Reminder</div>';
+    echo '<p>After setup, the first-run installer is locked with <b>install/installer.lock</b>. Keep the updater login private and still restrict direct access to <b>/install</b> where possible.</p>';
     echo '</div>';
+    echo '</div>';
+}
+
+
+function installer_render_status_badge(bool $ok, string $success = 'Complete', string $pending = 'Pending'): string
+{
+    $class = $ok ? 'installer-status-badge is-complete' : 'installer-status-badge is-pending';
+    $label = $ok ? $success : $pending;
+
+    return '<span class="' . InstallerSecurity::e($class) . '">' . InstallerSecurity::e($label) . '</span>';
+}
+
+function installer_render_install_progress(array $state, string $currentPage): void
+{
+    echo '<section class="installer-progress-grid">';
+
+    foreach (installer_install_step_order() as $step) {
+        $item = $state[$step] ?? ['label' => ucfirst($step), 'ok' => false, 'detail' => ''];
+        $active = ($currentPage === $step) ? ' is-active' : '';
+
+        echo '<div class="installer-progress-card' . $active . '">';
+        echo '<div class="installer-progress-card__top">';
+        echo '<div class="installer-progress-card__title">' . InstallerSecurity::e((string) $item['label']) . '</div>';
+        echo installer_render_status_badge(!empty($item['ok']));
+        echo '</div>';
+        echo '<p>' . InstallerSecurity::e((string) ($item['detail'] ?? '')) . '</p>';
+        echo '</div>';
+    }
+
+    echo '</section>';
+}
+
+/**
+ * Render the shared brand-side panel for installer auth pages.
+ *
+ * @param bool $isSetup True for first-run credential setup, false for login
+ * @return void
+ */
+function installer_render_auth_brand_panel(bool $isSetup): void
+{
+    echo '<aside class="installer-auth-brand-panel">';
+    echo '<div class="installer-auth-brand-eyebrow">' . ($isSetup ? 'First-Time Setup' : 'Protected Access') . '</div>';
+    echo '<h1>' . ($isSetup ? 'Secure the Installer' : 'Welcome Back') . '</h1>';
+
+    if ($isSetup) {
+        echo '<p class="installer-auth-brand-copy">Create the dedicated installer credentials used to protect installation and update actions. This account is separate from the main gallery account system.</p>';
+    } else {
+        echo '<p class="installer-auth-brand-copy">Sign in to continue into the installer and updater workspace for database installation, maintenance, and controlled update operations.</p>';
+    }
+
+    echo '<div class="installer-auth-feature-list">';
+
+    echo '<div class="installer-auth-feature-item">';
+    echo '<span class="installer-auth-feature-icon"><i class="fa-solid fa-shield-halved"></i></span>';
+    echo '<div>';
+    echo '<strong>Dedicated Protection</strong>';
+    echo '<p>The installer uses its own authentication layer so setup and update actions stay isolated from the public site.</p>';
+    echo '</div>';
+    echo '</div>';
+
+    echo '<div class="installer-auth-feature-item">';
+    echo '<span class="installer-auth-feature-icon"><i class="fa-solid fa-database"></i></span>';
+    echo '<div>';
+    echo '<strong>Database-Aware Workflow</strong>';
+    echo '<p>Walk through requirements, configure timezone and database access, then run the base schema in a guided sequence.</p>';
+    echo '</div>';
+    echo '</div>';
+
+    echo '<div class="installer-auth-feature-item">';
+    echo '<span class="installer-auth-feature-icon"><i class="fa-solid fa-rotate"></i></span>';
+    echo '<div>';
+    echo '<strong>Updater Ready</strong>';
+    echo '<p>After installation is locked, the updater remains available for SQL migrations, config merges, and future package workflows.</p>';
+    echo '</div>';
+    echo '</div>';
+
+    echo '</div>';
+    echo '</aside>';
+}
+
+/**
+ * Render the first-run installer credential setup form.
+ *
+ * @param array<string, mixed>|null $fallback Fallback file write payload when auth config cannot be written
+ * @return void
+ */
+function installer_render_auth_setup_page(?array $fallback = null): void
+{
+    echo '<main class="installer-auth">';
+    echo '<section class="installer-auth-shell installer-auth-shell-setup">';
+
+    installer_render_auth_brand_panel(true);
+
+    echo '<section class="installer-auth-form-panel">';
+    echo '<div class="installer-auth-panel-header">';
+    echo '<div class="installer-auth-panel-eyebrow">Installer Registration</div>';
+    echo '<h2>Create Installer Login</h2>';
+    echo '<p>Set a strong username and password for the installer/updater area before continuing with the first-time setup flow.</p>';
+    echo '</div>';
+
+    echo '<div class="installer-auth-alert-stack">';
+    installer_render_flash();
+    echo '</div>';
+
+    if (is_array($fallback) && !empty($fallback['content'])) {
+        echo '<div class="alert alert-danger installer-auth-alert-stack">Unable to write the credentials file automatically. Copy the generated file below into <b>' . InstallerSecurity::e((string) ($fallback['path'] ?? INSTALLER_AUTH_FILE)) . '</b>.</div>';
+        echo '<div class="installer-auth-field-group">';
+        echo '<label for="installer-auth-fallback">Generated Credentials File</label>';
+        echo '<textarea id="installer-auth-fallback" rows="12" readonly>' . InstallerSecurity::e((string) $fallback['content']) . '</textarea>';
+        echo '</div>';
+    }
+
+    echo '<form method="post" class="installer-auth-form">';
+    echo '<input type="hidden" name="action" value="auth_setup">';
+    echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
+
+    echo '<div class="installer-auth-field-grid installer-auth-field-grid-two">';
+
+    echo '<div class="installer-auth-field-group">';
+    echo '<label for="installer-username">Username</label>';
+    echo '<input class="installer-input" id="installer-username" type="text" name="username" autocomplete="username" required>';
+    echo '</div>';
+
+    echo '<div class="installer-auth-field-group">';
+    echo '<div class="installer-auth-label-row">';
+    echo '<label for="installer-password">Password</label>';
+    echo '<span class="installer-auth-label-helper">Minimum 12 characters</span>';
+    echo '</div>';
+    echo '<input class="installer-input" id="installer-password" type="password" name="password" autocomplete="new-password" required>';
+    echo '</div>';
+
+    echo '</div>';
+
+    echo '<div class="installer-auth-field-group">';
+    echo '<label for="installer-password-confirm">Confirm Password</label>';
+    echo '<input class="installer-input" id="installer-password-confirm" type="password" name="password_confirm" autocomplete="new-password" required>';
+    echo '</div>';
+
+    echo '<button type="submit" class="installer-auth-submit-button">';
+    echo '<i class="fa-solid fa-lock"></i>';
+    echo 'Save Installer Credentials';
+    echo '</button>';
+    echo '</form>';
+
+    echo '<div class="installer-auth-links">';
+    echo '<p>This login only protects the installer and updater area. It does not create a public gallery member account.</p>';
+    echo '</div>';
+
+    echo '</section>';
+    echo '</section>';
+    echo '</main>';
+}
+
+/**
+ * Render the installer login page.
+ *
+ * @return void
+ */
+function installer_render_auth_login_page(): void
+{
+    echo '<main class="installer-auth">';
+    echo '<section class="installer-auth-shell installer-auth-shell-login">';
+
+    installer_render_auth_brand_panel(false);
+
+    echo '<section class="installer-auth-form-panel">';
+    echo '<div class="installer-auth-panel-header">';
+    echo '<div class="installer-auth-panel-eyebrow">Installer Sign In</div>';
+    echo '<h2>Login</h2>';
+    echo '<p>Enter the installer credentials created during first-time setup to continue into the install or update workspace.</p>';
+    echo '</div>';
+
+    echo '<div class="installer-auth-alert-stack">';
+    installer_render_flash();
+    echo '</div>';
+
+    echo '<form method="post" class="installer-auth-form">';
+    echo '<input type="hidden" name="action" value="login">';
+    echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
+
+    echo '<div class="installer-auth-field-group">';
+    echo '<label for="installer-login-username">Username</label>';
+    echo '<input class="installer-input" id="installer-login-username" type="text" name="username" autocomplete="username" required>';
+    echo '</div>';
+
+    echo '<div class="installer-auth-field-group">';
+    echo '<div class="installer-auth-label-row">';
+    echo '<label for="installer-login-password">Password</label>';
+    echo '<span class="installer-auth-label-helper">Case-sensitive</span>';
+    echo '</div>';
+    echo '<input class="installer-input" id="installer-login-password" type="password" name="password" autocomplete="current-password" required>';
+    echo '</div>';
+
+    echo '<button type="submit" class="installer-auth-submit-button">';
+    echo '<i class="fa-solid fa-right-to-bracket"></i>';
+    echo 'Login';
+    echo '</button>';
+    echo '</form>';
+
+    echo '<div class="installer-auth-links">';
+    echo '<p>Need to return to the main site? <a href="/gallery">Go back to the gallery</a></p>';
+    echo '</div>';
+
+    echo '</section>';
+    echo '</section>';
+    echo '</main>';
 }
 
 // -------------------------------------------------
@@ -1528,96 +2355,47 @@ function installer_render_security_reminder(): void
 if (!installer_is_logged_in()) {
     installer_render_header('Login');
 
-    echo '<main>';
-
-    installer_render_flash();
-
-    // First-run setup
     if (!$authConfig) {
-        echo '<h1>Installer Setup</h1>';
-        echo '<p>This installer requires its own login. Set a strong username/password below.</p>';
-
         $fallback = $_SESSION['auth_setup_fallback'] ?? null;
         unset($_SESSION['auth_setup_fallback']);
 
-        if (is_array($fallback) && !empty($fallback['content'])) {
-            echo '<div class="alert alert-danger">Unable to write the credentials file automatically. Copy/paste the file below to: <b>' . InstallerSecurity::e((string) ($fallback['path'] ?? INSTALLER_AUTH_FILE)) . '</b></div>';
-            echo '<textarea style="width:100%; height: 240px;">' . InstallerSecurity::e((string) $fallback['content']) . '</textarea>';
-        }
-
-        echo '<form method="post" style="margin-top: 14px;">';
-        echo '<input type="hidden" name="action" value="auth_setup">';
-        echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
-
-        echo '<div style="margin: 10px 0;">';
-        echo '<label style="display:block; margin-bottom: 6px;"><b>Username</b></label>';
-        echo '<input class="installer-input" type="text" name="username" autocomplete="username">';
-        echo '</div>';
-
-        echo '<div style="margin: 10px 0;">';
-        echo '<label style="display:block; margin-bottom: 6px;"><b>Password</b> (min 12 chars)</label>';
-        echo '<input class="installer-input" type="password" name="password" autocomplete="new-password">';
-        echo '</div>';
-
-        echo '<div style="margin: 10px 0;">';
-        echo '<label style="display:block; margin-bottom: 6px;"><b>Confirm Password</b></label>';
-        echo '<input class="installer-input" type="password" name="password_confirm" autocomplete="new-password">';
-        echo '</div>';
-
-        echo '<button type="submit" style="margin-top: 10px;">Save Installer Credentials</button>';
-        echo '</form>';
-
-        echo '</main>';
+        installer_render_auth_setup_page(is_array($fallback) ? $fallback : null);
         installer_render_footer();
         exit;
     }
 
-    // Login form
-    echo '<h1>Installer Login</h1>';
-
-    echo '<form method="post" style="margin-top: 14px;">';
-    echo '<input type="hidden" name="action" value="login">';
-    echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
-
-    echo '<div style="margin: 10px 0;">';
-    echo '<label style="display:block; margin-bottom: 6px;"><b>Username</b></label>';
-        echo '<input class="installer-input" type="text" name="username" autocomplete="username">';
-    echo '</div>';
-
-    echo '<div style="margin: 10px 0;">';
-    echo '<label style="display:block; margin-bottom: 6px;"><b>Password</b></label>';
-        echo '<input class="installer-input" type="password" name="password" autocomplete="current-password">';
-    echo '</div>';
-
-    echo '<button type="submit" style="margin-top: 10px;">Login</button>';
-    echo '</form>';
-
-    echo '</main>';
+    installer_render_auth_login_page();
     installer_render_footer();
     exit;
 }
 
-// Logged in UI
 installer_render_header('Installer');
 
-echo '<main class="installer-authenticated">';
+$installState = installer_get_install_state();
+if ($tab !== 'update') {
+    $resolvedPage = installer_resolve_install_page($page, $installState);
+    if ($resolvedPage !== $page && $page !== 'overview') {
+        installer_flash_add('info', 'Complete the installer steps in order.');
+        installer_redirect('index.php?tab=install&page=' . $resolvedPage);
+    }
+    $page = $resolvedPage;
+}
 
-installer_render_flash();
+$nextInstallStep = installer_next_install_step($installState);
 
-// Primary navigation (Installer / Updater)
-echo '<div class="installer-topnav">';
-echo '<a class="installer-topnav__item' . ($tab === 'install' ? ' is-active' : '') . '" href="index.php?tab=install&page=overview"><i class="fa-solid fa-screwdriver-wrench"></i> Installer</a>';
-echo '<a class="installer-topnav__item' . ($tab === 'update' ? ' is-active' : '') . '" href="index.php?tab=update&page=overview"><i class="fa-solid fa-rotate"></i> Updater</a>';
-echo '</div>';
+$topNavItems = [
+    'install' => ['Installer', 'fa-solid fa-screwdriver-wrench', 'index.php?tab=install&page=overview'],
+    'update'  => ['Updater', 'fa-solid fa-rotate', 'index.php?tab=update&page=overview'],
+];
 
-// Secondary navigation (per section)
 $subNav = [];
-
 if ($tab === 'update') {
     $subNav = [
-        'overview'  => ['Updater Overview', 'fa-solid fa-circle-info'],
-        'config'    => ['Config Merge', 'fa-solid fa-code-merge'],
-        'database'  => ['Database Updates', 'fa-solid fa-database'],
+        'overview'      => ['Updater Overview', 'fa-solid fa-circle-info'],
+        'config'        => ['Live Configuration', 'fa-solid fa-sliders'],
+        'placeholders'  => ['Fallback Defaults', 'fa-solid fa-layer-group'],
+        'database'      => ['Database Updates', 'fa-solid fa-database'],
+        'packages'      => ['Package Staging', 'fa-solid fa-box-open'],
     ];
 } else {
     $subNav = [
@@ -1629,228 +2407,351 @@ if ($tab === 'update') {
     ];
 }
 
-echo '<div class="installer-subnav">';
+if (!isset($subNav[$page])) {
+    $page = 'overview';
+}
+
+echo '<main class="installer-authenticated">';
+installer_render_flash();
+
+echo '<section class="installer-hero">';
+echo '<div class="installer-hero__content">';
+echo '<div class="installer-hero__eyebrow">PHP Image Board</div>';
+if ($tab === 'update') {
+    echo '<h1>Updater Workspace</h1>';
+    echo '<p>Keep the deployment current after first-run setup. SQL updates stay available even when the installer is locked, and package archives can be staged here for future file-based upgrade flows.</p>';
+} else {
+    echo '<h1>Installer Workspace</h1>';
+    echo '<p>Run the installation in a guided sequence: requirements, filesystem, configuration, and finally the base database install. Each step stays focused so the initial setup remains clean and predictable.</p>';
+}
+echo '</div>';
+echo '<div class="installer-hero__actions">';
+foreach ($topNavItems as $navKey => $meta) {
+    $active = ($tab === $navKey) ? ' is-active' : '';
+    echo '<a class="installer-topnav__item' . $active . '" href="' . InstallerSecurity::e($meta[2]) . '"><i class="' . InstallerSecurity::e($meta[1]) . '"></i> ' . InstallerSecurity::e($meta[0]) . '</a>';
+}
+echo '</div>';
+echo '</section>';
+
+echo '<div class="installer-shell">';
+echo '<aside class="installer-sidebar">';
+echo '<div class="installer-sidebar__label">' . InstallerSecurity::e($tab === 'update' ? 'Updater Navigation' : 'Installer Navigation') . '</div>';
+echo '<div class="installer-subnav installer-subnav--stacked">';
 foreach ($subNav as $k => $meta) {
     $active = ($page === $k) ? ' is-active' : '';
     echo '<a class="installer-subnav__item' . $active . '" href="index.php?tab=' . InstallerSecurity::e($tab) . '&page=' . InstallerSecurity::e($k) . '">';
-    echo '<i class="' . InstallerSecurity::e($meta[1]) . '"></i> ' . InstallerSecurity::e($meta[0]);
+    echo '<i class="' . InstallerSecurity::e($meta[1]) . '"></i>';
+    echo '<span>' . InstallerSecurity::e($meta[0]) . '</span>';
+    if ($tab === 'install' && isset($installState[$k])) {
+        echo installer_render_status_badge(!empty($installState[$k]['ok']), 'Ready', 'Required');
+    }
     echo '</a>';
 }
+if ($tab === 'install') {
+    echo '<div class="installer-sidebar__helper">Next recommended step: <b>' . InstallerSecurity::e((string) ($installState[$nextInstallStep]['label'] ?? 'Overview')) . '</b></div>';
+} else {
+    echo '<div class="installer-sidebar__helper">The installer lock keeps first-run pages closed after deployment, while the updater remains available behind its separate login.</div>';
+}
 echo '</div>';
+echo '</aside>';
 
+echo '<section class="installer-content">';
 installer_render_security_reminder();
 
-// =========================================================
-// UPDATER PAGES
-// =========================================================
 if ($tab === 'update') {
-    if (!isset($subNav[$page])) {
-        $page = 'overview';
-    }
-
     if ($page === 'overview') {
-        echo '<h1>Updater</h1>';
-        echo '<p>Apply database updates and merge new config defaults from <b>config.php.dist</b>.</p>';
+        echo '<h2>Updater Overview</h2>';
+        echo '<p>Use this area for ongoing maintenance after the first install. Database SQL files remain the primary update mechanism, runtime configuration can be adjusted here, and package staging is available for future archive-based deployments.</p>';
+
+        echo '<div class="installer-stat-grid">';
+        echo '<div class="installer-stat-card"><div class="installer-stat-card__eyebrow">Installer Lock</div><div class="installer-stat-card__value">' . (!empty($installState['lock']['ok']) ? 'Enabled' : 'Missing') . '</div><p>' . InstallerSecurity::e((string) $installState['lock']['detail']) . '</p></div>';
+        $updateFiles = installer_list_update_files();
+        echo '<div class="installer-stat-card"><div class="installer-stat-card__eyebrow">SQL Update Files</div><div class="installer-stat-card__value">' . count($updateFiles) . '</div><p>Files detected inside /database/updates.</p></div>';
+        $stagedPackages = installer_list_package_files();
+        echo '<div class="installer-stat-card"><div class="installer-stat-card__eyebrow">Staged Packages</div><div class="installer-stat-card__value">' . count($stagedPackages) . '</div><p>Archive packages uploaded to secure updater storage.</p></div>';
+        echo '</div>';
 
         echo '<div class="installer-card-grid">';
-        echo '<div class="installer-card">';
-        echo '<h2>Config Merge</h2>';
-        echo '<p>Pull new settings from <b>config.php.dist</b> into <b>config.php</b> without losing your existing values.</p>';
-        echo '<a class="installer-button installer-button--secondary" href="index.php?tab=update&page=config">Open Config Merge</a>';
+        echo '<div class="installer-card installer-card--padded"><h3>Live Configuration</h3><p>Edit runtime configuration that still reflects the live board after the first install is complete.</p><a class="installer-button installer-button--secondary" href="index.php?tab=update&page=config">Open Live Configuration</a></div>';
+        echo '<div class="installer-card installer-card--padded"><h3>Fallback Defaults</h3><p>Review config.php placeholder defaults that only apply when Control Panel-backed settings are unavailable.</p><a class="installer-button installer-button--secondary" href="index.php?tab=update&page=placeholders">Open Fallback Defaults</a></div><div class="installer-card installer-card--padded"><h3>Database Updates</h3><p>Apply pending SQL files and track them through the app_updates table.</p><a class="installer-button installer-button--secondary" href="index.php?tab=update&page=database">Open Database Updates</a></div>';
+        echo '<div class="installer-card installer-card--padded"><h3>Package Staging</h3><p>Upload zip or tar archives into the updater staging area. This keeps future file-package installs organized without exposing uploads publicly.</p><a class="installer-button installer-button--secondary" href="index.php?tab=update&page=packages">Open Package Staging</a></div>';
         echo '</div>';
 
-        echo '<div class="installer-card">';
-        echo '<h2>Database Updates</h2>';
-        echo '<p>Apply SQL files in <b>/database/updates</b> and track which updates have already been applied.</p>';
-        echo '<a class="installer-button installer-button--secondary" href="index.php?tab=update&page=database">Open Database Updates</a>';
-        echo '</div>';
-        echo '</div>';
-
-        echo '</main>';
+        echo '</section></div></main>';
         installer_render_footer();
         exit;
     }
 
     if ($page === 'config') {
-        echo '<h1>Config Merge</h1>';
-        echo '<p>Merges missing keys from <b>config.php.dist</b> into <b>config.php</b> (your existing values stay intact).</p>';
+        echo '<h2>Live Configuration</h2>';
+        echo '<p>This page is limited to configuration that still reflects the live board directly. Control Panel-managed settings such as site, template, gallery, profile, and debugging values are intentionally kept out of this editor.</p>';
 
         if (empty($existingConfig)) {
             echo '<div class="alert alert-danger">Missing <b>config/config.php</b>. Run the installer first.</div>';
         } else {
-            $missingKeys = installer_collect_missing_config_keys($distConfig, $existingConfig);
+            $liveSections = installer_live_config_sections($distConfig);
+            $liveDistConfig = installer_filter_config_sections($distConfig, $liveSections);
+            $liveMergedConfig = installer_filter_config_sections($mergedConfig, $liveSections);
 
-            // Show what will be merged (or that everything is already up to date).
-            if (empty($missingKeys)) {
-                echo '<div class="alert alert-info">No new configuration keys were found. Your config already contains all keys from <b>config.php.dist</b>.</div>';
+            if (!empty($liveDistConfig)) {
+                echo '<form method="post">';
+                echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
+                echo '<input type="hidden" name="return_to" value="index.php?tab=update&page=config">';
+                installer_render_config_cards($liveMergedConfig, $liveDistConfig);
+                echo '<div class="installer-button-row">';
+                echo '<button type="submit" name="action" value="save_config">Save Live Configuration</button>';
+                echo '</div>';
+                echo '</form>';
             } else {
-                echo '<div class="alert alert-warning">Missing <b>' . count($missingKeys) . '</b> key(s) that can be merged from <b>config.php.dist</b>.</div>';
+                echo '<div class="alert alert-info">No live runtime sections were detected in <b>config.php.dist</b> for this updater page.</div>';
+            }
+
+            $missingKeys = installer_collect_missing_config_keys($distConfig, $existingConfig);
+            $liveMissingKeys = installer_filter_key_paths_by_sections($missingKeys, $liveSections);
+
+            if (empty($liveMissingKeys)) {
+                echo '<div class="alert alert-info" style="margin-top: 14px;">No new live configuration keys were found for this page. Other placeholder-only keys may still exist on the fallback defaults page.</div>';
+            } else {
+                echo '<div class="alert alert-warning" style="margin-top: 14px;">Missing <b>' . count($liveMissingKeys) . '</b> live configuration key(s) that can be merged from <b>config.php.dist</b>.</div>';
                 echo '<div class="installer-card installer-card--padded" style="margin-top: 12px;">';
-                echo '<div class="installer-card-title">Keys to be added</div>';
+                echo '<div class="installer-card-title">Config Merge</div>';
+                echo '<p>Use config merge when a future release adds new live configuration keys to <b>config.php.dist</b> and you want to pull them in without overwriting the values you already use.</p>';
                 echo '<ul class="installer-key-list">';
-                foreach ($missingKeys as $k) {
+                foreach ($liveMissingKeys as $k) {
                     echo '<li><code>' . InstallerSecurity::e($k) . '</code></li>';
                 }
                 echo '</ul>';
+                echo '<form method="post" style="margin-top: 14px;">';
+                echo '<input type="hidden" name="action" value="merge_config">';
+                echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
+                echo '<input type="hidden" name="return_to" value="index.php?tab=update&page=config">';
+                echo '<button type="submit">Merge Missing Live Configuration Keys</button>';
+                echo '</form>';
                 echo '</div>';
             }
-
-            // Last merge report (optional)
-            $lastTime = $_SESSION['config_merge_last_time'] ?? '';
-            $lastMissing = $_SESSION['config_merge_last_missing'] ?? null;
-
-            if (is_string($lastTime) && $lastTime !== '' && is_array($lastMissing)) {
-                echo '<div class="installer-card installer-card--padded" style="margin-top: 12px;">';
-                echo '<div class="installer-card-title">Last merge attempt</div>';
-                echo '<p style="margin: 6px 0 0 0;">Time: <b>' . InstallerSecurity::e($lastTime) . '</b><br>New keys detected: <b>' . count($lastMissing) . '</b></p>';
-                echo '</div>';
-            }
-
-            echo '<form method="post" style="margin-top: 14px;">';
-            echo '<input type="hidden" name="action" value="merge_config">';
-            echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
-            echo '<input type="hidden" name="return_to" value="index.php?tab=update&page=config">';
-            echo '<button type="submit">Merge config.php from config.php.dist</button>';
-            echo '</form>';
         }
 
         $fallbackCfg = $_SESSION['config_write_fallback'] ?? '';
         unset($_SESSION['config_write_fallback']);
-
         if (is_string($fallbackCfg) && trim($fallbackCfg) !== '') {
-            echo '<h2 style="margin-top: 18px;">Manual Config Copy/Paste</h2>';
+            echo '<h3 style="margin-top: 18px;">Manual Config Copy/Paste</h3>';
             echo '<div class="alert alert-danger">The updater could not write config/config.php. Copy/paste the content below into <b>config/config.php</b>.</div>';
             echo '<textarea class="installer-textarea-code">' . InstallerSecurity::e($fallbackCfg) . '</textarea>';
         }
 
-        echo '</main>';
+        echo '</section></div></main>';
         installer_render_footer();
         exit;
     }
 
-    // page === database
-    echo '<h1>Database Updates</h1>';
-    echo '<p>Applies missing SQL updates in <b>/database/updates</b>.</p>';
+    if ($page === 'placeholders') {
+        echo '<h2>Fallback Defaults</h2>';
+        echo '<p>These sections stay in <b>config/config.php</b> as placeholders only. They do <b>not</b> reflect the live board while the Control Panel and <b>app_settings</b> are available. Use this page only to maintain emergency or fallback defaults.</p>';
+        echo '<div class="alert alert-warning">Changes saved here do not update the live board settings managed from the Control Panel. They only change the config.php fallback values used when database-backed settings are unavailable.</div>';
 
-    $config = installer_load_config_existing();
-    $pdo = $config ? installer_pdo_from_config($config) : null;
-
-    if (!$config) {
-        echo '<div class="alert alert-danger">Missing config/config.php. Run the installer first.</div>';
-    } elseif (!$pdo) {
-        echo '<div class="alert alert-danger">Unable to connect using database settings in config/config.php.</div>';
-    } else {
-        $applied = installer_db_get_applied_updates($pdo);
-        $updates = installer_list_update_files();
-
-        $pending = [];
-        foreach ($updates as $u) {
-            if (empty($applied[$u['filename']])) $pending[] = $u;
-        }
-
-        if (empty($updates)) {
-            echo '<div class="alert alert-warning">No update files found in /database/updates.</div>';
-        } elseif (empty($pending)) {
-            echo '<div class="alert alert-success">No pending updates.</div>';
+        if (empty($existingConfig)) {
+            echo '<div class="alert alert-danger">Missing <b>config/config.php</b>. Run the installer first.</div>';
         } else {
-            echo '<div class="alert alert-warning">Pending updates: <b>' . InstallerSecurity::e((string) count($pending)) . '</b></div>';
-            echo '<ul class="installer-list">';
-            foreach ($pending as $u) {
-                echo '<li>' . InstallerSecurity::e($u['filename']) . '</li>';
+            $placeholderSections = installer_placeholder_config_sections_for_dist($distConfig);
+            $placeholderDistConfig = installer_filter_config_sections($distConfig, $placeholderSections);
+            $placeholderMergedConfig = installer_filter_config_sections($mergedConfig, $placeholderSections);
+
+            if (!empty($placeholderDistConfig)) {
+                echo '<form method="post">';
+                echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
+                echo '<input type="hidden" name="return_to" value="index.php?tab=update&page=placeholders">';
+                installer_render_config_cards($placeholderMergedConfig, $placeholderDistConfig);
+                echo '<div class="installer-button-row">';
+                echo '<button type="submit" name="action" value="save_config">Save Fallback Defaults</button>';
+                echo '</div>';
+                echo '</form>';
+            } else {
+                echo '<div class="alert alert-info">No placeholder sections were detected in <b>config.php.dist</b> for this updater page.</div>';
             }
-            echo '</ul>';
+
+            $missingKeys = installer_collect_missing_config_keys($distConfig, $existingConfig);
+            $placeholderMissingKeys = installer_filter_key_paths_by_sections($missingKeys, $placeholderSections);
+
+            if (empty($placeholderMissingKeys)) {
+                echo '<div class="alert alert-info" style="margin-top: 14px;">No new placeholder-only keys were found for this page.</div>';
+            } else {
+                echo '<div class="alert alert-warning" style="margin-top: 14px;">Missing <b>' . count($placeholderMissingKeys) . '</b> fallback placeholder key(s) that can be merged from <b>config.php.dist</b>.</div>';
+                echo '<div class="installer-card installer-card--padded" style="margin-top: 12px;">';
+                echo '<div class="installer-card-title">Config Merge</div>';
+                echo '<p>Use config merge when a future release adds new fallback placeholder keys to <b>config.php.dist</b> and you want to pull them in without overwriting the values you already keep in <b>config.php</b>.</p>';
+                echo '<ul class="installer-key-list">';
+                foreach ($placeholderMissingKeys as $k) {
+                    echo '<li><code>' . InstallerSecurity::e($k) . '</code></li>';
+                }
+                echo '</ul>';
+                echo '<form method="post" style="margin-top: 14px;">';
+                echo '<input type="hidden" name="action" value="merge_config">';
+                echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
+                echo '<input type="hidden" name="return_to" value="index.php?tab=update&page=placeholders">';
+                echo '<button type="submit">Merge Missing Fallback Keys</button>';
+                echo '</form>';
+                echo '</div>';
+            }
         }
 
-        echo '<form method="post" style="margin-top: 10px;">';
-        echo '<input type="hidden" name="action" value="apply_updates">';
-        echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
-        echo '<input type="hidden" name="return_to" value="index.php?tab=update&page=database">';
-        echo '<button type="submit">Apply Pending Updates</button>';
-        echo '</form>';
+        $fallbackCfg = $_SESSION['config_write_fallback'] ?? '';
+        unset($_SESSION['config_write_fallback']);
+        if (is_string($fallbackCfg) && trim($fallbackCfg) !== '') {
+            echo '<h3 style="margin-top: 18px;">Manual Config Copy/Paste</h3>';
+            echo '<div class="alert alert-danger">The updater could not write config/config.php. Copy/paste the content below into <b>config/config.php</b>.</div>';
+            echo '<textarea class="installer-textarea-code">' . InstallerSecurity::e($fallbackCfg) . '</textarea>';
+        }
+
+        echo '</section></div></main>';
+        installer_render_footer();
+        exit;
     }
 
-    echo '</main>';
+    if ($page === 'database') {
+        echo '<h2>Database Updates</h2>';
+        echo '<p>Applies missing SQL files in <b>/database/updates</b> and records successful runs in <b>app_updates</b>.</p>';
+
+        $config = installer_load_config_existing();
+        $pdo = $config ? installer_pdo_from_config($config) : null;
+
+        if (!$config) {
+            echo '<div class="alert alert-danger">Missing config/config.php. Run the installer first.</div>';
+        } elseif (!$pdo) {
+            echo '<div class="alert alert-danger">Unable to connect using database settings in config/config.php.</div>';
+        } else {
+            $applied = installer_db_get_applied_updates($pdo);
+            $updates = installer_list_update_files();
+            $pending = [];
+            foreach ($updates as $u) {
+                if (empty($applied[$u['filename']])) {
+                    $pending[] = $u;
+                }
+            }
+
+            if (empty($updates)) {
+                echo '<div class="alert alert-warning">No update files found in /database/updates.</div>';
+            } elseif (empty($pending)) {
+                echo '<div class="alert alert-success">No pending updates.</div>';
+            } else {
+                echo '<div class="alert alert-warning">Pending updates: <b>' . InstallerSecurity::e((string) count($pending)) . '</b></div>';
+                echo '<table class="installer-table"><tr><th>Filename</th><th>Status</th></tr>';
+                foreach ($updates as $u) {
+                    $isPending = empty($applied[$u['filename']]);
+                    echo '<tr><td>' . InstallerSecurity::e($u['filename']) . '</td><td>' . ($isPending ? 'Pending' : 'Applied') . '</td></tr>';
+                }
+                echo '</table>';
+            }
+
+            echo '<form method="post" style="margin-top: 14px;">';
+            echo '<input type="hidden" name="action" value="apply_updates">';
+            echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
+            echo '<input type="hidden" name="return_to" value="index.php?tab=update&page=database">';
+            echo '<button type="submit">Apply Pending Updates</button>';
+            echo '</form>';
+        }
+
+        echo '</section></div></main>';
+        installer_render_footer();
+        exit;
+    }
+
+    echo '<h2>Package Staging</h2>';
+    echo '<p>Upload future update archives into a protected staging area. Archive extraction and file deployment are intentionally not automated yet, but this workspace prepares the updater for that package flow.</p>';
+    echo '<div class="alert alert-info">Package installs are currently a managed staging feature only. Uploaded archives are stored in <b>storage/packages/updater</b> until you decide how deployment rules should work.</div>';
+
+    echo '<form method="post" enctype="multipart/form-data">';
+    echo '<input type="hidden" name="action" value="upload_package">';
+    echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
+    echo '<input type="hidden" name="return_to" value="index.php?tab=update&page=packages">';
+    echo '<div class="installer-card installer-card--padded">';
+    echo '<div class="installer-card-title">Upload Archive</div>';
+    echo '<div class="installer-field">';
+    echo '<label class="installer-label"><b>Package File</b></label>';
+    echo '<input class="installer-input" type="file" name="package_file" accept=".zip,.tar,.gz,.tgz">';
+    echo '</div>';
+    echo '<div class="installer-helper-text">Accepted formats: zip, tar, tar.gz, tgz. Staging limit: 25 MB.</div>';
+    echo '<div class="installer-button-row"><button type="submit">Stage Package</button></div>';
+    echo '</div>';
+    echo '</form>';
+
+    $packages = installer_list_package_files();
+    echo '<div class="installer-card installer-card--padded" style="margin-top: 14px;">';
+    echo '<div class="installer-card-title">Staged Packages</div>';
+    if (empty($packages)) {
+        echo '<p>No archives have been staged yet.</p>';
+    } else {
+        echo '<table class="installer-table"><tr><th>Filename</th><th>Size</th><th>Modified</th></tr>';
+        foreach ($packages as $package) {
+            echo '<tr>';
+            echo '<td>' . InstallerSecurity::e((string) $package['filename']) . '</td>';
+            echo '<td>' . InstallerSecurity::e(installer_format_bytes((int) ($package['size_bytes'] ?? 0))) . '</td>';
+            echo '<td>' . InstallerSecurity::e((string) ($package['modified_at'] ?? '')) . '</td>';
+            echo '</tr>';
+        }
+        echo '</table>';
+    }
+    echo '</div>';
+
+    echo '</section></div></main>';
     installer_render_footer();
     exit;
 }
 
-// =========================================================
-// INSTALLER PAGES
-// =========================================================
-
-if (!isset($subNav[$page])) {
-    $page = 'overview';
-}
-
 if ($page === 'overview') {
-    echo '<h1>Installer</h1>';
-    echo '<p>Use the steps below to set up the site. Each step has its own page to keep things clean and easy to follow.</p>';
+    echo '<h2>Installer Overview</h2>';
+    echo '<p>Follow the steps in order. The installer keeps the flow guided so the database step cannot run before the runtime requirements, folder setup, and timezone/database configuration are in place.</p>';
+    installer_render_install_progress($installState, $page);
+    //installer_render_overview_summary($installState);
 
     echo '<div class="installer-card-grid">';
-
-    echo '<div class="installer-card">';
-    echo '<h2>Requirements</h2>';
-    echo '<p>Verify PHP extensions and version requirements.</p>';
-    echo '<a class="installer-button installer-button--secondary" href="index.php?tab=install&page=requirements">Open Requirements</a>';
+    foreach (installer_install_step_order() as $step) {
+        $item = $installState[$step] ?? ['label' => ucfirst($step), 'detail' => ''];
+        echo '<div class="installer-card installer-card--padded">';
+        echo '<div class="installer-card-title">' . InstallerSecurity::e((string) $item['label']) . '</div>';
+        echo '<p>' . InstallerSecurity::e((string) ($item['detail'] ?? '')) . '</p>';
+        echo '<a class="installer-button installer-button--secondary" href="index.php?tab=install&page=' . InstallerSecurity::e($step) . '">Open Step</a>';
+        echo '</div>';
+    }
     echo '</div>';
 
-    echo '<div class="installer-card">';
-    echo '<h2>Filesystem</h2>';
-    echo '<p>Check folder permissions and create required directories.</p>';
-    echo '<a class="installer-button installer-button--secondary" href="index.php?tab=install&page=filesystem">Open Filesystem</a>';
-    echo '</div>';
-
-    echo '<div class="installer-card">';
-    echo '<h2>Configuration</h2>';
-    echo '<p>Edit and save <b>config/config.php</b> (loaded from <b>config.php.dist</b>).</p>';
-    echo '<a class="installer-button installer-button--secondary" href="index.php?tab=install&page=config">Open Configuration</a>';
-    echo '</div>';
-
-    echo '<div class="installer-card">';
-    echo '<h2>Database Install</h2>';
-    echo '<p>Install the base database schema using <b>install/base_database.sql</b>.</p>';
-    echo '<a class="installer-button installer-button--secondary" href="index.php?tab=install&page=database">Open Database Install</a>';
-    echo '</div>';
-
-    echo '</div>';
-
-    echo '</main>';
+    echo '</section></div></main>';
     installer_render_footer();
     exit;
 }
 
 if ($page === 'requirements') {
-    echo '<h1>Requirements</h1>';
+    echo '<h2>Requirements</h2>';
+    echo '<p>Start here before touching the database or configuration. Required checks must pass to continue through the guided install sequence.</p>';
+    installer_render_install_progress($installState, $page);
 
-    $reqs = [];
-    $reqs[] = ['PHP 8.1+', version_compare(PHP_VERSION, '8.1.0', '>=')];
-    $reqs[] = ['PDO MySQL', extension_loaded('pdo_mysql')];
-    $reqs[] = ['Fileinfo', extension_loaded('fileinfo')];
-    $reqs[] = ['GD', extension_loaded('gd')];
-    $reqs[] = ['Imagick', (extension_loaded('imagick') && class_exists('Imagick'))];
-
-    echo '<ul class="installer-list">';
-    foreach ($reqs as $r) {
-        $ok = (bool) $r[1];
-        echo '<li class="' . ($ok ? 'is-ok' : 'is-bad') . '">' . ($ok ? '<i class="fa-solid fa-circle-check"></i> ' : '<i class="fa-solid fa-circle-xmark"></i> ');
-        echo InstallerSecurity::e((string) $r[0]);
-        echo '</li>';
+    echo '<table class="installer-table"><tr><th>Requirement</th><th>Status</th><th>Type</th><th>Details</th></tr>';
+    foreach (installer_collect_requirements() as $requirement) {
+        $ok = !empty($requirement['ok']);
+        echo '<tr>';
+        echo '<td>' . InstallerSecurity::e((string) $requirement['label']) . '</td>';
+        echo '<td>' . ($ok ? 'Pass' : 'Fail') . '</td>';
+        echo '<td>' . (!empty($requirement['required']) ? 'Required' : 'Optional') . '</td>';
+        echo '<td>' . InstallerSecurity::e((string) ($requirement['detail'] ?? '')) . '</td>';
+        echo '</tr>';
     }
-    echo '</ul>';
+    echo '</table>';
 
-    echo '</main>';
+    if (!empty($installState['requirements']['ok'])) {
+        echo '<div class="installer-button-row"><a class="installer-button" href="index.php?tab=install&page=filesystem">Continue to Filesystem</a></div>';
+    }
+
+    echo '</section></div></main>';
     installer_render_footer();
     exit;
 }
 
 if ($page === 'filesystem') {
-    echo '<h1>Filesystem</h1>';
-    echo '<p>Checks required folders and ensures they are writable.</p>';
+    echo '<h2>Filesystem</h2>';
+    echo '<p>Create the runtime folders before saving the final configuration. The updater package staging directory is also prepared here so future archive uploads have a secure home.</p>';
+    installer_render_install_progress($installState, $page);
 
     $dirChecks = installer_check_dirs();
-
-    echo '<table class="installer-table">';
-    echo '<tr><th>Path</th><th>Exists</th><th>Writable</th></tr>';
+    echo '<table class="installer-table"><tr><th>Path</th><th>Exists</th><th>Writable</th></tr>';
     foreach ($dirChecks as $d) {
         echo '<tr>';
         echo '<td>' . InstallerSecurity::e($d['path']) . '</td>';
@@ -1860,60 +2761,79 @@ if ($page === 'filesystem') {
     }
     echo '</table>';
 
-    echo '<form method="post" style="margin-top: 10px;">';
+    echo '<form method="post" style="margin-top: 14px;">';
     echo '<input type="hidden" name="action" value="fix_dirs">';
     echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
     echo '<input type="hidden" name="return_to" value="index.php?tab=install&page=filesystem">';
+    echo '<div class="installer-button-row">';
     echo '<button type="submit">Create / Fix Required Folders</button>';
-    echo '</form>';
+    if (!empty($installState['filesystem']['ok'])) {
+        echo '<a class="installer-button installer-button--secondary" href="index.php?tab=install&page=config">Continue to Configuration</a>';
+    }
+    echo '</div></form>';
 
-    echo '</main>';
+    echo '</section></div></main>';
     installer_render_footer();
     exit;
 }
 
 if ($page === 'config') {
-    echo '<h1>Configuration</h1>';
-    echo '<p>Settings are loaded from <b>config/config.php.dist</b>. Save to write <b>config/config.php</b>.</p>';
+    echo '<h2>Configuration</h2>';
+    echo '<p>Only the timezone and database connection are needed for first-time installation. The remaining runtime configuration is maintained from the updater workspace after setup.</p>';
+    installer_render_install_progress($installState, $page);
+
+    $installSections = installer_install_config_sections();
+    $installMergedConfig = installer_filter_config_sections($mergedConfig, $installSections);
+    $installDistConfig = installer_filter_config_sections($distConfig, $installSections);
 
     echo '<form method="post">';
     echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
     echo '<input type="hidden" name="return_to" value="index.php?tab=install&page=config">';
-
-    installer_render_config_cards($mergedConfig, $distConfig);
-
+    installer_render_config_cards($installMergedConfig, $installDistConfig);
     echo '<div class="installer-button-row">';
     echo '<button type="submit" name="action" value="save_config">Save config.php</button>';
     echo '<button type="submit" name="action" value="db_test" class="installer-button--secondary">Test Database</button>';
+    if (!empty($installState['config']['ok'])) {
+        echo '<a class="installer-button installer-button--secondary" href="index.php?tab=install&page=database">Continue to Database Install</a>';
+    }
     echo '</div>';
-
     echo '</form>';
 
     $fallbackCfg = $_SESSION['config_write_fallback'] ?? '';
     unset($_SESSION['config_write_fallback']);
-
     if (is_string($fallbackCfg) && trim($fallbackCfg) !== '') {
-        echo '<h2 style="margin-top: 18px;">Manual Config Copy/Paste</h2>';
+        echo '<h3 style="margin-top: 18px;">Manual Config Copy/Paste</h3>';
         echo '<div class="alert alert-danger">The installer could not write config/config.php. Copy/paste the content below into <b>config/config.php</b>.</div>';
         echo '<textarea class="installer-textarea-code">' . InstallerSecurity::e($fallbackCfg) . '</textarea>';
     }
 
-    echo '</main>';
+    echo '</section></div></main>';
     installer_render_footer();
     exit;
 }
 
-// page === database
-echo '<h1>Database Install</h1>';
-echo '<p>Installs <b>install/base_database.sql</b> into the configured database.</p>';
+echo '<h2>Database Install</h2>';
+echo '<p>This is the final first-run step. When the base schema installs successfully, the installer writes its lock file and future maintenance shifts into the updater workspace.</p>';
+installer_render_install_progress($installState, $page);
 
-echo '<form method="post">';
-echo '<input type="hidden" name="action" value="install_db">';
-echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
-echo '<input type="hidden" name="return_to" value="index.php?tab=install&page=database">';
-echo '<button type="submit">Install Base Database</button>';
-echo '</form>';
+$config = installer_load_config_existing();
+$pdo = $config ? installer_pdo_from_config($config) : null;
+if (!$config) {
+    echo '<div class="alert alert-danger">Missing config/config.php. Complete the configuration step first.</div>';
+} elseif (!$pdo) {
+    echo '<div class="alert alert-danger">Unable to connect using the current config/config.php database settings. Re-test the connection on the configuration step before installing the base schema.</div>';
+} else {
+    echo '<div class="installer-card installer-card--padded">';
+    echo '<div class="installer-card-title">Base Database Install</div>';
+    echo '<p>Installs <b>install/base_database.sql</b> into the configured database and then writes the installer lock file so the updater remains available without exposing the initial setup flow.</p>';
+    echo '<form method="post">';
+    echo '<input type="hidden" name="action" value="install_db">';
+    echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
+    echo '<input type="hidden" name="return_to" value="index.php?tab=install&page=database">';
+    echo '<div class="installer-button-row"><button type="submit">Install Base Database</button></div>';
+    echo '</form>';
+    echo '</div>';
+}
 
-echo '</main>';
-
+echo '</section></div></main>';
 installer_render_footer();
