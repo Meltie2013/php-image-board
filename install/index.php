@@ -23,6 +23,9 @@
 
 declare(strict_types=1);
 
+ini_set('session.use_strict_mode', '1');
+ini_set('session.use_only_cookies', '1');
+
 session_name('installer_session');
 
 $secureCookie = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
@@ -41,6 +44,8 @@ session_start();
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
 header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
 if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
@@ -163,7 +168,9 @@ function installer_rate_limit_read(): array
  */
 function installer_rate_limit_write(array $state): void
 {
-    @file_put_contents(INSTALLER_RATE_LIMIT_FILE, json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX);
+    if (@file_put_contents(INSTALLER_RATE_LIMIT_FILE, json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX) !== false) {
+        @chmod(INSTALLER_RATE_LIMIT_FILE, 0600);
+    }
 }
 
 /**
@@ -261,7 +268,53 @@ function installer_write_lock_file(): bool
     }
 
     $content = "Installer locked on " . date('Y-m-d H:i:s') . PHP_EOL;
-    return @file_put_contents(INSTALLER_LOCK_FILE, $content, LOCK_EX) !== false;
+    $written = @file_put_contents(INSTALLER_LOCK_FILE, $content, LOCK_EX) !== false;
+
+    if ($written) {
+        @chmod(INSTALLER_LOCK_FILE, 0640);
+    }
+
+    return $written;
+}
+
+/**
+ * Determine whether the current request uses POST.
+ *
+ * @return bool
+ */
+function installer_is_post_request(): bool
+{
+    return strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'POST';
+}
+
+/**
+ * Restrict a query-string tab value to known installer areas.
+ *
+ * @param mixed $tab
+ * @return string
+ */
+function installer_normalize_tab(mixed $tab): string
+{
+    $tab = is_string($tab) ? trim($tab) : '';
+
+    return in_array($tab, ['install', 'update'], true) ? $tab : 'install';
+}
+
+/**
+ * Restrict a query-string page value to a safe slug-like token.
+ *
+ * @param mixed $page
+ * @return string
+ */
+function installer_normalize_page(mixed $page): string
+{
+    $page = is_string($page) ? trim($page) : '';
+
+    if ($page === '' || !preg_match('/^[a-z0-9_-]+$/', $page)) {
+        return 'overview';
+    }
+
+    return $page;
 }
 
 function installer_safe_return_to(string $candidate, string $fallback): string
@@ -356,7 +409,9 @@ function installer_write_auth_config(string $username, string $password): array
 
     if (is_dir(CONFIG_DIR) && is_writable(CONFIG_DIR)) {
         $ok = @file_put_contents(INSTALLER_AUTH_FILE, $php, LOCK_EX) !== false;
-        if (!$ok) {
+        if ($ok) {
+            @chmod(INSTALLER_AUTH_FILE, 0640);
+        } else {
             $err = 'Unable to write credentials file.';
         }
     } else {
@@ -592,6 +647,43 @@ function installer_ensure_index_html(string $dir): void
     $idx = rtrim($dir, '/') . '/index.html';
     if (!is_file($idx)) {
         @file_put_contents($idx, '', LOCK_EX);
+        @chmod($idx, 0640);
+    }
+}
+
+/**
+ * Ensure a directory has a deny-all .htaccess file when it should never be
+ * browsed directly from the web.
+ *
+ * @param string $dir
+ * @return void
+ */
+function installer_ensure_deny_htaccess(string $dir): void
+{
+    $path = rtrim($dir, '/') . '/.htaccess';
+
+    if (is_file($path)) {
+        return;
+    }
+
+    $content = "Require all denied\n<IfModule !mod_authz_core.c>\nDeny from all\n</IfModule>\n";
+    if (@file_put_contents($path, $content, LOCK_EX) !== false) {
+        @chmod($path, 0640);
+    }
+}
+
+/**
+ * Apply minimal hardening markers to a runtime directory.
+ *
+ * @param string $dir
+ * @return void
+ */
+function installer_harden_runtime_dir(string $dir): void
+{
+    installer_ensure_index_html($dir);
+
+    if (in_array($dir, [APP_ROOT . '/storage/packages', INSTALLER_PACKAGE_DIR], true)) {
+        installer_ensure_deny_htaccess($dir);
     }
 }
 
@@ -630,20 +722,22 @@ function installer_create_dirs(): array
             $ok = @mkdir($dir, 0755, true);
             if ($ok) {
                 $created[] = $dir;
-                installer_ensure_index_html($dir);
+                installer_harden_runtime_dir($dir);
             } else {
                 $errors[] = 'Unable to create directory: ' . $dir;
             }
         } else {
-            installer_ensure_index_html($dir);
+            installer_harden_runtime_dir($dir);
         }
     }
 
     // Ensure cache subfolders also have an index
-    installer_ensure_index_html(APP_ROOT . '/storage/cache');
-    installer_ensure_index_html(APP_ROOT . '/storage/cache/images');
-    installer_ensure_index_html(APP_ROOT . '/storage/cache/templates');
-    installer_ensure_index_html(APP_ROOT . '/json');
+    installer_harden_runtime_dir(APP_ROOT . '/storage/cache');
+    installer_harden_runtime_dir(APP_ROOT . '/storage/cache/images');
+    installer_harden_runtime_dir(APP_ROOT . '/storage/cache/templates');
+    installer_harden_runtime_dir(APP_ROOT . '/storage/packages');
+    installer_harden_runtime_dir(INSTALLER_PACKAGE_DIR);
+    installer_harden_runtime_dir(APP_ROOT . '/json');
 
     return ['created' => $created, 'errors' => $errors];
 }
@@ -865,6 +959,39 @@ function installer_is_allowed_package_name(string $filename): bool
     return false;
 }
 
+function installer_is_allowed_package_mime(string $filename, string $tmpPath): bool
+{
+    $extension = strtolower((string) pathinfo($filename, PATHINFO_EXTENSION));
+    $allowedByExtension = [
+        'zip' => ['application/zip', 'application/x-zip', 'application/x-zip-compressed'],
+        'tar' => ['application/x-tar'],
+        'gz'  => ['application/gzip', 'application/x-gzip'],
+        'tgz' => ['application/gzip', 'application/x-gzip'],
+    ];
+
+    if (!isset($allowedByExtension[$extension]) || !is_file($tmpPath)) {
+        return false;
+    }
+
+    $mimeType = '';
+    if (function_exists('finfo_open')) {
+        $finfo = @finfo_open(FILEINFO_MIME_TYPE);
+        if ($finfo !== false) {
+            $detected = @finfo_file($finfo, $tmpPath);
+            if (is_string($detected)) {
+                $mimeType = strtolower(trim($detected));
+            }
+            finfo_close($finfo);
+        }
+    }
+
+    if ($mimeType === '') {
+        return true;
+    }
+
+    return in_array($mimeType, $allowedByExtension[$extension], true);
+}
+
 /**
  * @return array<int, array<string, mixed>>
  */
@@ -885,8 +1012,13 @@ function installer_list_package_files(): array
             continue;
         }
 
+        $filename = basename($path);
+        if (in_array($filename, ['index.html', '.htaccess'], true) || !installer_is_allowed_package_name($filename)) {
+            continue;
+        }
+
         $files[] = [
-            'filename' => basename($path),
+            'filename' => $filename,
             'size_bytes' => (int) filesize($path),
             'modified_at' => date('Y-m-d H:i:s', (int) filemtime($path)),
         ];
@@ -907,6 +1039,9 @@ function installer_store_uploaded_package(array $upload): array
         }
     }
 
+    installer_harden_runtime_dir(APP_ROOT . '/storage/packages');
+    installer_harden_runtime_dir(INSTALLER_PACKAGE_DIR);
+
     $name = (string) ($upload['name'] ?? '');
     $tmp = (string) ($upload['tmp_name'] ?? '');
     $size = (int) ($upload['size'] ?? 0);
@@ -917,6 +1052,10 @@ function installer_store_uploaded_package(array $upload): array
 
     if (!installer_is_allowed_package_name($name)) {
         return ['ok' => false, 'error' => 'Allowed package formats are zip, tar, tar.gz, and tgz.'];
+    }
+
+    if (!installer_is_allowed_package_mime($name, $tmp)) {
+        return ['ok' => false, 'error' => 'The uploaded package type did not match the expected archive format.'];
     }
 
     if ($size < 1) {
@@ -1055,6 +1194,29 @@ function installer_db_mark_update_applied(PDO $pdo, string $filename): void
     $stmt->execute([':f' => $filename]);
 }
 
+/**
+ * Determine whether a SQL file should manage its own transaction boundaries.
+ *
+ * Files that contain explicit transaction control or DDL statements should not
+ * be wrapped in an outer PDO transaction because MySQL can implicitly commit
+ * those statements.
+ *
+ * @param string $sql
+ * @return bool
+ */
+function installer_sql_file_manages_transactions(string $sql): bool
+{
+    if ($sql === '') {
+        return false;
+    }
+
+    if (preg_match('/\b(START\s+TRANSACTION|BEGIN\s*(?:;|$)|COMMIT\s*;|ROLLBACK\s*;)\b/i', $sql)) {
+        return true;
+    }
+
+    return (bool) preg_match('/\b(CREATE|ALTER|DROP|RENAME|TRUNCATE)\s+(?:TABLE|DATABASE|INDEX|VIEW|TRIGGER|PROCEDURE|FUNCTION|EVENT)\b/i', $sql);
+}
+
 function installer_apply_sql_file(PDO $pdo, string $sqlFilePath): array
 {
     if (!is_file($sqlFilePath)) {
@@ -1066,15 +1228,26 @@ function installer_apply_sql_file(PDO $pdo, string $sqlFilePath): array
         return ['ok' => true, 'error' => ''];
     }
 
+    $manageTransactionsInFile = installer_sql_file_manages_transactions($sql);
+
     try {
-        $pdo->beginTransaction();
-        $pdo->exec($sql);
-        $pdo->commit();
+        if ($manageTransactionsInFile) {
+            $pdo->exec($sql);
+        } else {
+            $pdo->beginTransaction();
+            $pdo->exec($sql);
+
+            if ($pdo->inTransaction()) {
+                $pdo->commit();
+            }
+        }
+
         return ['ok' => true, 'error' => ''];
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
+
         return ['ok' => false, 'error' => $e->getMessage()];
     }
 }
@@ -1105,18 +1278,29 @@ function installer_list_update_files(): array
 
 InstallerSecurity::initCsrf();
 
-$action = $_POST['action'] ?? '';
-$tab = $_GET['tab'] ?? 'install';
-$page = $_GET['page'] ?? 'overview';
+$action = is_string($_POST['action'] ?? null) ? (string) $_POST['action'] : '';
+$tab = installer_normalize_tab($_GET['tab'] ?? 'install');
+$page = installer_normalize_page($_GET['page'] ?? 'overview');
 $lockedInstaller = installer_is_locked();
 
-if ($lockedInstaller && $tab !== 'update' && !isset($_GET['logout']) && !in_array($action, ['login', 'apply_updates', 'merge_config'], true)) {
+if ($action !== '' && !installer_is_post_request()) {
+    installer_flash_add('danger', 'Invalid request method.');
+    installer_redirect('index.php');
+}
+
+if ($lockedInstaller && $tab !== 'update' && $action !== 'logout' && !in_array($action, ['login', 'apply_updates', 'merge_config'], true)) {
     installer_redirect('index.php?tab=update');
 }
 
 // Logout
-if (isset($_GET['logout'])) {
+if ($action === 'logout') {
+    if (!InstallerSecurity::verifyCsrf($_POST['csrf_token'] ?? null)) {
+        installer_flash_add('danger', 'Invalid CSRF token.');
+        installer_redirect('index.php');
+    }
+
     $_SESSION = [];
+    session_regenerate_id(true);
     session_destroy();
     installer_redirect('index.php');
 }
@@ -1130,16 +1314,18 @@ if ($action === 'auth_setup') {
         installer_redirect('index.php');
     }
 
-    $username = (string) ($_POST['username'] ?? '');
+    $username = trim((string) ($_POST['username'] ?? ''));
     $password = (string) ($_POST['password'] ?? '');
     $password2 = (string) ($_POST['password_confirm'] ?? '');
 
     $errors = [];
 
-    if (trim($username) === '') $errors[] = 'Username is required.';
+    if ($username === '') $errors[] = 'Username is required.';
+    if (!preg_match('/^[A-Za-z0-9._-]{3,64}$/', $username)) $errors[] = 'Username must be 3-64 characters and use only letters, numbers, dots, underscores, or dashes.';
     if ($password === '') $errors[] = 'Password is required.';
     if ($password !== $password2) $errors[] = 'Password confirmation does not match.';
     if (strlen($password) < 12) $errors[] = 'Password must be at least 12 characters.';
+    if (strlen($password) > 4096) $errors[] = 'Password is too long.';
 
     if (!empty($errors)) {
         foreach ($errors as $err) installer_flash_add('danger', $err);
@@ -1169,7 +1355,7 @@ if ($action === 'login') {
         installer_redirect('index.php');
     }
 
-    $username = (string) ($_POST['username'] ?? '');
+    $username = trim((string) ($_POST['username'] ?? ''));
     $password = (string) ($_POST['password'] ?? '');
 
     $authConfig = installer_read_auth_config();
@@ -1179,7 +1365,13 @@ if ($action === 'login') {
         installer_redirect('index.php');
     }
 
-    if (!hash_equals((string) $authConfig['username'], trim($username))) {
+    if ($username === '' || strlen($username) > 64 || strlen($password) > 4096) {
+        installer_record_failed_login();
+        installer_flash_add('danger', 'Invalid credentials.');
+        installer_redirect('index.php');
+    }
+
+    if (!hash_equals((string) $authConfig['username'], $username)) {
         installer_record_failed_login();
         installer_flash_add('danger', 'Invalid credentials.');
         installer_redirect('index.php');
@@ -1675,36 +1867,37 @@ if ($action === 'install_db') {
 
     $res = installer_apply_sql_file($pdo, INSTALL_SQL_FILE);
 
-    if ($res['ok']) {
-        installer_flash_add('success', 'Base database installed successfully.');
-
-        // -------------------------------------------------
-        // Seed app_settings with installer-selected defaults
-        // -------------------------------------------------
-
-        $distConfig = installer_load_config_dist();
-        $allowList = installer_placeholder_config_sections_for_dist($distConfig);
-
-        $rows = $_SESSION['installer_app_settings_rows'] ?? installer_build_app_settings_rows($distConfig, $allowList);
-        $seed = installer_insert_app_settings($pdo, $rows);
-
-        if ($seed['ok']) {
-            installer_flash_add('success', 'app_settings seeded successfully.');
-        } else {
-            installer_flash_add('warning', 'app_settings seed failed: ' . $seed['error']);
-        }
-
-        if (installer_write_lock_file()) {
-            installer_flash_add('success', 'Installer locked. Use the update tab for future maintenance.');
-        } else {
-            installer_flash_add('warning', 'Base install finished, but the installer lock file could not be written. Lock /install manually before going live.');
-        }
-
-    } else {
+    if (!$res['ok']) {
         installer_flash_add('danger', 'Database install failed: ' . $res['error']);
+        installer_redirect('index.php?tab=install&page=database');
     }
 
-    installer_redirect('index.php?tab=update&page=overview');
+    installer_flash_add('success', 'Base database installed successfully.');
+
+    // -------------------------------------------------
+    // Seed app_settings with installer-selected defaults
+    // -------------------------------------------------
+
+    $distConfig = installer_load_config_dist();
+    $allowList = installer_placeholder_config_sections_for_dist($distConfig);
+
+    $rows = $_SESSION['installer_app_settings_rows'] ?? installer_build_app_settings_rows($distConfig, $allowList);
+    $seed = installer_insert_app_settings($pdo, $rows);
+
+    if (!$seed['ok']) {
+        installer_flash_add('danger', 'Base schema installed, but app_settings seed failed. The installer remains unlocked so the issue can be corrected: ' . $seed['error']);
+        installer_redirect('index.php?tab=install&page=database');
+    }
+
+    installer_flash_add('success', 'app_settings seeded successfully.');
+
+    if (installer_write_lock_file()) {
+        installer_flash_add('success', 'Installer locked. Use the update tab for future maintenance.');
+        installer_redirect('index.php?tab=update&page=overview');
+    }
+
+    installer_flash_add('warning', 'Base install finished, but the installer lock file could not be written. Lock /install manually before going live.');
+    installer_redirect('index.php?tab=install&page=database');
 }
 
 // Stage updater package
@@ -1851,9 +2044,13 @@ function installer_render_header(string $title = 'Installer'): void
             </a>
 
 <?php if (installer_is_logged_in()) { ?>
-            <a class="nav-icon" href="index.php?logout=1" aria-label="Logout" data-tooltip="Logout">
-                <i class="fa-solid fa-right-from-bracket"></i>
-            </a>
+            <form class="installer-nav-form" method="post">
+                <input type="hidden" name="action" value="logout">
+                <input type="hidden" name="csrf_token" value="<?php echo InstallerSecurity::e(InstallerSecurity::csrfToken()); ?>">
+                <button class="nav-icon installer-nav-button" type="submit" aria-label="Logout" data-tooltip="Logout">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </button>
+            </form>
 <?php } ?>
         </nav>
     </header>

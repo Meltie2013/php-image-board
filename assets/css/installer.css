@@ -131,7 +131,21 @@ body.installer-page header nav {
     line-height: 1;
 }
 
-body.installer-page header nav a.nav-icon {
+body.installer-page .installer-nav-form {
+    margin: 0;
+}
+
+body.installer-page .installer-nav-button {
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    font: inherit;
+}
+
+body.installer-page header nav .nav-icon {
     width: 32px;
     height: 32px;
     display: inline-flex;
@@ -143,21 +157,21 @@ body.installer-page header nav a.nav-icon {
     transition: background 0.15s ease, color 0.15s ease, transform 0.08s ease;
 }
 
-body.installer-page header nav a.nav-icon i {
+body.installer-page header nav .nav-icon i {
     font-size: 16px;
     line-height: 1;
     display: block;
 }
 
-body.installer-page header nav a.nav-icon:hover,
-body.installer-page header nav a.nav-icon:focus-visible {
+body.installer-page header nav .nav-icon:hover,
+body.installer-page header nav .nav-icon:focus-visible {
     background: rgba(255, 255, 255, 0.06);
     color: var(--color-text-main);
     transform: translateY(-1px);
     outline: none;
 }
 
-body.installer-page header nav a.nav-icon::after {
+body.installer-page header nav .nav-icon::after {
     content: attr(data-tooltip);
     position: absolute;
     left: 50%;
@@ -177,8 +191,8 @@ body.installer-page header nav a.nav-icon::after {
     transition: opacity 0.15s ease;
 }
 
-body.installer-page header nav a.nav-icon:hover::after,
-body.installer-page header nav a.nav-icon:focus-visible::after {
+body.installer-page header nav .nav-icon:hover::after,
+body.installer-page header nav .nav-icon:focus-visible::after {
     opacity: 1;
 }
 
