@@ -6,7 +6,19 @@
             <div class="gallery-index-board-header gallery-index-board-header-actions">
                 <div class="gallery-index-board-intro">
                     <span class="gallery-panel-kicker">Premium Gallery</span>
-                    <h3>View images posted by users</h3>
+                    <p>Browse the latest approved uploads from the community and open any image for its full viewer, stats, and metadata.</p>
+
+                    <div class="gallery-index-board-notes">
+                        <span class="gallery-index-board-note">
+                            <i class="fa-regular fa-clock"></i>
+                            Latest approved uploads
+                        </span>
+
+                        <span class="gallery-index-board-note">
+                            <i class="fa-solid fa-expand"></i>
+                            Open any tile for the full image page
+                        </span>
+                    </div>
                 </div>
 
                 {if $is_logged_in}
@@ -31,10 +43,6 @@
                         <span class="gallery-thumb-meta" title="Views">
                             <i class="fa-solid fa-eye"></i>
                             {$img_views}
-                        </span>
-
-                        <span class="gallery-thumb-overlay">
-                            <span class="gallery-thumb-overlay-text">Open Image</span>
                         </span>
 
                         <img src="{$img_display_path}" loading="lazy" decoding="async" alt="Gallery image preview">
@@ -68,13 +76,41 @@
             {/if}
         </section>
         {else}
-        <section class="gallery-empty-state">
-            <div class="gallery-empty-state-icon">
-                <i class="fa-regular fa-image"></i>
+        <section class="gallery-index-board gallery-index-board-stream gallery-empty-state-panel">
+            <div class="gallery-index-board-header gallery-index-board-header-actions">
+                <div class="gallery-index-board-intro">
+                    <span class="gallery-panel-kicker">Premium Gallery</span>
+                    <p>Browse the latest approved uploads from the community and open any image for its full viewer, stats, and metadata.</p>
+
+                    <div class="gallery-index-board-notes">
+                        <span class="gallery-index-board-note">
+                            <i class="fa-regular fa-clock"></i>
+                            Latest approved uploads
+                        </span>
+
+                        <span class="gallery-index-board-note">
+                            <i class="fa-solid fa-expand"></i>
+                            Open any tile for the full image page
+                        </span>
+                    </div>
+                </div>
+
+                {if $is_logged_in}
+                <div class="gallery-index-board-actions">
+                    <a href="/gallery/upload-image" class="gallery-hero-btn is-primary">
+                        <i class="fa-solid fa-upload"></i>
+                        Upload Image
+                    </a>
+
+                    <a href="#" class="gallery-hero-btn">
+                        <i class="fa-solid fa-file-circle-exclamation"></i>
+                        File DMCA Report
+                    </a>
+                </div>
+                {/if}
             </div>
-            <span class="gallery-panel-kicker">Premium Gallery</span>
-            <h2>No images found</h2>
-            <p>No approved uploads are available yet. Once images are approved, they will appear here automatically.</p>
+
+            <p>The board is ready for content, but there are no approved uploads to show on the public gallery just yet.</p>
         </section>
         {/if}
     </main>
