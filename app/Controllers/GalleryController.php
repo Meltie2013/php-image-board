@@ -401,6 +401,8 @@ class GalleryController extends BaseController
                 i.size_bytes,
                 i.md5,
                 i.sha1,
+                i.sha256,
+                i.sha512,
                 i.reject_reason,
                 COALESCE(v.votes, 0) AS votes,
                 COALESCE(f.favorites, 0) AS favorites,
@@ -593,6 +595,8 @@ class GalleryController extends BaseController
         $template->assign('img_size', StorageHelper::formatFileSize($img['size_bytes']));
         $template->assign('img_md5', $img['md5']);
         $template->assign('img_sha1', $img['sha1']);
+        $template->assign('img_sha256', $img['sha256']);
+        $template->assign('img_sha512', $img['sha512']);
         $template->assign('img_reject_reason', $img['reject_reason']);
         $template->assign('img_approved_status', ucfirst($img['status']));
         $template->assign('img_created_at', DateHelper::format($img['created_at']));
@@ -602,7 +606,10 @@ class GalleryController extends BaseController
         $template->assign('img_favorites', NumericalHelper::formatCount($img['favorites']));
         $template->assign('img_views', NumericalHelper::formatCount($img['views']));
         $template->assign('img_has_favorited', $hasFavorited);
+        $template->assign('can_edit_image', $canEditImage);
+        $template->assign('img_has_tag', $image_tags);
 
+        // todo: clean this code up, so it looks cleaner
         $controlBlock = $config['control_server'] ?? ($config['maintenance_server'] ?? []);
         $webSocketConfig = is_array($controlBlock['websocket'] ?? null) ? $controlBlock['websocket'] : [];
         $webSocketPort = max(1, min(65535, TypeHelper::toInt($webSocketConfig['port'] ?? null) ?? (ControlServer::controlPort($config) + 1)));
@@ -637,9 +644,6 @@ class GalleryController extends BaseController
         $template->assign('img_live_poll_url', '/gallery/' . $img['image_hash'] . '/live');
         $template->assign('img_live_websocket_url', $webSocketScheme . '://' . $webSocketHost . ':' . $webSocketPort . $publicPath);
         $template->assign('img_live_tick', ControlServer::imageLiveTick($config, $img['image_hash']));
-
-        $template->assign('can_edit_image', $canEditImage);
-        $template->assign('img_has_tag', $image_tags);
 
         $template->render('gallery/gallery_view.html');
     }
@@ -1016,12 +1020,6 @@ class GalleryController extends BaseController
                 ], 409);
                 return;
             }
-
-            $template->assign('title', "Favorite Failed");
-            $template->assign('message', "You have already marked this image as a favorite.");
-            $template->assign('link', "/gallery/{$hash}");
-            $template->render('errors/error_page.html');
-            return;
         }
 
         // Insert favorite
@@ -1039,11 +1037,6 @@ class GalleryController extends BaseController
             ]);
             return;
         }
-
-        $template->assign('title', 'Successful Favorite!');
-        $template->assign('message', "You have successfully marked this image as a favorite.");
-        $template->assign('link', "/gallery/{$hash}");
-        $template->render('errors/error_page.html');
     }
 
     /**
@@ -1140,12 +1133,6 @@ class GalleryController extends BaseController
                 ], 409);
                 return;
             }
-
-            $template->assign('title', "Upvote Failed");
-            $template->assign('message', "You have already upvoted this image.");
-            $template->assign('link', "/gallery/{$hash}");
-            $template->render('errors/error_page.html');
-            return;
         }
 
         // Insert vote
@@ -1163,11 +1150,6 @@ class GalleryController extends BaseController
             ]);
             return;
         }
-
-        $template->assign('title', 'Successful Upvote!');
-        $template->assign('message', "You have successfully upvoted this image.");
-        $template->assign('link', "/gallery/{$hash}");
-        $template->render('errors/error_page.html');
     }
 
     /**
@@ -1469,5 +1451,4 @@ class GalleryController extends BaseController
             $template->render('errors/error_page.html');
         }
     }
-
 }

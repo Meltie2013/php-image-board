@@ -2,9 +2,6 @@
  * Premium Theme (Gallery)
  *
  * Refined styles for gallery index and image view pages.
- * The gallery index keeps its original browsing width so large screens
- * still land on an 8-column layout, while the image view adopts the
- * same premium panel language as the refreshed backend pages.
  */
 
 /* =========================================================
@@ -85,6 +82,22 @@
 
 .gallery-hero-btn-subtle {
     background: rgba(19, 22, 30, 0.96);
+}
+
+.gallery-hero-btn-danger,
+.gallery-hero-btn-button.gallery-hero-btn-danger {
+    border-color: rgba(255, 122, 122, 0.20);
+    background: linear-gradient(180deg, rgba(88, 30, 36, 0.94), rgba(68, 20, 25, 0.94));
+    color: #ffe6e6;
+}
+
+.gallery-hero-btn-danger:hover,
+.gallery-hero-btn-danger:focus-visible,
+.gallery-hero-btn-button.gallery-hero-btn-danger:hover,
+.gallery-hero-btn-button.gallery-hero-btn-danger:focus-visible {
+    border-color: rgba(255, 145, 145, 0.30);
+    background: linear-gradient(180deg, rgba(105, 37, 44, 0.96), rgba(80, 24, 31, 0.96));
+    color: #fff4f4;
 }
 
 .gallery-action-badge {
@@ -296,6 +309,12 @@
     background: linear-gradient(180deg, rgba(16, 18, 24, 0.96), rgba(9, 11, 14, 0.96));
     box-shadow: 0 16px 32px rgba(0, 0, 0, 0.42);
     isolation: isolate;
+    transition:
+        transform 0.18s ease,
+        border-color 0.18s ease,
+        box-shadow 0.18s ease,
+        background 0.18s ease,
+        filter 0.18s ease;
 }
 
 .gallery-card-link::before {
@@ -306,6 +325,19 @@
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 36%);
     opacity: 0.7;
     pointer-events: none;
+}
+
+.gallery-card-link:hover,
+.gallery-card-link:focus-visible {
+    transform: translateY(-3px);
+    border-color: rgba(141, 146, 255, 0.38);
+    box-shadow: 0 0 0 1px rgba(141, 146, 255, 0.22), 0 18px 34px rgba(0, 0, 0, 0.48);
+}
+
+.gallery-card-link:hover::before,
+.gallery-card-link:focus-visible::before {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(111, 116, 255, 0.08) 40%, transparent 78%);
+    opacity: 1;
 }
 
 .gallery-thumb-meta {
@@ -969,7 +1001,9 @@
 .gallery-image-view,
 .gallery-view-page .gallery-image-stage-restored .gallery-image-view {
     display: block;
-    width: 100%;
+    width: auto;
+    max-width: 100%;
+    height: auto;
     max-height: calc(100vh - 210px);
     object-fit: contain;
     border-radius: 14px;

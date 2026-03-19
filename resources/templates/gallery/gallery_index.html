@@ -28,7 +28,7 @@
                         Upload Image
                     </a>
 
-                    <a href="#" class="gallery-hero-btn">
+                    <a href="#" class="gallery-hero-btn gallery-hero-btn-danger">
                         <i class="fa-solid fa-file-circle-exclamation"></i>
                         File DMCA Report
                     </a>
@@ -45,7 +45,7 @@
                             {$img_views}
                         </span>
 
-                        <img src="{$img_display_path}" loading="lazy" decoding="async" alt="Gallery image preview">
+                        <img src="{$img_display_path}" loading="eager" decoding="sync" alt="Gallery image preview">
                     </a>
                 </article>
                 {/foreach}
@@ -102,7 +102,7 @@
                         Upload Image
                     </a>
 
-                    <a href="#" class="gallery-hero-btn">
+                    <a href="#" class="gallery-hero-btn gallery-hero-btn-danger">
                         <i class="fa-solid fa-file-circle-exclamation"></i>
                         File DMCA Report
                     </a>

@@ -960,7 +960,7 @@ class ControlPanelController extends BaseController
             'security'
         );
 
-        $template->assign('log_id', TypeHelper::toString($log['id'] ?? ''));
+        $template->assign('log_id', TypeHelper::toInt($log['id'] ?? ''));
         $template->assign('log_created_at', TypeHelper::toString(DateHelper::date_only_format($log['created_at']) ?? ''));
         $template->assign('log_category', TypeHelper::toString($log['category'] ?? ''));
         $template->assign('log_message', TypeHelper::toString($log['message'] ?? ''));

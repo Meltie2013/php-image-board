@@ -4,25 +4,31 @@
         <div class="gallery-item-view">
             <aside class="gallery-left-side">
                 <div class="gallery-details-view">
-                    {if $img_description}
                     <section>
                         <div class="gallery-panel-heading">
                             <span class="gallery-panel-kicker">Caption</span>
                             <h2>Description</h2>
                         </div>
-                        <p class="gallery-description-block">{$img_description}</p>
-                    </section>
-                    {/if}
 
-                    {if $img_has_tag}
+                        {if $img_description}
+                        <p class="gallery-description-block">{$img_description}</p>
+                        {else}
+                        <p class="gallery-description-block gallery-description-placeholder">No description has been added yet.</p>
+                        {/if}
+                    </section>
+
                     <section>
                         <div class="gallery-panel-heading">
                             <span class="gallery-panel-kicker">Tags</span>
                             <h2>Image Tags</h2>
                         </div>
-                        
+
+                        {if $img_has_tag}
+                        <p class="gallery-description-block">Tags are available for this image.</p>
+                        {else}
+                        <p class="gallery-description-block gallery-description-placeholder">No tags have been added yet.</p>
+                        {/if}
                     </section>
-                    {/if}
 
                     <section>
                         <div class="gallery-panel-heading">
@@ -39,6 +45,16 @@
                             <li>
                                 <strong>SHA-1</strong>
                                 <small>{$img_sha1}</small>
+                            </li>
+
+                            <li>
+                                <strong>SHA-256</strong>
+                                <small>{$img_sha256}</small>
+                            </li>
+
+                            <li>
+                                <strong>SHA-512</strong>
+                                <small>{$img_sha512}</small>
                             </li>
                         </ul>
                     </section>
@@ -84,6 +100,11 @@
 
                 <div class="gallery-image-toolbar-row">
                     <div class="gallery-view-primary-actions">
+                        <a href="/gallery" class="gallery-hero-btn">
+                            <i class="fa-solid fa-arrow-left"></i>
+                            Back to Gallery
+                        </a>
+
                         <a href="{$img_original_url}" class="gallery-hero-btn">
                             <i class="fa-solid fa-up-right-from-square"></i>
                             View Original
@@ -101,7 +122,7 @@
                         </button>
                         {/if}
 
-                        <button type="button" class="gallery-hero-btn gallery-hero-btn-button" aria-label="Report Image">
+                        <button type="button" class="gallery-hero-btn gallery-hero-btn-button gallery-hero-btn-danger" aria-label="Report Image">
                             <i class="fa-solid fa-flag"></i>
                             Report
                         </button>
