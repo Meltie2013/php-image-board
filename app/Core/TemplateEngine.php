@@ -68,6 +68,8 @@ class TemplateEngine
             'displayed_comments' => $config['gallery']['comments_per_page'],
             'site_user_role' => SessionManager::get('user_role'),
             'site_user_avatar' => SessionManager::get('user_avatar', ''),
+            'current_request_uri' => RedirectHelper::getCurrentRequestUri(),
+            'current_request_path' => RedirectHelper::getCurrentRequestPath(),
         ];
 
         // Allowed template functions (whitelisted)

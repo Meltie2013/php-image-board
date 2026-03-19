@@ -55,6 +55,7 @@
 
                 <form method="post" action="/user/login" class="auth-form">
                     <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                    <input type="hidden" name="return_to" value="{$return_to}">
 
                     <div class="auth-field-group">
                         <label for="email">E-mail Address</label>

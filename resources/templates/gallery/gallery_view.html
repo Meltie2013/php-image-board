@@ -100,7 +100,7 @@
 
                 <div class="gallery-image-toolbar-row">
                     <div class="gallery-view-primary-actions">
-                        <a href="/gallery" class="gallery-hero-btn">
+                        <a href="{$gallery_back_url}" class="gallery-hero-btn">
                             <i class="fa-solid fa-arrow-left"></i>
                             Back to Gallery
                         </a>
@@ -145,6 +145,7 @@
                         {else}
                         <form method="POST" action="/gallery/{$img_hash}/favorite" data-live-action-form="favorite">
                             <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                            <input type="hidden" name="back_to" value="{$gallery_back_url}">
                             <button type="submit" class="gallery-feedback-btn" data-live-favorite-button="1" aria-label="Add Favorite">
                                 <i class="fa-regular fa-star"></i>
                                 <span>Favorite</span>
@@ -162,6 +163,7 @@
                         {else}
                         <form method="POST" action="/gallery/{$img_hash}/upvote" data-live-action-form="vote">
                             <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                            <input type="hidden" name="back_to" value="{$gallery_back_url}">
                             <button type="submit" class="gallery-feedback-btn" data-live-vote-button="1" aria-label="Up Vote">
                                 <i class="fa-regular fa-thumbs-up"></i>
                                 <span>Like</span>
@@ -222,6 +224,7 @@
             {if $can_edit_image}
             <form method="POST" action="/gallery/{$img_hash}/edit" class="edit-image-modal-form">
                 <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                <input type="hidden" name="back_to" value="{$gallery_back_url}">
 
                 <div class="edit-image-field">
                     <label>Image ID</label>
@@ -265,6 +268,7 @@
                 {if $is_logged_in}
                 <form method="POST" action="/gallery/{$img_hash}/comment" class="comments-modal-form">
                     <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                    <input type="hidden" name="back_to" value="{$gallery_back_url}">
                     <textarea name="comment_body" rows="5" maxlength="500" placeholder="Write your comment..."></textarea>
                     <button type="submit">Post Comment</button>
                 </form>
@@ -289,7 +293,7 @@
                 {if $comments_total_pages > 1}
                 <div class="comments-pagination">
                     {if $comments_has_prev}
-                    <a class="comments-page-btn" href="/gallery/{$img_hash}?cpage={$comments_prev_page}&show_comments=1">Prev</a>
+                    <a class="comments-page-btn" href="/gallery/{$img_hash}?cpage={$comments_prev_page}&show_comments=1&back_to={$gallery_back_url_encoded}">Prev</a>
                     {else}
                     <span class="comments-page-btn is-disabled">Prev</span>
                     {/if}
@@ -297,7 +301,7 @@
                     <span class="comments-page-info">Page {$comments_page} of {$comments_total_pages}</span>
 
                     {if $comments_has_next}
-                    <a class="comments-page-btn" href="/gallery/{$img_hash}?cpage={$comments_next_page}&show_comments=1">Next</a>
+                    <a class="comments-page-btn" href="/gallery/{$img_hash}?cpage={$comments_next_page}&show_comments=1&back_to={$gallery_back_url_encoded}">Next</a>
                     {else}
                     <span class="comments-page-btn is-disabled">Next</span>
                     {/if}
@@ -311,7 +315,7 @@
                 {/if}
                 {else}
                 <div class="comments-modal-footer">
-                    <small>Greetings guest! To view or post comments, please <a href="/user/register/">register</a> or <a href="/user/login">login</a>.</small>
+                    <small>Greetings guest! To view or post comments, please <a href="/user/register/">register</a> or <a href="/user/login?return_to={$current_request_uri}">login</a>.</small>
                 </div>
                 {/if}
             </div>

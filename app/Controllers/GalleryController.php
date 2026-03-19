@@ -80,6 +80,43 @@ class GalleryController extends BaseController
     }
 
     /**
+     * Build one gallery image-view URL with an optional return gallery page.
+     *
+     * @param string $hash Unique image hash identifier.
+     * @param string|null $galleryBackUrl Optional gallery return destination.
+     * @param array $query Additional query string values.
+     * @return string Gallery image-view URL.
+     */
+    private static function buildGalleryViewUrl(string $hash, ?string $galleryBackUrl = null, array $query = []): string
+    {
+        $url = '/gallery/' . $hash;
+
+        $galleryBackUrl = RedirectHelper::sanitizeInternalPath($galleryBackUrl);
+        if ($galleryBackUrl !== null)
+        {
+            $query['back_to'] = $galleryBackUrl;
+        }
+
+        if (!empty($query))
+        {
+            $url .= '?' . http_build_query($query);
+        }
+
+        return $url;
+    }
+
+    /**
+     * Resolve the gallery page that image-view actions should return to.
+     *
+     * @param string|null $galleryBackUrl Optional explicit gallery page.
+     * @return string Safe gallery page URL.
+     */
+    private static function resolveGalleryBackUrl(?string $galleryBackUrl = null): string
+    {
+        return RedirectHelper::resolveGalleryPage($galleryBackUrl, '/gallery');
+    }
+
+    /**
      * Resolve one stored image path safely inside the images directory.
      *
      * @param string $originalPath Stored original image path from the database/session.
@@ -176,6 +213,8 @@ class GalleryController extends BaseController
         $config = self::getConfig();
         $imagesPerPage = $config['gallery']['images_displayed'];
 
+        RedirectHelper::rememberGalleryPage(RedirectHelper::getCurrentRequestUri());
+
         // Route param parsing should be tolerant (never throw)
         $page = TypeHelper::toInt($page) ?? 1;
         if ($page < 1)
@@ -263,6 +302,8 @@ class GalleryController extends BaseController
             self::getCurrentRequestDeviceId()
         );
 
+        $galleryBackUrl = self::resolveGalleryBackUrl(RedirectHelper::getCurrentRequestUri());
+
         $loopImages = [];
         foreach ($pageImages as $img)
         {
@@ -276,7 +317,7 @@ class GalleryController extends BaseController
             $views = TypeHelper::toInt($img['views'] ?? null) ?? 0;
             $loopImages[] = [
                 self::buildTokenizedImageUrl($imageHash, $galleryPageToken),
-                "/gallery/" . $imageHash,
+                self::buildGalleryViewUrl($imageHash, $galleryBackUrl),
                 $views,
             ];
         }
@@ -366,6 +407,7 @@ class GalleryController extends BaseController
         }
 
         $currentUser = null;
+        $galleryBackUrl = self::resolveGalleryBackUrl($_GET['back_to'] ?? null);
 
         $commentsPerPage = TypeHelper::toInt($config['gallery']['comments_per_page']) ?? 5;
         if ($commentsPerPage < 1)
@@ -608,6 +650,8 @@ class GalleryController extends BaseController
         $template->assign('img_has_favorited', $hasFavorited);
         $template->assign('can_edit_image', $canEditImage);
         $template->assign('img_has_tag', $image_tags);
+        $template->assign('gallery_back_url', $galleryBackUrl);
+        $template->assign('gallery_back_url_encoded', rawurlencode($galleryBackUrl));
 
         // todo: clean this code up, so it looks cleaner
         $controlBlock = $config['control_server'] ?? ($config['maintenance_server'] ?? []);
@@ -922,7 +966,7 @@ class GalleryController extends BaseController
 
         ControlServer::bumpImageLiveTick(self::getConfig(), $hash);
 
-        header('Location: /gallery/' . $hash);
+        header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null));
         exit;
     }
 
@@ -1037,6 +1081,9 @@ class GalleryController extends BaseController
             ]);
             return;
         }
+
+        header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null));
+        exit;
     }
 
     /**
@@ -1150,6 +1197,9 @@ class GalleryController extends BaseController
             ]);
             return;
         }
+
+        header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null));
+        exit;
     }
 
     /**
@@ -1213,7 +1263,7 @@ class GalleryController extends BaseController
         $commentBody = Security::sanitizeString($_POST['comment_body'] ?? '');
         if ($commentBody === '')
         {
-            header('Location: /gallery/' . $hash);
+            header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null));
             exit;
         }
 
@@ -1248,7 +1298,7 @@ class GalleryController extends BaseController
 
         ControlServer::bumpImageLiveTick(self::getConfig(), $hash);
 
-        header('Location: /gallery/' . $hash);
+        header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null));
         exit;
     }
 

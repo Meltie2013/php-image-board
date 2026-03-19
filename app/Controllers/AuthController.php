@@ -38,12 +38,28 @@ class AuthController extends BaseController
     {
         $errors = [];
 
+        $submittedReturnTo = RedirectHelper::sanitizeInternalPath($_POST['return_to'] ?? null);
+        $queryReturnTo = RedirectHelper::sanitizeInternalPath($_GET['return_to'] ?? null);
+
+        if ($submittedReturnTo !== null)
+        {
+            RedirectHelper::rememberLoginDestination($submittedReturnTo);
+        }
+        else if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            $loginReturnTo = $queryReturnTo ?? RedirectHelper::getSafeRefererPath();
+            if ($loginReturnTo !== null)
+            {
+                RedirectHelper::rememberLoginDestination($loginReturnTo);
+            }
+        }
+
         // Check if user is already logged in
         $userId = TypeHelper::toInt(SessionManager::get('user_id'));
         if ($userId)
         {
-            // Redirect authenticated users to their profile overview
-            header('Location: /profile/overview');
+            // Redirect authenticated users to their intended destination
+            header('Location: ' . RedirectHelper::takeLoginDestination($queryReturnTo, '/profile/overview'));
             exit();
         }
 
@@ -151,8 +167,8 @@ class AuthController extends BaseController
                             // Record device fingerprint for this account
                             DevicePolicy::recordForUser($userIdToCheck);
 
-                            // Redirect user to profile overview
-                            header('Location: /profile/overview');
+                            // Redirect user to their intended destination
+                            header('Location: ' . RedirectHelper::takeLoginDestination($submittedReturnTo, '/profile/overview'));
                             exit();
                         }
                     }
@@ -211,6 +227,7 @@ class AuthController extends BaseController
         // Pass CSRF token and error messages to template
         $template->assign('csrf_token', Security::generateCsrfToken());
         $template->assign('error', $errors);
+        $template->assign('return_to', $submittedReturnTo ?? RedirectHelper::getRememberedLoginDestination());
 
         // Render login page
         $template->render('login.html');
@@ -394,11 +411,15 @@ class AuthController extends BaseController
             exit();
         }
 
+        $redirectTo = RedirectHelper::sanitizeInternalPath($_POST['return_to'] ?? null)
+            ?? RedirectHelper::getSafeRefererPath()
+            ?? '/index.php';
+
         // Destroy all session data
         SessionManager::destroy();
 
-        // Redirect to index page
-        header('Location: /index.php');
+        // Redirect to the page the user came from when possible
+        header('Location: ' . $redirectTo);
         exit();
     }
 }

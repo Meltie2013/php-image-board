@@ -99,6 +99,7 @@ class RoleHelper
         $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
         if ($userId < 1)
         {
+            RedirectHelper::rememberLoginDestination();
             header('Location: /user/login');
             exit();
         }
@@ -115,6 +116,7 @@ class RoleHelper
         $status = strtolower(TypeHelper::toString($user['status'] ?? '', allowEmpty: true) ?? '');
         if ($status !== 'active')
         {
+            RedirectHelper::rememberLoginDestination();
             SessionManager::destroy();
             header('Location: /user/login');
             exit();
