@@ -241,7 +241,7 @@ body.installer-page main.installer-authenticated::before {
 
 /* Tighten headings inside the container so they feel like the app */
 body.installer-page main.installer-authenticated h1 {
-    font-size: 28px;
+    font-size: 26px;
     margin: 2px 0 10px;
 }
 
@@ -1173,7 +1173,7 @@ body.installer-page .installer-sidebar {
 body.installer-page .installer-sidebar__helper,
 body.installer-page .installer-helper-text {
     margin-top: 14px;
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.55;
     color: var(--color-text-muted);
 }
@@ -1405,13 +1405,13 @@ body.installer-page .installer-hero__content {
 body.installer-page .installer-hero__content h1,
 body.installer-page .installer-hero__content h2 {
     margin-bottom: 10px;
-    font-size: clamp(2rem, 3vw, 2.5rem);
-    letter-spacing: 0.06em;
+    font-size: clamp(1.75rem, 2.6vw, 2.15rem);
+    letter-spacing: 0.05em;
 }
 
 body.installer-page .installer-hero__content p {
-    font-size: 1rem;
-    line-height: 1.75;
+    font-size: 0.92rem;
+    line-height: 1.68;
     color: rgba(225, 228, 240, 0.72);
 }
 
@@ -1451,15 +1451,16 @@ body.installer-page .installer-content {
 
 body.installer-page .installer-content > h2 {
     margin-bottom: 10px;
-    font-size: clamp(1.65rem, 2vw, 2rem);
+    font-size: clamp(1.45rem, 1.8vw, 1.75rem);
     letter-spacing: 0.02em;
 }
 
 body.installer-page .installer-content > p {
     margin-bottom: 18px;
     max-width: 900px;
+    font-size: 0.92rem;
     color: rgba(214, 217, 229, 0.78);
-    line-height: 1.72;
+    line-height: 1.66;
 }
 
 body.installer-page .installer-sidebar__label {
@@ -1535,7 +1536,7 @@ body.installer-page .installer-security-reminder__icon {
 
 body.installer-page .installer-security-reminder__title {
     margin: 0 0 5px;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 800;
     color: #fff5d1;
 }
@@ -1591,8 +1592,8 @@ body.installer-page .installer-progress-card__top {
 
 body.installer-page .installer-progress-card__title,
 body.installer-page .installer-card-title {
-    font-size: 0.98rem;
-    letter-spacing: 0.04em;
+    font-size: 0.92rem;
+    letter-spacing: 0.035em;
 }
 
 body.installer-page .installer-status-badge {
@@ -1602,7 +1603,7 @@ body.installer-page .installer-status-badge {
 }
 
 body.installer-page .installer-stat-card__value {
-    font-size: clamp(1.9rem, 3vw, 2.3rem);
+    font-size: clamp(1.65rem, 2.6vw, 2rem);
     line-height: 1;
 }
 
@@ -1652,7 +1653,7 @@ body.installer-page .installer-config-subheading {
     margin: 0;
     padding-bottom: 10px;
     border-bottom-color: rgba(255, 255, 255, 0.08);
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 800;
 }
 
@@ -1677,7 +1678,7 @@ body.installer-page .installer-field {
 }
 
 body.installer-page .installer-label {
-    font-size: 0.95rem;
+    font-size: 0.88rem;
 }
 
 body.installer-page .installer-helper-text,
@@ -1692,6 +1693,7 @@ body.installer-page select {
     border-color: rgba(255, 255, 255, 0.09);
     background: linear-gradient(180deg, rgba(5, 8, 12, 0.52), rgba(0, 0, 0, 0.28));
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    font-size: 14px;
 }
 
 body.installer-page .installer-input:hover,

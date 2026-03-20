@@ -1571,6 +1571,61 @@ function installer_filter_config_sections(array $config, array $sections): array
 }
 
 /**
+ * Cast only the submitted config keys using the matching config.php.dist defaults.
+ *
+ * This avoids wiping unrelated sections when the updater edits a partial slice of
+ * the full configuration tree (for example, the Live Configuration page).
+ *
+ * @param array $defaults
+ * @param array $submitted
+ * @return array
+ */
+function installer_cast_submitted_config(array $defaults, array $submitted): array
+{
+    $casted = [];
+
+    foreach ($submitted as $key => $value) {
+        if (!array_key_exists($key, $defaults)) {
+            $casted[$key] = $value;
+            continue;
+        }
+
+        $default = $defaults[$key];
+
+        if (is_array($default)) {
+            if (is_array($value)) {
+                $casted[$key] = installer_cast_submitted_config($default, $value);
+            }
+            continue;
+        }
+
+        if (is_bool($default)) {
+            $casted[$key] = ($value === '1' || $value === 1 || $value === true || $value === 'true');
+            continue;
+        }
+
+        if (is_int($default)) {
+            $casted[$key] = (int) $value;
+            continue;
+        }
+
+        if (is_float($default)) {
+            $casted[$key] = (float) $value;
+            continue;
+        }
+
+        if ($default === null && $value === '') {
+            $casted[$key] = null;
+            continue;
+        }
+
+        $casted[$key] = (string) $value;
+    }
+
+    return $casted;
+}
+
+/**
  * Convert config keys into cleaner display labels.
  *
  * @param string[] $path
@@ -1692,46 +1747,11 @@ if ($action === 'save_config') {
         $incoming = [];
     }
 
-    // Cast types based on dist defaults
-
-    $cast = function ($default, $value) use (&$cast) {
-        if (is_array($default) && is_array($value)) {
-            $out = $default;
-            foreach ($default as $k => $dv) {
-                if (array_key_exists($k, $value)) {
-                    $out[$k] = $cast($dv, $value[$k]);
-                }
-            }
-            // keep extra keys
-            foreach ($value as $k => $vv) {
-                if (!array_key_exists($k, $out)) {
-                    $out[$k] = $vv;
-                }
-            }
-            return $out;
-        }
-
-        if (is_bool($default)) {
-            return $value === '1' || $value === 1 || $value === true || $value === 'true';
-        }
-
-        if (is_int($default)) {
-            return (int) $value;
-        }
-
-        if (is_float($default)) {
-            return (float) $value;
-        }
-
-        // string
-        return (string) $value;
-    };
-
     // Start from: dist structure + existing values
     $final = $mergedConfig;
 
     // Apply user-submitted values on top (only submitted keys are changed)
-    $submitted = $cast($distConfig, $incoming);
+    $submitted = installer_cast_submitted_config($distConfig, $incoming);
 
     // Validate timezone values if present.
     $allowedTimezones = array_fill_keys(DateTimeZone::listIdentifiers(), true);
@@ -2256,6 +2276,7 @@ function installer_render_config_form_fields(array $config, array $dist, array $
 
         if ($type === 'checkbox') {
             $checked = ($current === true) ? 'checked' : '';
+            echo '<input type="hidden" name="' . InstallerSecurity::e($name) . '" value="0">';
             echo '<label class="installer-checkbox">';
             echo '<input type="checkbox" name="' . InstallerSecurity::e($name) . '" value="1" ' . $checked . '>';
             echo '<span>Enabled</span>';
@@ -2587,12 +2608,16 @@ $topNavItems = [
 
 $subNav = [];
 if ($tab === 'update') {
+    if ($page === 'placeholders') {
+        installer_flash_add('info', 'Fallback default editing has been removed from the updater. Use Live Configuration for runtime config changes and Config Merge to add any missing keys from config.php.dist.');
+        installer_redirect('index.php?tab=update&page=config');
+    }
+
     $subNav = [
-        'overview'      => ['Updater Overview', 'fa-solid fa-circle-info'],
-        'config'        => ['Live Configuration', 'fa-solid fa-sliders'],
-        'placeholders'  => ['Fallback Defaults', 'fa-solid fa-layer-group'],
-        'database'      => ['Database Updates', 'fa-solid fa-database'],
-        'packages'      => ['Package Staging', 'fa-solid fa-box-open'],
+        'overview' => ['Updater Overview', 'fa-solid fa-circle-info'],
+        'config'   => ['Live Configuration', 'fa-solid fa-sliders'],
+        'database' => ['Database Updates', 'fa-solid fa-database'],
+        'packages' => ['Package Staging', 'fa-solid fa-box-open'],
     ];
 } else {
     $subNav = [
@@ -2669,8 +2694,8 @@ if ($tab === 'update') {
         echo '</div>';
 
         echo '<div class="installer-card-grid">';
-        echo '<div class="installer-card installer-card--padded"><h3>Live Configuration</h3><p>Edit runtime configuration that still reflects the live board after the first install is complete.</p><a class="installer-button installer-button--secondary" href="index.php?tab=update&page=config">Open Live Configuration</a></div>';
-        echo '<div class="installer-card installer-card--padded"><h3>Fallback Defaults</h3><p>Review config.php placeholder defaults that only apply when Control Panel-backed settings are unavailable.</p><a class="installer-button installer-button--secondary" href="index.php?tab=update&page=placeholders">Open Fallback Defaults</a></div><div class="installer-card installer-card--padded"><h3>Database Updates</h3><p>Apply pending SQL files and track them through the app_updates table.</p><a class="installer-button installer-button--secondary" href="index.php?tab=update&page=database">Open Database Updates</a></div>';
+        echo '<div class="installer-card installer-card--padded"><h3>Live Configuration</h3><p>Edit runtime configuration that still reflects the live board after the first install is complete, then use Config Merge to add any new keys from future config.php.dist updates without overwriting your existing values.</p><a class="installer-button installer-button--secondary" href="index.php?tab=update&page=config">Open Live Configuration</a></div>';
+        echo '<div class="installer-card installer-card--padded"><h3>Database Updates</h3><p>Apply pending SQL files and track them through the app_updates table.</p><a class="installer-button installer-button--secondary" href="index.php?tab=update&page=database">Open Database Updates</a></div>';
         echo '<div class="installer-card installer-card--padded"><h3>Package Staging</h3><p>Upload zip or tar archives into the updater staging area. This keeps future file-package installs organized without exposing uploads publicly.</p><a class="installer-button installer-button--secondary" href="index.php?tab=update&page=packages">Open Package Staging</a></div>';
         echo '</div>';
 
@@ -2681,7 +2706,7 @@ if ($tab === 'update') {
 
     if ($page === 'config') {
         echo '<h2>Live Configuration</h2>';
-        echo '<p>This page is limited to configuration that still reflects the live board directly. Control Panel-managed settings such as site, template, gallery, profile, and debugging values are intentionally kept out of this editor.</p>';
+        echo '<p>This page is limited to configuration that still reflects the live board directly. Control Panel-managed settings such as site, template, gallery, profile, and debugging values are intentionally kept out of this editor. Use Config Merge below whenever a future release adds new keys to <b>config.php.dist</b> and you want to add them into <b>config/config.php</b> without overwriting the values you already use.</p>';
 
         if (empty($existingConfig)) {
             echo '<div class="alert alert-danger">Missing <b>config/config.php</b>. Run the installer first.</div>';
@@ -2704,17 +2729,16 @@ if ($tab === 'update') {
             }
 
             $missingKeys = installer_collect_missing_config_keys($distConfig, $existingConfig);
-            $liveMissingKeys = installer_filter_key_paths_by_sections($missingKeys, $liveSections);
 
-            if (empty($liveMissingKeys)) {
-                echo '<div class="alert alert-info" style="margin-top: 14px;">No new live configuration keys were found for this page. Other placeholder-only keys may still exist on the fallback defaults page.</div>';
+            if (empty($missingKeys)) {
+                echo '<div class="alert alert-info" style="margin-top: 14px;">No new configuration keys were found to merge from <b>config.php.dist</b>. Your <b>config/config.php</b> file is already up to date.</div>';
             } else {
-                echo '<div class="alert alert-warning" style="margin-top: 14px;">Missing <b>' . count($liveMissingKeys) . '</b> live configuration key(s) that can be merged from <b>config.php.dist</b>.</div>';
+                echo '<div class="alert alert-warning" style="margin-top: 14px;">Missing <b>' . count($missingKeys) . '</b> configuration key(s) that can be merged from <b>config.php.dist</b>.</div>';
                 echo '<div class="installer-card installer-card--padded" style="margin-top: 12px;">';
                 echo '<div class="installer-card-title">Config Merge</div>';
-                echo '<p>Use config merge when a future release adds new live configuration keys to <b>config.php.dist</b> and you want to pull them in without overwriting the values you already use.</p>';
+                echo '<p>Config Merge reads <b>config.php.dist</b>, adds any keys that are missing from <b>config/config.php</b>, and keeps the values you already have for existing keys.</p>';
                 echo '<ul class="installer-key-list">';
-                foreach ($liveMissingKeys as $k) {
+                foreach ($missingKeys as $k) {
                     echo '<li><code>' . InstallerSecurity::e($k) . '</code></li>';
                 }
                 echo '</ul>';
@@ -2722,7 +2746,7 @@ if ($tab === 'update') {
                 echo '<input type="hidden" name="action" value="merge_config">';
                 echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
                 echo '<input type="hidden" name="return_to" value="index.php?tab=update&page=config">';
-                echo '<button type="submit">Merge Missing Live Configuration Keys</button>';
+                echo '<button type="submit">Merge Missing Configuration Keys</button>';
                 echo '</form>';
                 echo '</div>';
             }

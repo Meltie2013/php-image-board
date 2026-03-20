@@ -21,8 +21,7 @@ What it does:
 - Writes /install/installer.lock after a successful base install so the first-run installer stays blocked
 - Keeps the updater available after install for:
   - Live runtime configuration that still reflects the board directly
-  - Fallback placeholder defaults stored in config.php for Control Panel-managed settings
-  - Config merges from config.php.dist
+  - Config merges from config.php.dist so new keys can be added without overwriting existing values
   - SQL updates from /database/updates/*.sql
   - Package archive staging (zip / tar / tar.gz / tgz) for future file-based upgrade workflows
 
