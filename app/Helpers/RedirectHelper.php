@@ -59,6 +59,46 @@ class RedirectHelper
     }
 
     /**
+     * Remove one query-string parameter from a safe internal path.
+     *
+     * @param string|null $target Target path or URL.
+     * @param string $parameter Query-string parameter to remove.
+     * @param bool $allowAuthRoutes Whether auth routes may be returned.
+     * @return string|null Normalized internal path without the parameter, or null when invalid.
+     */
+    public static function removeQueryParameter(?string $target, string $parameter, bool $allowAuthRoutes = false): ?string
+    {
+        $normalized = self::sanitizeInternalPath($target, $allowAuthRoutes);
+        if ($normalized === null)
+        {
+            return null;
+        }
+
+        $parts = parse_url($normalized);
+        if ($parts === false)
+        {
+            return null;
+        }
+
+        $path = TypeHelper::toString($parts['path'] ?? '/', allowEmpty: false) ?? '/';
+        $query = TypeHelper::toString($parts['query'] ?? '', allowEmpty: true) ?? '';
+        if ($query === '')
+        {
+            return $path;
+        }
+
+        parse_str($query, $queryValues);
+        unset($queryValues[$parameter]);
+
+        if (empty($queryValues))
+        {
+            return $path;
+        }
+
+        return $path . '?' . http_build_query($queryValues);
+    }
+
+    /**
      * Normalize one redirect target to an internal path with optional query string.
      *
      * Accepts:

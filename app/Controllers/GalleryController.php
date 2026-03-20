@@ -80,7 +80,9 @@ class GalleryController extends BaseController
     }
 
     /**
-     * Build one gallery image-view URL with an optional return gallery page.
+     * Build one gallery image-view URL with optional query-string values.
+     *
+     * Gallery return navigation is stored in the session.
      *
      * @param string $hash Unique image hash identifier.
      * @param string|null $galleryBackUrl Optional gallery return destination.
@@ -90,12 +92,6 @@ class GalleryController extends BaseController
     private static function buildGalleryViewUrl(string $hash, ?string $galleryBackUrl = null, array $query = []): string
     {
         $url = '/gallery/' . $hash;
-
-        $galleryBackUrl = RedirectHelper::sanitizeInternalPath($galleryBackUrl);
-        if ($galleryBackUrl !== null)
-        {
-            $query['back_to'] = $galleryBackUrl;
-        }
 
         if (!empty($query))
         {
@@ -407,7 +403,21 @@ class GalleryController extends BaseController
         }
 
         $currentUser = null;
-        $galleryBackUrl = self::resolveGalleryBackUrl($_GET['back_to'] ?? null);
+
+        $requestedGalleryBackUrl = RedirectHelper::sanitizeInternalPath($_GET['back_to'] ?? null);
+        if ($requestedGalleryBackUrl !== null)
+        {
+            RedirectHelper::rememberGalleryPage($requestedGalleryBackUrl);
+
+            $cleanViewUrl = RedirectHelper::removeQueryParameter(RedirectHelper::getCurrentRequestUri(), 'back_to', true);
+            if ($cleanViewUrl !== null && $cleanViewUrl !== RedirectHelper::getCurrentRequestUri())
+            {
+                header('Location: ' . $cleanViewUrl);
+                exit;
+            }
+        }
+
+        $galleryBackUrl = self::resolveGalleryBackUrl();
 
         $commentsPerPage = TypeHelper::toInt($config['gallery']['comments_per_page']) ?? 5;
         if ($commentsPerPage < 1)

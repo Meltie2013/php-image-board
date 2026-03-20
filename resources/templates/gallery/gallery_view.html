@@ -293,7 +293,7 @@
                 {if $comments_total_pages > 1}
                 <div class="comments-pagination">
                     {if $comments_has_prev}
-                    <a class="comments-page-btn" href="/gallery/{$img_hash}?cpage={$comments_prev_page}&show_comments=1&back_to={$gallery_back_url_encoded}">Prev</a>
+                    <a class="comments-page-btn" href="/gallery/{$img_hash}?cpage={$comments_prev_page}&show_comments=1">Prev</a>
                     {else}
                     <span class="comments-page-btn is-disabled">Prev</span>
                     {/if}
@@ -301,7 +301,7 @@
                     <span class="comments-page-info">Page {$comments_page} of {$comments_total_pages}</span>
 
                     {if $comments_has_next}
-                    <a class="comments-page-btn" href="/gallery/{$img_hash}?cpage={$comments_next_page}&show_comments=1&back_to={$gallery_back_url_encoded}">Next</a>
+                    <a class="comments-page-btn" href="/gallery/{$img_hash}?cpage={$comments_next_page}&show_comments=1">Next</a>
                     {else}
                     <span class="comments-page-btn is-disabled">Next</span>
                     {/if}
