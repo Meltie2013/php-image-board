@@ -32,7 +32,7 @@
                     <div class="admin-panel-heading">
                         <div>
                             <h3>Filters</h3>
-                            <p>Search enforcement records by identity, address, fingerprint, or status.</p>
+                            <p>Search enforcement records by scope, identity, address, request fingerprint, device fingerprint, browser fingerprint, or status.</p>
                         </div>
                     </div>
 
@@ -40,20 +40,16 @@
                         <form method="GET" action="/panel/security/blocks" class="admin-form">
                             <div class="admin-form-grid-two">
                                 <div class="admin-field">
-                                    <label>IP</label>
-                                    <input type="text" name="ip" value="{$filter_ip}" placeholder="Starts with...">
-                                </div>
-
-                                <div class="admin-field">
-                                    <label>Fingerprint</label>
-                                    <input type="text" name="fingerprint" value="{$filter_fingerprint}" placeholder="Starts with...">
-                                </div>
-                            </div>
-
-                            <div class="admin-form-grid-two">
-                                <div class="admin-field">
-                                    <label>User ID</label>
-                                    <input type="text" name="user_id" value="{$filter_user_id}">
+                                    <label>Scope</label>
+                                    <select name="scope">
+                                        <option value="">All</option>
+                                        <option value="user_id" {if $filter_scope == 'user_id'}selected{/if}>user_id</option>
+                                        <option value="ip" {if $filter_scope == 'ip'}selected{/if}>ip</option>
+                                        <option value="fingerprint" {if $filter_scope == 'fingerprint'}selected{/if}>fingerprint</option>
+                                        <option value="device_fingerprint" {if $filter_scope == 'device_fingerprint'}selected{/if}>device_fingerprint</option>
+                                        <option value="browser_fingerprint" {if $filter_scope == 'browser_fingerprint'}selected{/if}>browser_fingerprint</option>
+                                        <option value="ua" {if $filter_scope == 'ua'}selected{/if}>ua</option>
+                                    </select>
                                 </div>
 
                                 <div class="admin-field">
@@ -68,6 +64,35 @@
                                 </div>
                             </div>
 
+                            <div class="admin-form-grid-two">
+                                <div class="admin-field">
+                                    <label>User ID</label>
+                                    <input type="text" name="user_id" value="{$filter_user_id}">
+                                </div>
+
+                                <div class="admin-field">
+                                    <label>IP</label>
+                                    <input type="text" name="ip" value="{$filter_ip}" placeholder="Exact IP address">
+                                </div>
+                            </div>
+
+                            <div class="admin-form-grid-two">
+                                <div class="admin-field">
+                                    <label>Request Fingerprint</label>
+                                    <input type="text" name="fingerprint" value="{$filter_fingerprint}" placeholder="Starts with...">
+                                </div>
+
+                                <div class="admin-field">
+                                    <label>Device Fingerprint</label>
+                                    <input type="text" name="device_fingerprint" value="{$filter_device_fingerprint}" placeholder="Starts with...">
+                                </div>
+                            </div>
+
+                            <div class="admin-field">
+                                <label>Browser Fingerprint</label>
+                                <input type="text" name="browser_fingerprint" value="{$filter_browser_fingerprint}" placeholder="Starts with...">
+                            </div>
+
                             <div class="admin-form-footer">
                                 <button type="submit" class="admin-btn admin-btn-primary"><i class="fa-solid fa-filter"></i> Apply Filters</button>
                                 <a href="/panel/security/blocks" class="admin-btn admin-btn-secondary">Reset</a>
@@ -80,7 +105,7 @@
                     <div class="admin-panel-heading">
                         <div>
                             <h3>Add Block Entry</h3>
-                            <p>Create a new block, ban, jail, or rate-limit enforcement record.</p>
+                            <p>Create a new block, ban, jail, or rate-limit enforcement record against a specific scope and match value.</p>
                         </div>
                     </div>
 
@@ -90,6 +115,18 @@
 
                             <div class="admin-form-grid-two">
                                 <div class="admin-field">
+                                    <label>Scope</label>
+                                    <select name="scope">
+                                        <option value="user_id">user_id</option>
+                                        <option value="ip">ip</option>
+                                        <option value="fingerprint">fingerprint</option>
+                                        <option value="device_fingerprint">device_fingerprint</option>
+                                        <option value="browser_fingerprint">browser_fingerprint</option>
+                                        <option value="ua">ua</option>
+                                    </select>
+                                </div>
+
+                                <div class="admin-field">
                                     <label>Status</label>
                                     <select name="status">
                                         <option value="blocked">blocked</option>
@@ -98,28 +135,18 @@
                                         <option value="rate_limited">rate_limited</option>
                                     </select>
                                 </div>
+                            </div>
+
+                            <div class="admin-form-grid-two">
+                                <div class="admin-field">
+                                    <label>Match Value</label>
+                                    <input type="text" name="match_value" value="" placeholder="User ID, IP, hash, or user agent">
+                                </div>
 
                                 <div class="admin-field">
                                     <label>Duration (minutes, 0 = permanent)</label>
                                     <input type="text" name="duration_minutes" value="60">
                                 </div>
-                            </div>
-
-                            <div class="admin-form-grid-two">
-                                <div class="admin-field">
-                                    <label>User ID (optional)</label>
-                                    <input type="text" name="user_id" value="">
-                                </div>
-
-                                <div class="admin-field">
-                                    <label>IP (optional)</label>
-                                    <input type="text" name="ip" value="">
-                                </div>
-                            </div>
-
-                            <div class="admin-field">
-                                <label>Fingerprint (optional)</label>
-                                <input type="text" name="fingerprint" value="">
                             </div>
 
                             <div class="admin-field">
@@ -138,7 +165,7 @@
                     <div class="admin-panel-heading">
                         <div>
                             <h3>Enforcement Records</h3>
-                            <p>Review current and historical block entries, then remove exact or matched records.</p>
+                            <p>Review current and historical enforcement records, then remove exact matches by scope.</p>
                         </div>
                     </div>
 
@@ -157,22 +184,22 @@
                                             <th>Status</th>
                                             <th>Reason</th>
                                             <th>User</th>
-                                            <th>IP</th>
-                                            <th>Fingerprint</th>
+                                            <th>Match Value</th>
+                                            <th>Last Seen</th>
                                             <th>Expires</th>
                                             <th>Action</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {foreach $blocks as list($b_id, $b_scope, $b_status, $b_reason, $b_user_id, $b_ip, $b_fingerprint, $b_expires_at)}
+                                        {foreach $blocks as list($b_id, $b_scope, $b_status, $b_reason, $b_user_id, $b_match_value, $b_last_seen, $b_expires_at)}
                                         <tr>
                                             <td>{$b_id}</td>
                                             <td><span class="admin-pill">{$b_scope}</span></td>
                                             <td><span class="admin-status admin-status-{$b_status}">{$b_status}</span></td>
                                             <td class="is-wrap">{$b_reason}</td>
                                             <td>{$b_user_id}</td>
-                                            <td class="is-wrap">{$b_ip}</td>
-                                            <td class="is-wrap">{$b_fingerprint}</td>
+                                            <td class="is-wrap">{$b_match_value}</td>
+                                            <td>{$b_last_seen}</td>
                                             <td>{$b_expires_at}</td>
                                             <td>
                                                 <div class="admin-row-actions">
@@ -189,25 +216,10 @@
 
                                                     <form method="POST" action="/panel/security/blocks/remove-match">
                                                         <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                                                        <input type="hidden" name="user_id" value="{$b_user_id}">
-                                                        <button type="submit" class="admin-btn admin-btn-secondary admin-btn-icon" {if empty($b_user_id)}disabled{/if} title="Remove by User" aria-label="Remove by User">
-                                                            <i class="fa-solid fa-user-xmark"></i>
-                                                        </button>
-                                                    </form>
-
-                                                    <form method="POST" action="/panel/security/blocks/remove-match">
-                                                        <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                                                        <input type="hidden" name="ip" value="{$b_ip}">
-                                                        <button type="submit" class="admin-btn admin-btn-secondary admin-btn-icon" {if empty($b_ip)}disabled{/if} title="Remove by IP" aria-label="Remove by IP">
-                                                            <i class="fa-solid fa-network-wired"></i>
-                                                        </button>
-                                                    </form>
-
-                                                    <form method="POST" action="/panel/security/blocks/remove-match">
-                                                        <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                                                        <input type="hidden" name="fingerprint" value="{$b_fingerprint}">
-                                                        <button type="submit" class="admin-btn admin-btn-secondary admin-btn-icon" {if empty($b_fingerprint)}disabled{/if} title="Remove by Fingerprint" aria-label="Remove by Fingerprint">
-                                                            <i class="fa-solid fa-fingerprint"></i>
+                                                        <input type="hidden" name="scope" value="{$b_scope}">
+                                                        <input type="hidden" name="match_value" value="{$b_match_value}">
+                                                        <button type="submit" class="admin-btn admin-btn-secondary admin-btn-icon" {if empty($b_match_value)}disabled{/if} title="Remove Matching Scope Records" aria-label="Remove Matching Scope Records">
+                                                            <i class="fa-solid fa-link-slash"></i>
                                                         </button>
                                                     </form>
                                                 </div>

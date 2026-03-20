@@ -22,13 +22,14 @@ SET time_zone = "+00:00";
 
 CREATE TABLE `app_block_list` (
     `id` bigint(20) NOT NULL,
-    `scope` enum('ip','fingerprint','device_fingerprint','ua','user_id') NOT NULL,
+    `scope` enum('ip','fingerprint','device_fingerprint','browser_fingerprint','ua','user_id') NOT NULL,
     `value_hash` char(64) NOT NULL,
     `user_id` bigint(20) UNSIGNED DEFAULT NULL,
     `ip` varbinary(16) DEFAULT NULL,
     `ua` varchar(255) DEFAULT NULL,
     `fingerprint` char(64) DEFAULT NULL,
     `device_fingerprint` char(64) DEFAULT NULL,
+    `browser_fingerprint` char(64) DEFAULT NULL,
     `status` enum('blocked','banned','rate_limited','jailed') NOT NULL DEFAULT 'blocked',
     `reason` varchar(255) DEFAULT NULL,
     `created_at` datetime NOT NULL,
@@ -211,6 +212,7 @@ CREATE TABLE `app_security_logs` (
     `ua` varchar(255) DEFAULT NULL,
     `fingerprint` char(64) DEFAULT NULL,
     `device_fingerprint` char(64) DEFAULT NULL,
+    `browser_fingerprint` char(64) DEFAULT NULL,
     `category` varchar(64) NOT NULL,
     `message` varchar(255) NOT NULL,
     `created_at` timestamp NOT NULL DEFAULT current_timestamp()
@@ -230,6 +232,8 @@ CREATE TABLE `app_sessions` (
     `ua` varchar(255) DEFAULT NULL,
     `fingerprint` char(64) DEFAULT NULL,
     `device_fingerprint` char(64) DEFAULT NULL,
+    `browser_fingerprint` char(64) DEFAULT NULL,
+    `session_binding_hash` char(64) DEFAULT NULL,
     `last_activity` datetime NOT NULL,
     `expires_at` datetime DEFAULT NULL,
     `data` mediumblob DEFAULT NULL
@@ -267,6 +271,43 @@ INSERT INTO `app_settings` (`key`, `value`, `type`) VALUES
     ('template.allowed_functions', '[\"strtoupper\",\"strtolower\",\"ucfirst\",\"lcfirst\"]', 'json'),
     ('template.disable_cache', '1', 'bool'),
     ('upload.hash_type', 'mixed_lower', 'string');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `app_client_signals`
+--
+
+CREATE TABLE `app_client_signals` (
+    `id` bigint(20) UNSIGNED NOT NULL,
+    `user_id` bigint(20) UNSIGNED DEFAULT NULL,
+    `session_id` varchar(128) DEFAULT NULL,
+    `ip` varbinary(16) DEFAULT NULL,
+    `device_fingerprint` char(64) DEFAULT NULL,
+    `browser_fingerprint` char(64) DEFAULT NULL,
+    `signal_hash` char(64) NOT NULL,
+    `signal_payload` text DEFAULT NULL,
+    `event_type` varchar(32) NOT NULL DEFAULT 'seen',
+    `created_at` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `app_device_overrides`
+--
+
+CREATE TABLE `app_device_overrides` (
+    `id` bigint(20) UNSIGNED NOT NULL,
+    `device_fingerprint` char(64) NOT NULL,
+    `browser_fingerprint` char(64) DEFAULT NULL,
+    `label` varchar(100) DEFAULT NULL,
+    `allow_multi_account` tinyint(1) NOT NULL DEFAULT 1,
+    `max_accounts` int(10) UNSIGNED NOT NULL DEFAULT 0,
+    `expires_at` datetime DEFAULT NULL,
+    `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+    `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -314,6 +355,7 @@ CREATE TABLE `app_user_devices` (
     `id` bigint(20) UNSIGNED NOT NULL,
     `user_id` bigint(20) UNSIGNED NOT NULL,
     `device_fingerprint` char(64) NOT NULL,
+    `browser_fingerprint` char(64) DEFAULT NULL,
     `first_seen_at` datetime NOT NULL,
     `last_seen_at` datetime NOT NULL,
     `first_ip` varbinary(16) DEFAULT NULL,
@@ -335,7 +377,8 @@ ALTER TABLE `app_block_list`
     ADD KEY `idx_user_id` (`user_id`),
     ADD KEY `idx_ip` (`ip`),
     ADD KEY `idx_fingerprint` (`fingerprint`),
-    ADD KEY `idx_device_fingerprint` (`device_fingerprint`);
+    ADD KEY `idx_device_fingerprint` (`device_fingerprint`),
+    ADD KEY `idx_browser_fingerprint` (`browser_fingerprint`);
 
 --
 -- Indexes for table `app_images`
@@ -409,14 +452,17 @@ ALTER TABLE `app_security_logs`
     ADD KEY `idx_user_id` (`user_id`),
     ADD KEY `idx_created_at` (`created_at`),
     ADD KEY `idx_category` (`category`),
-    ADD KEY `idx_device_fingerprint` (`device_fingerprint`);
+    ADD KEY `idx_device_fingerprint` (`device_fingerprint`),
+    ADD KEY `idx_browser_fingerprint` (`browser_fingerprint`);
 
 --
 -- Indexes for table `app_sessions`
 --
 ALTER TABLE `app_sessions`
     ADD PRIMARY KEY (`session_id`),
-    ADD KEY `fk_sessions_user` (`user_id`);
+    ADD KEY `fk_sessions_user` (`user_id`),
+    ADD KEY `idx_sessions_device_fingerprint` (`device_fingerprint`),
+    ADD KEY `idx_sessions_browser_fingerprint` (`browser_fingerprint`);
 
 --
 -- Indexes for table `app_settings`
@@ -447,7 +493,30 @@ ALTER TABLE `app_user_devices`
     ADD PRIMARY KEY (`id`),
     ADD UNIQUE KEY `uniq_user_device` (`user_id`,`device_fingerprint`),
     ADD KEY `idx_device_fingerprint` (`device_fingerprint`),
+    ADD KEY `idx_browser_fingerprint` (`browser_fingerprint`),
+    ADD KEY `idx_device_browser_fingerprint` (`device_fingerprint`,`browser_fingerprint`),
     ADD KEY `idx_user_id` (`user_id`);
+
+--
+-- Indexes for table `app_client_signals`
+--
+ALTER TABLE `app_client_signals`
+    ADD PRIMARY KEY (`id`),
+    ADD KEY `idx_user_id` (`user_id`),
+    ADD KEY `idx_session_id` (`session_id`),
+    ADD KEY `idx_device_fingerprint` (`device_fingerprint`),
+    ADD KEY `idx_browser_fingerprint` (`browser_fingerprint`),
+    ADD KEY `idx_signal_hash` (`signal_hash`),
+    ADD KEY `idx_created_at` (`created_at`);
+
+--
+-- Indexes for table `app_device_overrides`
+--
+ALTER TABLE `app_device_overrides`
+    ADD PRIMARY KEY (`id`),
+    ADD KEY `idx_device_fingerprint` (`device_fingerprint`),
+    ADD KEY `idx_browser_fingerprint` (`browser_fingerprint`),
+    ADD KEY `idx_expires_at` (`expires_at`);
 
 --
 -- AUTO_INCREMENT for dumped tables
@@ -500,6 +569,18 @@ ALTER TABLE `app_roles`
 --
 ALTER TABLE `app_security_logs`
   MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `app_updates`
+--
+ALTER TABLE `app_client_signals`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `app_device_overrides`
+--
+ALTER TABLE `app_device_overrides`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `app_updates`
@@ -573,6 +654,12 @@ ALTER TABLE `app_sessions`
 --
 ALTER TABLE `app_users`
     ADD CONSTRAINT `fk_users_role` FOREIGN KEY (`role_id`) REFERENCES `app_roles` (`id`) ON UPDATE CASCADE;
+
+--
+-- Constraints for table `app_user_devices`
+--
+ALTER TABLE `app_client_signals`
+    ADD CONSTRAINT `fk_client_signals_user` FOREIGN KEY (`user_id`) REFERENCES `app_users` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `app_user_devices`

@@ -109,6 +109,148 @@ class ControlPanelController extends BaseController
     }
 
     /**
+     * Convert a packed database IP value into a display-safe string.
+     *
+     * @param mixed $value Raw database value.
+     * @return string
+     */
+    private static function formatStoredIp(mixed $value): string
+    {
+        if (!is_string($value) || $value === '')
+        {
+            return '';
+        }
+
+        $ip = @inet_ntop($value);
+        if (is_string($ip) && $ip !== '')
+        {
+            return $ip;
+        }
+
+        return TypeHelper::toString($value, allowEmpty: true) ?? '';
+    }
+
+    /**
+     * Normalize an IP filter value to packed binary storage format.
+     *
+     * @param string $value Raw filter value.
+     * @return string|null
+     */
+    private static function packIpFilter(string $value): ?string
+    {
+        $value = trim($value);
+        if ($value === '')
+        {
+            return null;
+        }
+
+        $packed = @inet_pton($value);
+        if ($packed === false)
+        {
+            return null;
+        }
+
+        return $packed;
+    }
+
+    /**
+     * Shorten long fingerprint values for list views while preserving the full
+     * value in the detailed record pages.
+     *
+     * @param string $value Raw hash/fingerprint.
+     * @param int $visible Number of leading characters to keep.
+     * @return string
+     */
+    private static function shortenHash(string $value, int $visible = 14): string
+    {
+        $value = trim($value);
+        if ($value === '')
+        {
+            return '';
+        }
+
+        if (mb_strlen($value) <= ($visible + 3))
+        {
+            return $value;
+        }
+
+        return mb_substr($value, 0, $visible) . '...';
+    }
+
+    /**
+     * Resolve related account usernames linked through device or browser
+     * fingerprints for a security log entry.
+     *
+     * @param string $deviceFingerprint Stable browser-instance fingerprint.
+     * @param string $browserFingerprint Softer browser fingerprint.
+     * @param int $currentUserId Current event user identifier.
+     * @return array<int, array<int, string|int>>
+     */
+    private static function getLinkedSecurityUsers(string $deviceFingerprint, string $browserFingerprint, int $currentUserId = 0): array
+    {
+        if ($deviceFingerprint === '' && $browserFingerprint === '')
+        {
+            return [];
+        }
+
+        $where = [];
+        $params = [];
+
+        if ($deviceFingerprint !== '')
+        {
+            $where[] = 'd.device_fingerprint = :dfp';
+            $params['dfp'] = $deviceFingerprint;
+        }
+
+        if ($browserFingerprint !== '')
+        {
+            $where[] = 'd.browser_fingerprint = :bfp';
+            $params['bfp'] = $browserFingerprint;
+        }
+
+        try
+        {
+            $rows = Database::fetchAll(
+                "SELECT DISTINCT u.id, u.username
+                 FROM app_user_devices d
+                 INNER JOIN app_users u ON u.id = d.user_id
+                 WHERE " . implode(' OR ', $where) . "
+                 ORDER BY u.username ASC
+                 LIMIT 25",
+                $params
+            );
+        }
+        catch (Throwable $e)
+        {
+            return [];
+        }
+
+        $users = [];
+        foreach ($rows as $row)
+        {
+            $userId = TypeHelper::toInt($row['id'] ?? 0) ?? 0;
+            $username = TypeHelper::toString($row['username'] ?? '', allowEmpty: true) ?? '';
+            if ($userId < 1 || $username === '')
+            {
+                continue;
+            }
+
+            $label = $username;
+            if ($currentUserId > 0 && $userId === $currentUserId)
+            {
+                $label .= ' (event user)';
+            }
+
+            $users[] = [
+                $userId,
+                $label,
+            ];
+        }
+
+        return $users;
+    }
+
+    /**
      * Render the merged control panel dashboard.
      *
      * Administrators receive the broader operational overview while moderators
@@ -643,38 +785,12 @@ class ControlPanelController extends BaseController
 
         $template = self::initTemplate();
 
-        $notice = '';
-        $noticeType = '';
-        $blockError = Security::sanitizeString($_GET['error'] ?? '');
-        if (isset($_GET['created']))
-        {
-            $notice = 'Block entry saved successfully.';
-            $noticeType = 'success';
-        }
-        else if (isset($_GET['removed']))
-        {
-            $notice = 'Matching block entry records were removed.';
-            $noticeType = 'success';
-        }
-        else if ($blockError === 'csrf')
-        {
-            $notice = 'The request could not be verified. Please try again.';
-            $noticeType = 'error';
-        }
-        else if ($blockError === 'scope')
-        {
-            $notice = 'Choose a user, IP address, or fingerprint before creating a block entry.';
-            $noticeType = 'error';
-        }
-        else if ($blockError === 'match')
-        {
-            $notice = 'Provide at least one block match value before removing entries.';
-            $noticeType = 'error';
-        }
-
         $filters = [
             'ip' => Security::sanitizeString($_GET['ip'] ?? ''),
             'fingerprint' => Security::sanitizeString($_GET['fingerprint'] ?? ''),
+            'device_fingerprint' => Security::sanitizeString($_GET['device_fingerprint'] ?? ''),
+            'browser_fingerprint' => Security::sanitizeString($_GET['browser_fingerprint'] ?? ''),
+            'session_id' => Security::sanitizeString($_GET['session_id'] ?? ''),
             'user_id' => TypeHelper::toInt($_GET['user_id'] ?? 0) ?? 0,
             'category' => Security::sanitizeString($_GET['category'] ?? ''),
             'q' => Security::sanitizeString($_GET['q'] ?? ''),
@@ -696,14 +812,40 @@ class ControlPanelController extends BaseController
 
         if ($filters['ip'] !== '')
         {
-            $where[] = 'l.ip LIKE :ip';
-            $params['ip'] = $filters['ip'] . '%';
+            $packedIp = self::packIpFilter($filters['ip']);
+            if ($packedIp !== null)
+            {
+                $where[] = 'l.ip = :ip';
+                $params['ip'] = $packedIp;
+            }
+            else
+            {
+                $where[] = '1 = 0';
+            }
         }
 
         if ($filters['fingerprint'] !== '')
         {
             $where[] = 'l.fingerprint LIKE :fp';
             $params['fp'] = $filters['fingerprint'] . '%';
+        }
+
+        if ($filters['device_fingerprint'] !== '')
+        {
+            $where[] = 'l.device_fingerprint LIKE :dfp';
+            $params['dfp'] = $filters['device_fingerprint'] . '%';
+        }
+
+        if ($filters['browser_fingerprint'] !== '')
+        {
+            $where[] = 'l.browser_fingerprint LIKE :bfp';
+            $params['bfp'] = $filters['browser_fingerprint'] . '%';
+        }
+
+        if ($filters['session_id'] !== '')
+        {
+            $where[] = 'l.session_id LIKE :sid';
+            $params['sid'] = $filters['session_id'] . '%';
         }
 
         if ($filters['user_id'] > 0)
@@ -720,7 +862,7 @@ class ControlPanelController extends BaseController
 
         if ($filters['q'] !== '')
         {
-            $where[] = '(l.message LIKE :q OR l.ua LIKE :q)';
+            $where[] = '(l.message LIKE :q OR l.ua LIKE :q OR l.session_id LIKE :q)';
             $params['q'] = '%' . $filters['q'] . '%';
         }
 
@@ -754,7 +896,7 @@ class ControlPanelController extends BaseController
         try
         {
             $logs = Database::fetchAll(
-                "SELECT l.id, l.user_id, l.category, l.created_at
+                "SELECT l.id, l.user_id, l.session_id, l.ip, l.fingerprint, l.device_fingerprint, l.browser_fingerprint, l.category, l.created_at
                  FROM app_security_logs l
                  {$sqlWhere}
                  ORDER BY l.id DESC
@@ -783,11 +925,38 @@ class ControlPanelController extends BaseController
         foreach ($logRows as $l)
         {
             $id = TypeHelper::toInt($l['id'] ?? 0) ?? 0;
+            $createdAt = TypeHelper::toString(DateHelper::date_only_format($l['created_at']) ?? '', allowEmpty: true) ?? '';
+            $deviceFingerprint = TypeHelper::toString($l['device_fingerprint'] ?? '', allowEmpty: true) ?? '';
+            $browserFingerprint = TypeHelper::toString($l['browser_fingerprint'] ?? '', allowEmpty: true) ?? '';
+            $requestFingerprint = TypeHelper::toString($l['fingerprint'] ?? '', allowEmpty: true) ?? '';
+            $sessionId = TypeHelper::toString($l['session_id'] ?? '', allowEmpty: true) ?? '';
+            $signalSummary = [];
+
+            if ($deviceFingerprint !== '')
+            {
+                $signalSummary[] = 'Device: ' . self::shortenHash($deviceFingerprint);
+            }
+
+            if ($browserFingerprint !== '')
+            {
+                $signalSummary[] = 'Browser: ' . self::shortenHash($browserFingerprint);
+            }
+            else if ($requestFingerprint !== '')
+            {
+                $signalSummary[] = 'Request: ' . self::shortenHash($requestFingerprint);
+            }
+
+            if ($sessionId !== '')
+            {
+                $signalSummary[] = 'Session: ' . self::shortenHash($sessionId, 18);
+            }
 
             $logs[] = [
-                TypeHelper::toString(DateHelper::date_only_format($l['created_at']) ?? ''),
+                $createdAt,
                 TypeHelper::toString($l['category'] ?? ''),
                 TypeHelper::toString(ucfirst(self::getUsernameById($l['user_id'])) ?? ''),
+                self::formatStoredIp($l['ip'] ?? null),
+                implode(' | ', $signalSummary),
                 '/panel/security/logs/view?id=' . $id,
             ];
         }
@@ -822,6 +991,21 @@ class ControlPanelController extends BaseController
         if ($filters['fingerprint'] !== '')
         {
             $queryParams['fingerprint'] = $filters['fingerprint'];
+        }
+
+        if ($filters['device_fingerprint'] !== '')
+        {
+            $queryParams['device_fingerprint'] = $filters['device_fingerprint'];
+        }
+
+        if ($filters['browser_fingerprint'] !== '')
+        {
+            $queryParams['browser_fingerprint'] = $filters['browser_fingerprint'];
+        }
+
+        if ($filters['session_id'] !== '')
+        {
+            $queryParams['session_id'] = $filters['session_id'];
         }
 
         if ($filters['user_id'] > 0)
@@ -891,13 +1075,16 @@ class ControlPanelController extends BaseController
             $template,
             'security_logs',
             'Security Logs',
-            'Filter and review audit events before drilling into the full request details.',
+            'Filter and review audit events across request, device, browser, and session signals before drilling into the full request details.',
             'security'
         );
 
         $template->assign('logs', $logs);
-        $template->assign('filter_ip', TypeHelper::toString(inet_ntop(hex2bin($filters['ip']))));
+        $template->assign('filter_ip', TypeHelper::toString($filters['ip']));
         $template->assign('filter_fingerprint', TypeHelper::toString($filters['fingerprint']));
+        $template->assign('filter_device_fingerprint', TypeHelper::toString($filters['device_fingerprint']));
+        $template->assign('filter_browser_fingerprint', TypeHelper::toString($filters['browser_fingerprint']));
+        $template->assign('filter_session_id', TypeHelper::toString($filters['session_id']));
         $template->assign('filter_user_id', TypeHelper::toString($filters['user_id']));
         $template->assign('filter_category', TypeHelper::toString($filters['category']));
         $template->assign('filter_q', TypeHelper::toString($filters['q']));
@@ -934,7 +1121,7 @@ class ControlPanelController extends BaseController
         try
         {
             $log = Database::fetch(
-                "SELECT l.id, l.user_id, l.ip, l.ua, l.fingerprint, l.category, l.message, l.created_at
+                "SELECT l.id, l.user_id, l.session_id, l.ip, l.ua, l.fingerprint, l.device_fingerprint, l.browser_fingerprint, l.category, l.message, l.created_at
                  FROM app_security_logs l
                  WHERE l.id = :id
                  LIMIT 1",
@@ -952,11 +1139,16 @@ class ControlPanelController extends BaseController
             exit();
         }
 
+        $deviceFingerprint = TypeHelper::toString($log['device_fingerprint'] ?? '', allowEmpty: true) ?? '';
+        $browserFingerprint = TypeHelper::toString($log['browser_fingerprint'] ?? '', allowEmpty: true) ?? '';
+        $userId = TypeHelper::toInt($log['user_id'] ?? 0) ?? 0;
+        $linkedUsers = self::getLinkedSecurityUsers($deviceFingerprint, $browserFingerprint, $userId);
+
         self::assignPanelPage(
             $template,
             'security_logs',
             'Security Log Details',
-            'Inspect the full event payload, client details, and audit metadata for a single entry.',
+            'Inspect the full event payload, device/browser linkage signals, and audit metadata for a single entry.',
             'security'
         );
 
@@ -964,11 +1156,16 @@ class ControlPanelController extends BaseController
         $template->assign('log_created_at', TypeHelper::toString(DateHelper::date_only_format($log['created_at']) ?? ''));
         $template->assign('log_category', TypeHelper::toString($log['category'] ?? ''));
         $template->assign('log_message', TypeHelper::toString($log['message'] ?? ''));
+        $template->assign('log_session_id', TypeHelper::toString($log['session_id'] ?? ''));
         $template->assign('log_fingerprint', TypeHelper::toString($log['fingerprint'] ?? ''));
-        $template->assign('log_ip', TypeHelper::toString(inet_ntop($log['ip'])) ?? '');
+        $template->assign('log_device_fingerprint', $deviceFingerprint);
+        $template->assign('log_browser_fingerprint', $browserFingerprint);
+        $template->assign('log_ip', self::formatStoredIp($log['ip'] ?? null));
         $template->assign('log_ua', TypeHelper::toString($log['ua'] ?? ''));
+        $template->assign('linked_users', $linkedUsers);
+        $template->assign('csrf_token', Security::generateCsrfToken());
 
-        $userId = TypeHelper::toInt($log['user_id'] ?? 0) ?? 0;
+        $template->assign('log_user_id', $userId > 0 ? (string)$userId : '');
         $template->assign('log_user', TypeHelper::toString(ucfirst(self::getUsernameById($userId)) ?? ''));
 
         $template->render('panel/control_panel_security_log_view.html');
@@ -1007,18 +1204,21 @@ class ControlPanelController extends BaseController
         }
         else if ($blockError === 'scope')
         {
-            $notice = 'Choose a user, IP address, or fingerprint before creating a block entry.';
+            $notice = 'Choose a supported scope and provide a matching value before creating a block entry.';
             $noticeType = 'error';
         }
         else if ($blockError === 'match')
         {
-            $notice = 'Provide at least one block match value before removing entries.';
+            $notice = 'Provide at least one exact match value before removing entries.';
             $noticeType = 'error';
         }
 
         $filters = [
+            'scope' => Security::sanitizeString($_GET['scope'] ?? ''),
             'ip' => Security::sanitizeString($_GET['ip'] ?? ''),
             'fingerprint' => Security::sanitizeString($_GET['fingerprint'] ?? ''),
+            'device_fingerprint' => Security::sanitizeString($_GET['device_fingerprint'] ?? ''),
+            'browser_fingerprint' => Security::sanitizeString($_GET['browser_fingerprint'] ?? ''),
             'user_id' => TypeHelper::toInt($_GET['user_id'] ?? 0) ?? 0,
             'status' => Security::sanitizeString($_GET['status'] ?? ''),
         ];
@@ -1026,16 +1226,42 @@ class ControlPanelController extends BaseController
         $where = [];
         $params = [];
 
+        if ($filters['scope'] !== '')
+        {
+            $where[] = 'scope = :scope';
+            $params['scope'] = $filters['scope'];
+        }
+
         if ($filters['ip'] !== '')
         {
-            $where[] = 'ip LIKE :ip';
-            $params['ip'] = $filters['ip'] . '%';
+            $packedIp = self::packIpFilter($filters['ip']);
+            if ($packedIp !== null)
+            {
+                $where[] = 'ip = :ip';
+                $params['ip'] = $packedIp;
+            }
+            else
+            {
+                $where[] = '1 = 0';
+            }
         }
 
         if ($filters['fingerprint'] !== '')
         {
             $where[] = 'fingerprint LIKE :fp';
             $params['fp'] = $filters['fingerprint'] . '%';
+        }
+
+        if ($filters['device_fingerprint'] !== '')
+        {
+            $where[] = 'device_fingerprint LIKE :dfp';
+            $params['dfp'] = $filters['device_fingerprint'] . '%';
+        }
+
+        if ($filters['browser_fingerprint'] !== '')
+        {
+            $where[] = 'browser_fingerprint LIKE :bfp';
+            $params['bfp'] = $filters['browser_fingerprint'] . '%';
         }
 
         if ($filters['user_id'] > 0)
@@ -1060,7 +1286,7 @@ class ControlPanelController extends BaseController
         try
         {
             $blocks = Database::fetchAll(
-                "SELECT id, scope, status, reason, user_id, ip, ua, fingerprint, created_at, last_seen, expires_at
+                "SELECT id, scope, status, reason, user_id, ip, ua, fingerprint, device_fingerprint, browser_fingerprint, created_at, last_seen, expires_at
                  FROM app_block_list
                  {$sqlWhere}
                  ORDER BY id DESC
@@ -1077,15 +1303,43 @@ class ControlPanelController extends BaseController
         $blocks = [];
         foreach ($blockRows as $b)
         {
+            $scope = TypeHelper::toString($b['scope'] ?? '', allowEmpty: true) ?? '';
+            $matchValue = '';
+
+            if ($scope === 'user_id')
+            {
+                $matchValue = TypeHelper::toString($b['user_id'] ?? '', allowEmpty: true) ?? '';
+            }
+            else if ($scope === 'ip')
+            {
+                $matchValue = self::formatStoredIp($b['ip'] ?? null);
+            }
+            else if ($scope === 'ua')
+            {
+                $matchValue = TypeHelper::toString($b['ua'] ?? '', allowEmpty: true) ?? '';
+            }
+            else if ($scope === 'device_fingerprint')
+            {
+                $matchValue = TypeHelper::toString($b['device_fingerprint'] ?? '', allowEmpty: true) ?? '';
+            }
+            else if ($scope === 'browser_fingerprint')
+            {
+                $matchValue = TypeHelper::toString($b['browser_fingerprint'] ?? '', allowEmpty: true) ?? '';
+            }
+            else
+            {
+                $matchValue = TypeHelper::toString($b['fingerprint'] ?? '', allowEmpty: true) ?? '';
+            }
+
             $blocks[] = [
                 TypeHelper::toInt($b['id'] ?? ''),
-                TypeHelper::toString($b['scope'] ?? ''),
+                $scope,
                 TypeHelper::toString($b['status'] ?? ''),
                 TypeHelper::toString($b['reason'] ?? ''),
                 TypeHelper::toString($b['user_id'] ?? ''),
-                TypeHelper::toString($b['ip'] ?? ''),
-                TypeHelper::toString($b['fingerprint'] ?? ''),
-                TypeHelper::toString($b['expires_at'] ?? ''),
+                TypeHelper::toString($matchValue),
+                TypeHelper::toString(DateHelper::date_only_format($b['last_seen']) ?? '', allowEmpty: true) ?? '',
+                TypeHelper::toString(DateHelper::date_only_format($b['expires_at']) ?? '', allowEmpty: true) ?? '',
             ];
         }
 
@@ -1093,15 +1347,18 @@ class ControlPanelController extends BaseController
             $template,
             'block_list',
             'Block List',
-            'Create, review, and remove temporary or permanent enforcement records.',
+            'Create, review, and remove enforcement records across user, IP, request, device, browser, and user-agent scopes.',
             'security'
         );
 
         $template->assign('blocks', $blocks);
         $template->assign('control_panel_notice', $notice);
         $template->assign('control_panel_notice_type', $noticeType);
+        $template->assign('filter_scope', TypeHelper::toString($filters['scope']));
         $template->assign('filter_ip', TypeHelper::toString($filters['ip']));
         $template->assign('filter_fingerprint', TypeHelper::toString($filters['fingerprint']));
+        $template->assign('filter_device_fingerprint', TypeHelper::toString($filters['device_fingerprint']));
+        $template->assign('filter_browser_fingerprint', TypeHelper::toString($filters['browser_fingerprint']));
         $template->assign('filter_user_id', TypeHelper::toString($filters['user_id']));
         $template->assign('filter_status', TypeHelper::toString($filters['status']));
         $template->assign('csrf_token', Security::generateCsrfToken());
@@ -1137,13 +1394,61 @@ class ControlPanelController extends BaseController
         $reason = Security::sanitizeString($_POST['reason'] ?? '');
         $duration = TypeHelper::toInt($_POST['duration_minutes'] ?? 0) ?? 0;
 
+        $scope = Security::sanitizeString($_POST['scope'] ?? '');
+        $matchValue = Security::sanitizeString($_POST['match_value'] ?? '');
+
+        // Backwards-compatible support for older templates posting individual fields.
         $userId = TypeHelper::toInt($_POST['user_id'] ?? 0) ?? 0;
         $ip = Security::sanitizeString($_POST['ip'] ?? '');
         $fingerprint = Security::sanitizeString($_POST['fingerprint'] ?? '');
+        $deviceFingerprint = Security::sanitizeString($_POST['device_fingerprint'] ?? '');
+        $browserFingerprint = Security::sanitizeString($_POST['browser_fingerprint'] ?? '');
+        $ua = Security::sanitizeString($_POST['ua'] ?? '');
+
+        if ($scope === '' || $matchValue === '')
+        {
+            if ($userId > 0)
+            {
+                $scope = 'user_id';
+                $matchValue = (string)$userId;
+            }
+            else if ($ip !== '')
+            {
+                $scope = 'ip';
+                $matchValue = $ip;
+            }
+            else if ($deviceFingerprint !== '')
+            {
+                $scope = 'device_fingerprint';
+                $matchValue = $deviceFingerprint;
+            }
+            else if ($browserFingerprint !== '')
+            {
+                $scope = 'browser_fingerprint';
+                $matchValue = $browserFingerprint;
+            }
+            else if ($fingerprint !== '')
+            {
+                $scope = 'fingerprint';
+                $matchValue = $fingerprint;
+            }
+            else if ($ua !== '')
+            {
+                $scope = 'ua';
+                $matchValue = $ua;
+            }
+        }
 
         if (!in_array($status, ['blocked', 'banned', 'jailed', 'rate_limited'], true))
         {
             $status = 'blocked';
+        }
+
+        $allowedScopes = ['user_id', 'ip', 'fingerprint', 'device_fingerprint', 'browser_fingerprint', 'ua'];
+        if (!in_array($scope, $allowedScopes, true) || $matchValue === '')
+        {
+            header('Location: /panel/security/blocks?error=scope');
+            exit();
         }
 
         $expires = null;
@@ -1152,50 +1457,65 @@ class ControlPanelController extends BaseController
             $expires = gmdate('Y-m-d H:i:s', time() + ($duration * 60));
         }
 
-        $scope = '';
         $valueHash = '';
         $ipStore = null;
         $fpStore = null;
+        $dfpStore = null;
+        $bfpStore = null;
+        $uaStore = null;
         $uidStore = null;
 
-        if ($userId > 0)
+        if ($scope === 'user_id')
         {
-            $scope = 'user_id';
-            $uidStore = $userId;
-            $valueHash = hash('sha256', 'user|' . $userId);
-        }
-        else if ($ip !== '')
-        {
-            $scope = 'ip';
-            $ipNorm = $ip;
-            $packed = @inet_pton($ip);
-            if ($packed !== false)
+            $uidStore = TypeHelper::toInt($matchValue) ?? 0;
+            if ($uidStore < 1)
             {
-                $ipStore = $packed;
-                $ipNorm = @inet_ntop($packed);
-                if ($ipNorm === false)
-                {
-                    $ipNorm = $ip;
-                }
+                header('Location: /panel/security/blocks?error=scope');
+                exit();
+            }
+            $valueHash = hash('sha256', 'user|' . $uidStore);
+        }
+        else if ($scope === 'ip')
+        {
+            $packed = self::packIpFilter($matchValue);
+            if ($packed === null)
+            {
+                header('Location: /panel/security/blocks?error=scope');
+                exit();
+            }
+
+            $ipStore = $packed;
+            $ipNorm = @inet_ntop($packed);
+            if (!is_string($ipNorm) || $ipNorm === '')
+            {
+                $ipNorm = $matchValue;
             }
             $valueHash = hash('sha256', 'ip|' . $ipNorm);
         }
-        else if ($fingerprint !== '')
+        else if ($scope === 'fingerprint')
         {
-            $scope = 'fingerprint';
-            $fpStore = $fingerprint;
-            $valueHash = hash('sha256', 'fp|' . $fingerprint);
+            $fpStore = $matchValue;
+            $valueHash = hash('sha256', 'fp|' . $matchValue);
         }
-
-        if ($scope === '')
+        else if ($scope === 'device_fingerprint')
         {
-            header('Location: /panel/security/blocks?error=scope');
-            exit();
+            $dfpStore = $matchValue;
+            $valueHash = hash('sha256', 'dfp|' . $matchValue);
+        }
+        else if ($scope === 'browser_fingerprint')
+        {
+            $bfpStore = $matchValue;
+            $valueHash = hash('sha256', 'bfp|' . $matchValue);
+        }
+        else if ($scope === 'ua')
+        {
+            $uaStore = mb_substr($matchValue, 0, 255);
+            $valueHash = hash('sha256', mb_strtolower($uaStore));
         }
 
         Database::query(
-            "INSERT INTO app_block_list (scope, value_hash, user_id, ip, ua, fingerprint, status, reason, created_at, last_seen, expires_at)
-             VALUES (:scope, :vh, :uid, :ip, NULL, :fp, :status, :reason, NOW(), NOW(), :exp)
+            "INSERT INTO app_block_list (scope, value_hash, user_id, ip, ua, fingerprint, device_fingerprint, browser_fingerprint, status, reason, created_at, last_seen, expires_at)
+             VALUES (:scope, :vh, :uid, :ip, :ua, :fp, :dfp, :bfp, :status, :reason, NOW(), NOW(), :exp)
              ON DUPLICATE KEY UPDATE status = :status_upd, reason = :reason_upd, last_seen = NOW(), expires_at = :exp_upd",
             [
                 'scope' => $scope,
@@ -1204,7 +1524,10 @@ class ControlPanelController extends BaseController
                 'reason' => $reason !== '' ? $reason : null,
                 'uid' => $uidStore,
                 'ip' => $ipStore,
+                'ua' => $uaStore,
                 'fp' => $fpStore,
+                'dfp' => $dfpStore,
+                'bfp' => $bfpStore,
                 'exp' => $expires,
                 'status_upd' => $status,
                 'reason_upd' => $reason !== '' ? $reason : null,
@@ -1232,7 +1555,7 @@ class ControlPanelController extends BaseController
         $success = '';
 
         $block = Database::fetch(
-            "SELECT id, scope, status, reason, user_id, ip, ua, fingerprint, created_at, last_seen, expires_at
+            "SELECT id, scope, status, reason, user_id, ip, ua, fingerprint, device_fingerprint, browser_fingerprint, created_at, last_seen, expires_at
              FROM app_block_list
              WHERE id = :id LIMIT 1",
             ['id' => $id]
@@ -1289,7 +1612,7 @@ class ControlPanelController extends BaseController
 
                     $success = 'Block entry updated.';
                     $block = Database::fetch(
-                        "SELECT id, scope, status, reason, user_id, ip, ua, fingerprint, created_at, last_seen, expires_at
+                        "SELECT id, scope, status, reason, user_id, ip, ua, fingerprint, device_fingerprint, browser_fingerprint, created_at, last_seen, expires_at
                          FROM app_block_list
                          WHERE id = :id LIMIT 1",
                         ['id' => $id]
@@ -1315,8 +1638,11 @@ class ControlPanelController extends BaseController
         $template->assign('block_status', TypeHelper::toString($block['status'] ?? ''));
         $template->assign('block_reason', TypeHelper::toString($block['reason'] ?? ''));
         $template->assign('block_user_id', TypeHelper::toString($block['user_id'] ?? ''));
-        $template->assign('block_ip', TypeHelper::toString($block['ip'] ?? ''));
-        $template->assign('block_fingerprint', TypeHelper::toString($block['fingerprint'] ?? ''));
+        $template->assign('block_ip', self::formatStoredIp($block['ip'] ?? null));
+        $template->assign('block_ua', TypeHelper::toString($block['ua'] ?? '', allowEmpty: true) ?? '');
+        $template->assign('block_fingerprint', TypeHelper::toString($block['fingerprint'] ?? '', allowEmpty: true) ?? '');
+        $template->assign('block_device_fingerprint', TypeHelper::toString($block['device_fingerprint'] ?? '', allowEmpty: true) ?? '');
+        $template->assign('block_browser_fingerprint', TypeHelper::toString($block['browser_fingerprint'] ?? '', allowEmpty: true) ?? '');
         $template->assign('block_expires_at', TypeHelper::toString($block['expires_at'] ?? ''));
         $template->assign('csrf_token', Security::generateCsrfToken());
         $template->assign('error', $errors);
@@ -1349,29 +1675,97 @@ class ControlPanelController extends BaseController
             exit();
         }
 
+        $scope = Security::sanitizeString($_POST['scope'] ?? '');
+        $matchValue = Security::sanitizeString($_POST['match_value'] ?? '');
+
+        // Backwards-compatible support for older remove buttons.
         $userId = TypeHelper::toInt($_POST['user_id'] ?? 0) ?? 0;
         $ip = Security::sanitizeString($_POST['ip'] ?? '');
         $fingerprint = Security::sanitizeString($_POST['fingerprint'] ?? '');
+        $deviceFingerprint = Security::sanitizeString($_POST['device_fingerprint'] ?? '');
+        $browserFingerprint = Security::sanitizeString($_POST['browser_fingerprint'] ?? '');
+        $ua = Security::sanitizeString($_POST['ua'] ?? '');
+
+        if ($scope === '' || $matchValue === '')
+        {
+            if ($userId > 0)
+            {
+                $scope = 'user_id';
+                $matchValue = (string)$userId;
+            }
+            else if ($ip !== '')
+            {
+                $scope = 'ip';
+                $matchValue = $ip;
+            }
+            else if ($deviceFingerprint !== '')
+            {
+                $scope = 'device_fingerprint';
+                $matchValue = $deviceFingerprint;
+            }
+            else if ($browserFingerprint !== '')
+            {
+                $scope = 'browser_fingerprint';
+                $matchValue = $browserFingerprint;
+            }
+            else if ($fingerprint !== '')
+            {
+                $scope = 'fingerprint';
+                $matchValue = $fingerprint;
+            }
+            else if ($ua !== '')
+            {
+                $scope = 'ua';
+                $matchValue = $ua;
+            }
+        }
 
         $where = [];
         $params = [];
 
-        if ($userId > 0)
+        if ($scope === 'user_id')
         {
-            $where[] = 'user_id = :uid';
-            $params['uid'] = $userId;
+            $uid = TypeHelper::toInt($matchValue) ?? 0;
+            if ($uid > 0)
+            {
+                $where[] = 'scope = :scope AND user_id = :uid';
+                $params['scope'] = $scope;
+                $params['uid'] = $uid;
+            }
         }
-
-        if ($ip !== '')
+        else if ($scope === 'ip')
         {
-            $where[] = 'ip = :ip';
-            $params['ip'] = $ip;
+            $packedIp = self::packIpFilter($matchValue);
+            if ($packedIp !== null)
+            {
+                $where[] = 'scope = :scope AND ip = :ip';
+                $params['scope'] = $scope;
+                $params['ip'] = $packedIp;
+            }
         }
-
-        if ($fingerprint !== '')
+        else if ($scope === 'fingerprint')
         {
-            $where[] = 'fingerprint = :fp';
-            $params['fp'] = $fingerprint;
+            $where[] = 'scope = :scope AND fingerprint = :fp';
+            $params['scope'] = $scope;
+            $params['fp'] = $matchValue;
+        }
+        else if ($scope === 'device_fingerprint')
+        {
+            $where[] = 'scope = :scope AND device_fingerprint = :dfp';
+            $params['scope'] = $scope;
+            $params['dfp'] = $matchValue;
+        }
+        else if ($scope === 'browser_fingerprint')
+        {
+            $where[] = 'scope = :scope AND browser_fingerprint = :bfp';
+            $params['scope'] = $scope;
+            $params['bfp'] = $matchValue;
+        }
+        else if ($scope === 'ua')
+        {
+            $where[] = 'scope = :scope AND value_hash = :vh';
+            $params['scope'] = $scope;
+            $params['vh'] = hash('sha256', mb_strtolower($matchValue));
         }
 
         if (empty($where))

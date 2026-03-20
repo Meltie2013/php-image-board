@@ -25,7 +25,7 @@
                     <div class="admin-panel-heading">
                         <div>
                             <h3>Filters</h3>
-                            <p>Narrow the audit stream by source, identity, category, or content.</p>
+                            <p>Narrow the audit stream by user, IP, request fingerprint, device/browser fingerprint, session, category, or message content.</p>
                         </div>
                     </div>
 
@@ -34,21 +34,40 @@
                             <div class="admin-form-grid-two">
                                 <div class="admin-field">
                                     <label>IP</label>
-                                    <input type="text" name="ip" value="{$filter_ip}" placeholder="Starts with...">
+                                    <input type="text" name="ip" value="{$filter_ip}" placeholder="Exact IP address">
                                 </div>
 
                                 <div class="admin-field">
-                                    <label>Fingerprint</label>
-                                    <input type="text" name="fingerprint" value="{$filter_fingerprint}" placeholder="Starts with...">
+                                    <label>User ID</label>
+                                    <input type="text" name="user_id" value="{$filter_user_id}">
                                 </div>
                             </div>
 
                             <div class="admin-form-grid-two">
                                 <div class="admin-field">
-                                    <label>User ID</label>
-                                    <input type="text" name="user_id" value="{$filter_user_id}">
+                                    <label>Request Fingerprint</label>
+                                    <input type="text" name="fingerprint" value="{$filter_fingerprint}" placeholder="Starts with...">
                                 </div>
 
+                                <div class="admin-field">
+                                    <label>Device Fingerprint</label>
+                                    <input type="text" name="device_fingerprint" value="{$filter_device_fingerprint}" placeholder="Starts with...">
+                                </div>
+                            </div>
+
+                            <div class="admin-form-grid-two">
+                                <div class="admin-field">
+                                    <label>Browser Fingerprint</label>
+                                    <input type="text" name="browser_fingerprint" value="{$filter_browser_fingerprint}" placeholder="Starts with...">
+                                </div>
+
+                                <div class="admin-field">
+                                    <label>Session ID</label>
+                                    <input type="text" name="session_id" value="{$filter_session_id}" placeholder="Starts with...">
+                                </div>
+                            </div>
+
+                            <div class="admin-form-grid-two">
                                 <div class="admin-field">
                                     <label>Category</label>
                                     <select name="category">
@@ -58,11 +77,11 @@
                                         {/foreach}
                                     </select>
                                 </div>
-                            </div>
 
-                            <div class="admin-field">
-                                <label>Search</label>
-                                <input type="text" name="q" value="{$filter_q}" placeholder="Message / User Agent">
+                                <div class="admin-field">
+                                    <label>Search</label>
+                                    <input type="text" name="q" value="{$filter_q}" placeholder="Message / User Agent / Session ID">
+                                </div>
                             </div>
 
                             <div class="admin-form-footer">
@@ -77,7 +96,7 @@
                     <div class="admin-panel-heading">
                         <div>
                             <h3>Audit Events</h3>
-                            <p>Condensed event view with links into the full security record details.</p>
+                            <p>Condensed event view with quick visibility into the IP and active tracking signals behind each event.</p>
                         </div>
                     </div>
 
@@ -94,14 +113,18 @@
                                             <th>Date / Time</th>
                                             <th>Category</th>
                                             <th>User</th>
+                                            <th>IP</th>
+                                            <th>Signals</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {foreach $logs as list($l_created_at, $l_category, $l_user, $l_view_url)}
+                                        {foreach $logs as list($l_created_at, $l_category, $l_user, $l_ip, $l_signals, $l_view_url)}
                                         <tr>
                                             <td><a href="{$l_view_url}" class="admin-table-link">{$l_created_at}</a></td>
                                             <td><span class="admin-pill">{$l_category}</span></td>
                                             <td>{$l_user}</td>
+                                            <td class="is-wrap">{$l_ip}</td>
+                                            <td class="is-wrap">{$l_signals}</td>
                                         </tr>
                                         {/foreach}
                                     </tbody>

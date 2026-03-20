@@ -46,12 +46,28 @@
                                         <td>{$log_user}</td>
                                     </tr>
                                     <tr>
+                                        <td class="security-log-details-label">User ID</td>
+                                        <td>{$log_user_id}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="security-log-details-label">Session ID</td>
+                                        <td class="is-wrap">{$log_session_id}</td>
+                                    </tr>
+                                    <tr>
                                         <td class="security-log-details-label">IP</td>
                                         <td>{$log_ip}</td>
                                     </tr>
                                     <tr>
-                                        <td class="security-log-details-label">Fingerprint</td>
+                                        <td class="security-log-details-label">Request Fingerprint</td>
                                         <td class="is-wrap">{$log_fingerprint}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="security-log-details-label">Device Fingerprint</td>
+                                        <td class="is-wrap">{$log_device_fingerprint}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="security-log-details-label">Browser Fingerprint</td>
+                                        <td class="is-wrap">{$log_browser_fingerprint}</td>
                                     </tr>
                                     <tr>
                                         <td class="security-log-details-label">User Agent</td>
@@ -64,6 +80,115 @@
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+                </section>
+
+                <section class="admin-panel">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <h3>Quick Block Actions</h3>
+                            <p>Create an enforcement entry directly from the signal(s) captured in this log record.</p>
+                        </div>
+                    </div>
+
+                    <div class="admin-panel-body">
+                        <div class="admin-row-actions">
+                            {if !empty($log_user_id)}
+                            <form method="POST" action="/panel/security/blocks/create">
+                                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                <input type="hidden" name="scope" value="user_id">
+                                <input type="hidden" name="match_value" value="{$log_user_id}">
+                                <input type="hidden" name="status" value="blocked">
+                                <input type="hidden" name="duration_minutes" value="60">
+                                <input type="hidden" name="reason" value="Security log quick action">
+                                <button type="submit" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-user-lock"></i> Block User</button>
+                            </form>
+                            {/if}
+
+                            {if !empty($log_ip)}
+                            <form method="POST" action="/panel/security/blocks/create">
+                                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                <input type="hidden" name="scope" value="ip">
+                                <input type="hidden" name="match_value" value="{$log_ip}">
+                                <input type="hidden" name="status" value="blocked">
+                                <input type="hidden" name="duration_minutes" value="60">
+                                <input type="hidden" name="reason" value="Security log quick action">
+                                <button type="submit" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-network-wired"></i> Block IP</button>
+                            </form>
+                            {/if}
+
+                            {if !empty($log_device_fingerprint)}
+                            <form method="POST" action="/panel/security/blocks/create">
+                                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                <input type="hidden" name="scope" value="device_fingerprint">
+                                <input type="hidden" name="match_value" value="{$log_device_fingerprint}">
+                                <input type="hidden" name="status" value="blocked">
+                                <input type="hidden" name="duration_minutes" value="60">
+                                <input type="hidden" name="reason" value="Security log quick action">
+                                <button type="submit" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-laptop-code"></i> Block Device Fingerprint</button>
+                            </form>
+                            {/if}
+
+                            {if !empty($log_browser_fingerprint)}
+                            <form method="POST" action="/panel/security/blocks/create">
+                                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                <input type="hidden" name="scope" value="browser_fingerprint">
+                                <input type="hidden" name="match_value" value="{$log_browser_fingerprint}">
+                                <input type="hidden" name="status" value="blocked">
+                                <input type="hidden" name="duration_minutes" value="60">
+                                <input type="hidden" name="reason" value="Security log quick action">
+                                <button type="submit" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-globe"></i> Block Browser Fingerprint</button>
+                            </form>
+                            {/if}
+
+                            {if !empty($log_fingerprint)}
+                            <form method="POST" action="/panel/security/blocks/create">
+                                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                <input type="hidden" name="scope" value="fingerprint">
+                                <input type="hidden" name="match_value" value="{$log_fingerprint}">
+                                <input type="hidden" name="status" value="blocked">
+                                <input type="hidden" name="duration_minutes" value="60">
+                                <input type="hidden" name="reason" value="Security log quick action">
+                                <button type="submit" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-fingerprint"></i> Block Request Fingerprint</button>
+                            </form>
+                            {/if}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="admin-panel">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <h3>Linked Accounts</h3>
+                            <p>Accounts seen on the same device and/or browser fingerprint signals for this event.</p>
+                        </div>
+                    </div>
+
+                    <div class="admin-panel-body">
+                        {if empty($linked_users)}
+                            <div class="admin-empty-state">
+                                <p>No linked users were found for the captured device/browser signals.</p>
+                            </div>
+                        {else}
+                            <div class="pending-images-wrapper">
+                                <table class="pending-images-table">
+                                    <thead>
+                                        <tr>
+                                            <th>User ID</th>
+                                            <th>Username</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {foreach $linked_users as list($linked_user_id, $linked_username)}
+                                        <tr>
+                                            <td>{$linked_user_id}</td>
+                                            <td>{$linked_username}</td>
+                                        </tr>
+                                        {/foreach}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {/if}
                     </div>
                 </section>
             </div>

@@ -553,10 +553,11 @@ class RequestGuard
         $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
         $fingerprint = TypeHelper::toString(SessionManager::get('fingerprint'), allowEmpty: true) ?? '';
         $deviceFingerprint = self::deviceFingerprint();
+        $browserFingerprint = SessionManager::getBrowserFingerprint();
         $ua = self::userAgent();
         $ip = self::ip();
 
-        // Priority order: user_id -> device_fingerprint -> fingerprint -> ip -> ua
+        // Priority order: user_id -> device_fingerprint -> browser_fingerprint -> fingerprint -> ip -> ua
         if ($userId > 0)
         {
             $row = Database::fetch("SELECT status, expires_at FROM app_block_list WHERE scope = 'user_id' AND user_id = :uid AND (expires_at IS NULL OR expires_at > :now) ORDER BY id DESC LIMIT 1",
@@ -573,6 +574,18 @@ class RequestGuard
         {
             $row = Database::fetch("SELECT status, expires_at FROM app_block_list WHERE scope = 'device_fingerprint' AND device_fingerprint = :dfp AND (expires_at IS NULL OR expires_at > :now) ORDER BY id DESC LIMIT 1",
                 ['dfp' => $deviceFingerprint, 'now' => $now]
+            );
+
+            if ($row)
+            {
+                return $row;
+            }
+        }
+
+        if ($browserFingerprint !== '')
+        {
+            $row = Database::fetch("SELECT status, expires_at FROM app_block_list WHERE scope = 'browser_fingerprint' AND browser_fingerprint = :bfp AND (expires_at IS NULL OR expires_at > :now) ORDER BY id DESC LIMIT 1",
+                ['bfp' => $browserFingerprint, 'now' => $now]
             );
 
             if ($row)
@@ -645,6 +658,7 @@ class RequestGuard
         $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
         $fingerprint = TypeHelper::toString(SessionManager::get('fingerprint'), allowEmpty: true) ?? '';
         $deviceFingerprint = self::deviceFingerprint();
+        $browserFingerprint = SessionManager::getBrowserFingerprint();
         $ua = self::userAgent();
         $ip = self::ip();
 
@@ -663,6 +677,7 @@ class RequestGuard
         $uaStore = null;
         $fpStore = null;
         $dfpStore = null;
+        $bfpStore = null;
         $ipStore = null;
         $uidStore = null;
 
@@ -679,6 +694,7 @@ class RequestGuard
         else if ($scope === 'device_fingerprint')
         {
             $dfpStore = $deviceFingerprint;
+            $bfpStore = $browserFingerprint !== '' ? $browserFingerprint : null;
             $fpStore = $fingerprint !== '' ? $fingerprint : null;
             $valueHash = hash('sha256', 'dfp|' . $deviceFingerprint);
         }
@@ -686,6 +702,7 @@ class RequestGuard
         {
             $fpStore = $fingerprint;
             $dfpStore = $deviceFingerprint !== '' ? $deviceFingerprint : null;
+            $bfpStore = $browserFingerprint !== '' ? $browserFingerprint : null;
             $valueHash = hash('sha256', 'fp|' . $fingerprint);
         }
 
@@ -696,8 +713,8 @@ class RequestGuard
             $uaStore = mb_substr($ua, 0, 255);
         }
 
-        Database::query("INSERT INTO app_block_list (scope, value_hash, user_id, ip, ua, fingerprint, device_fingerprint, status, reason, created_at, last_seen, expires_at)
-             VALUES (:scope, :h, :uid, :ip, :ua, :fp, :dfp, :status, :reason, :created, :seen, :expires)
+        Database::query("INSERT INTO app_block_list (scope, value_hash, user_id, ip, ua, fingerprint, device_fingerprint, browser_fingerprint, status, reason, created_at, last_seen, expires_at)
+             VALUES (:scope, :h, :uid, :ip, :ua, :fp, :dfp, :bfp, :status, :reason, :created, :seen, :expires)
              ON DUPLICATE KEY UPDATE status = :status_upd, reason = :reason_upd, last_seen = :seen_upd, expires_at = :expires_upd",
             [
                 'scope' => $scope,
@@ -707,6 +724,7 @@ class RequestGuard
                 'ua' => $uaStore,
                 'fp' => $fpStore,
                 'dfp' => $dfpStore,
+                'bfp' => $bfpStore,
                 'status' => $status,
                 'reason' => $reason . ($context !== '' ? ('|' . $context) : ''),
                 'created' => $now,
@@ -742,12 +760,13 @@ class RequestGuard
         $ip = self::ip();
         $fingerprint = TypeHelper::toString(SessionManager::get('fingerprint'), allowEmpty: true) ?? '';
         $deviceFingerprint = self::deviceFingerprint();
+        $browserFingerprint = SessionManager::getBrowserFingerprint();
 
         $valueHash = hash('sha256', 'user|' . $userId);
 
         Database::query(
-            "INSERT INTO app_block_list (scope, value_hash, user_id, ip, ua, fingerprint, device_fingerprint, status, reason, created_at, last_seen, expires_at)
-             VALUES ('user_id', :vh, :uid, :ip, :ua, :fp, :dfp, :st, :rs, NOW(), NOW(), :exp)",
+            "INSERT INTO app_block_list (scope, value_hash, user_id, ip, ua, fingerprint, device_fingerprint, browser_fingerprint, status, reason, created_at, last_seen, expires_at)
+             VALUES ('user_id', :vh, :uid, :ip, :ua, :fp, :dfp, :bfp, :st, :rs, NOW(), NOW(), :exp)",
             [
                 'vh' => $valueHash,
                 'uid' => $userId,
@@ -755,6 +774,7 @@ class RequestGuard
                 'ua' => $ua !== '' ? mb_substr($ua, 0, 255) : null,
                 'fp' => $fingerprint !== '' ? $fingerprint : null,
                 'dfp' => $deviceFingerprint !== '' ? $deviceFingerprint : null,
+                'bfp' => $browserFingerprint !== '' ? $browserFingerprint : null,
                 'st' => $status,
                 'rs' => mb_substr($reason, 0, 255),
                 'exp' => $expiresAt,
@@ -827,21 +847,43 @@ class RequestGuard
         $ua = self::userAgent();
         $fingerprint = TypeHelper::toString(SessionManager::get('fingerprint'), allowEmpty: true) ?? '';
         $deviceFingerprint = self::deviceFingerprint();
+        $browserFingerprint = TypeHelper::toString(SessionManager::get('browser_fingerprint'), allowEmpty: true) ?? '';
 
-        Database::query("INSERT INTO app_security_logs (user_id, session_id, ip, ua, fingerprint, device_fingerprint, category, message, created_at)
-             VALUES (:uid, :sid, :ip, :ua, :fp, :dfp, :cat, :msg, :created)",
-            [
-                'uid' => $userId,
-                'sid' => $sessionId,
-                'ip' => $ip,
-                'ua' => mb_substr($ua, 0, 255),
-                'fp' => $fingerprint !== '' ? $fingerprint : null,
-                'dfp' => $deviceFingerprint !== '' ? $deviceFingerprint : null,
-                'cat' => $category,
-                'msg' => mb_substr($message, 0, 255),
-                'created' => $now
-            ]
-        );
+        try
+        {
+            Database::query("INSERT INTO app_security_logs (user_id, session_id, ip, ua, fingerprint, device_fingerprint, browser_fingerprint, category, message, created_at)
+                 VALUES (:uid, :sid, :ip, :ua, :fp, :dfp, :bfp, :cat, :msg, :created)",
+                [
+                    'uid' => $userId,
+                    'sid' => $sessionId,
+                    'ip' => $ip,
+                    'ua' => mb_substr($ua, 0, 255),
+                    'fp' => $fingerprint !== '' ? $fingerprint : null,
+                    'dfp' => $deviceFingerprint !== '' ? $deviceFingerprint : null,
+                    'bfp' => $browserFingerprint !== '' ? $browserFingerprint : null,
+                    'cat' => $category,
+                    'msg' => mb_substr($message, 0, 255),
+                    'created' => $now
+                ]
+            );
+        }
+        catch (Throwable $e)
+        {
+            Database::query("INSERT INTO app_security_logs (user_id, session_id, ip, ua, fingerprint, device_fingerprint, category, message, created_at)
+                 VALUES (:uid, :sid, :ip, :ua, :fp, :dfp, :cat, :msg, :created)",
+                [
+                    'uid' => $userId,
+                    'sid' => $sessionId,
+                    'ip' => $ip,
+                    'ua' => mb_substr($ua, 0, 255),
+                    'fp' => $fingerprint !== '' ? $fingerprint : null,
+                    'dfp' => $deviceFingerprint !== '' ? $deviceFingerprint : null,
+                    'cat' => $category,
+                    'msg' => mb_substr($message, 0, 255),
+                    'created' => $now
+                ]
+            );
+        }
     }
 
     /**

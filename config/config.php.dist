@@ -137,17 +137,41 @@ return [
         // Number of days to retain security log rows before background cleanup removes them.
         'log_retention_days' => 30,
 
+        // First-party cookie name used by the lightweight browser-signal collector.
+        // This is intentionally low entropy and should be treated only as one
+        // signal in a broader abuse-detection decision.
+        'client_signal_cookie_name' => 'pg_client_signals',
+
         // Optional enforcement for "multiple account" rules per device fingerprint.
         // This is intentionally OFF by default to avoid false positives on shared devices.
+        //
+        // Recommended approach:
+        // - Treat device_fingerprint as a strong browser-instance key.
+        // - Treat browser_fingerprint as a softer linkage signal.
+        // - Prefer review/flagging before hard blocking unless both signals line up.
         'device_policy' => [
             'enabled' => 0,
-            'max_accounts_per_device' => 1,
+
+            // Strong browser-instance threshold.
+            'max_accounts_per_device' => 3,
+
+            // Softer browser/profile threshold.
+            'max_accounts_per_browser_fingerprint' => 2,
+
+            // When linkage reaches this level, write review events even if the
+            // request is still allowed.
+            'shared_device_review_threshold' => 2,
 
             // Enforce on: 'login', 'register', or 'both'
             'enforce_on' => 'both',
 
             // Action: 'deny' (default), 'jail', 'ban'
             'action' => 'deny',
+
+            // Only take action when both strong + soft signals exceed thresholds
+            // unless one of these is explicitly enabled.
+            'block_on_device_fingerprint_only' => 0,
+            'block_on_browser_fingerprint_only' => 0,
 
             // Only used when action == 'jail'
             'jail_seconds' => 900,
