@@ -70,6 +70,9 @@
                     </div>
 
                     <div class="gallery-image-statuses">
+                        {if $img_has_open_reports}
+                        <span class="gallery-image-pill gallery-image-pill-alert">Under Review</span>
+                        {/if}
                         <span class="gallery-image-pill">{$img_approved_status}</span>
                         <span class="gallery-image-pill">{$img_mime_type}</span>
                         <span class="gallery-image-pill">{if $img_age_sensitive}Sensitive{else}Standard{/if}</span>
@@ -122,10 +125,12 @@
                         </button>
                         {/if}
 
-                        <button type="button" class="gallery-hero-btn gallery-hero-btn-button gallery-hero-btn-danger" aria-label="Report Image">
+                        {if $is_logged_in}
+                        <button type="button" class="gallery-hero-btn gallery-hero-btn-button gallery-hero-btn-danger js-open-report-image" aria-label="Report Image">
                             <i class="fa-solid fa-flag"></i>
                             Report
                         </button>
+                        {/if}
                     </div>
 
                     {if $is_logged_in}
@@ -195,6 +200,12 @@
                     {/if}
                 </div>
 
+                {if $report_notice_message}
+                <div class="alert {$report_notice_class}">
+                    {$report_notice_message}
+                </div>
+                {/if}
+
                 {if $img_age_sensitive || $img_reject_reason}
                 <div class="alert {$alert_color}">
                     {$alert_tag} {$alert_message} <a href="#">Learn more</a>
@@ -253,6 +264,54 @@
         </div>
     </div>
     {/if}
+
+    <div class="edit-image-modal-overlay js-report-image-overlay" aria-hidden="true">
+        <div class="edit-image-modal" role="dialog" aria-modal="true" aria-label="Report Image">
+            <div class="edit-image-modal-header">
+                <h3>Report Image</h3>
+
+                <button type="button" class="edit-image-modal-close js-close-report-image" title="Close">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form method="POST" action="/gallery/{$img_hash}/report" class="edit-image-modal-form">
+                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                <input type="hidden" name="back_to" value="{$gallery_back_url}">
+
+                <div class="edit-image-field">
+                    <label>Image ID</label>
+                    <div class="edit-image-readonly">{$img_hash}</div>
+                </div>
+
+                <div class="edit-image-field">
+                    <label for="report_category">Report Category</label>
+                    <select id="report_category" name="report_category">
+                        <option value="tagging">Bad Tagging</option>
+                        <option value="details">Incorrect Details</option>
+                        <option value="copyright">Copyright / Ownership</option>
+                        <option value="sensitive">Sensitive / Safety</option>
+                        <option value="duplicate">Duplicate / Repost</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+
+                <div class="edit-image-field">
+                    <label for="report_subject">Summary</label>
+                    <input id="report_subject" type="text" name="report_subject" maxlength="150" placeholder="Short summary for staff review">
+                </div>
+
+                <div class="edit-image-field">
+                    <label for="report_message">Details</label>
+                    <textarea id="report_message" name="report_message" rows="6" maxlength="2000" placeholder="Explain what staff should review on this image..." required></textarea>
+                </div>
+
+                <div class="edit-image-actions">
+                    <button type="submit">Submit Report</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <div class="comments-modal-overlay js-comments-overlay" aria-hidden="true">
         <div class="comments-modal" role="dialog" aria-modal="true" aria-label="Image Comments">

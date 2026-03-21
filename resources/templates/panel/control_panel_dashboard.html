@@ -17,19 +17,6 @@
                     </div>
 
                     <div class="admin-page-actions">
-                        {if $cp_can_moderate_images}
-                        <a href="/panel/image-pending" class="admin-btn admin-btn-primary"><i class="fa-solid fa-clock"></i> Review Queue</a>
-                        <a href="/panel/image-comparison" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-code-compare"></i> Compare Images</a>
-                        {/if}
-
-                        {if $cp_can_rehash_images}
-                        <a href="/panel/image-rehash" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-arrows-rotate"></i> Rehash Tool</a>
-                        {/if}
-
-                        {if $cp_can_manage_users}
-                        <a href="/panel/users" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-users"></i> Manage Users</a>
-                        {/if}
-
                         {if $cp_can_manage_settings}
                         <a href="/panel/settings" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-sliders"></i> Settings</a>
                         {/if}
@@ -83,6 +70,12 @@
                                     <p>Uploads still waiting for a moderator decision.</p>
                                 </article>
 
+                                <article class="admin-stat-card">
+                                    <div class="admin-stat-card-label"><i class="fa-solid fa-flag"></i> Open Reports</div>
+                                    <div class="admin-stat-card-value removed">{$open_report_count}</div>
+                                    <p>Approved images currently carrying an active review ticket.</p>
+                                </article>
+
                                 {if $cp_is_admin}
                                 <article class="admin-stat-card">
                                     <div class="admin-stat-card-label"><i class="fa-solid fa-trash"></i> Deleted</div>
@@ -107,71 +100,6 @@
                     </section>
 
                     <div class="admin-shell-grid">
-                        <section class="admin-panel">
-                            <div class="admin-panel-heading">
-                                <div>
-                                    <h3>Quick Modules</h3>
-                                    <p>Jump directly into the sections that matter for your current role.</p>
-                                </div>
-                            </div>
-
-                            <div class="admin-panel-body">
-                                <div class="admin-shortcuts-grid">
-                                    {if $cp_can_moderate_images}
-                                    <article class="admin-shortcut-card">
-                                        <h4>Review Queue</h4>
-                                        <p>Open the pending uploads queue and resolve moderation decisions quickly.</p>
-                                        <a href="/panel/image-pending" class="admin-btn admin-btn-secondary">Open Queue</a>
-                                    </article>
-
-                                    <article class="admin-shortcut-card">
-                                        <h4>Image Comparison</h4>
-                                        <p>Measure similarity between approved images before moderation decisions.</p>
-                                        <a href="/panel/image-comparison" class="admin-btn admin-btn-secondary">Open Comparison</a>
-                                    </article>
-                                    {/if}
-
-                                    {if $cp_can_rehash_images}
-                                    <article class="admin-shortcut-card">
-                                        <h4>Rehashing</h4>
-                                        <p>Refresh perceptual hash records when legacy image data needs repair.</p>
-                                        <a href="/panel/image-rehash" class="admin-btn admin-btn-secondary">Open Rehash Tool</a>
-                                    </article>
-                                    {/if}
-
-                                    {if $cp_can_manage_users}
-                                    <article class="admin-shortcut-card">
-                                        <h4>User Administration</h4>
-                                        <p>Inspect member roles, statuses, and account access.</p>
-                                        <a href="/panel/users" class="admin-btn admin-btn-secondary">Open Users</a>
-                                    </article>
-                                    {/if}
-
-                                    {if $cp_can_manage_settings}
-                                    <article class="admin-shortcut-card">
-                                        <h4>Configuration</h4>
-                                        <p>Manage the application settings surface for gallery, security, and future modules.</p>
-                                        <a href="/panel/settings" class="admin-btn admin-btn-secondary">Open Settings</a>
-                                    </article>
-                                    {/if}
-
-                                    {if $cp_can_view_security}
-                                    <article class="admin-shortcut-card">
-                                        <h4>Audit Visibility</h4>
-                                        <p>Review the security events feeding your moderation and abuse workflows.</p>
-                                        <a href="/panel/security/logs" class="admin-btn admin-btn-secondary">Open Logs</a>
-                                    </article>
-
-                                    <article class="admin-shortcut-card">
-                                        <h4>Enforcement</h4>
-                                        <p>Manage blocks, bans, jail states, and rate-limit escalations.</p>
-                                        <a href="/panel/security/blocks" class="admin-btn admin-btn-secondary">Open Block List</a>
-                                    </article>
-                                    {/if}
-                                </div>
-                            </div>
-                        </section>
-
                         <section class="admin-panel">
                             <div class="admin-panel-heading">
                                 <div>

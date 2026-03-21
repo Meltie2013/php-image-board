@@ -1,0 +1,323 @@
+{include file="global/header.html"}
+
+    <main class="moderation-container">
+        <div class="moderation-shell moderation-layout">
+            <div class="moderation-sidebar">
+                <div class="moderation-sidebar-inner moderation-menu">
+                    {include file="panel/control_panel_menu.html"}
+                </div>
+            </div>
+
+            <div class="moderation-content moderation-dashboard">
+                <div class="moderation-page-header">
+                    <div>
+                        <div class="moderation-kicker">Control Panel</div>
+                        <h2>{$control_panel_page_title}</h2>
+                        <p>{$control_panel_page_description}</p>
+                    </div>
+
+                    <div class="moderation-page-actions">
+                        <a href="/panel/image-reports" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back to Reports</a>
+                        <a href="{$report_public_image_url}" class="moderation-btn moderation-btn-secondary" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-up-right-from-square"></i> Open Image Page</a>
+                        <a href="{$report_public_original_url}" class="moderation-btn moderation-btn-secondary" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-image"></i> View Original</a>
+                    </div>
+                </div>
+
+                {if $report_notice_state == 'closed'}
+                <div class="moderation-notice moderation-notice-success" style="margin-bottom: 14px;">
+                    The report has been closed and the public image badge will clear once no open reports remain.
+                </div>
+                {else if $report_notice_state == 'reopened'}
+                <div class="moderation-notice moderation-notice-success" style="margin-bottom: 14px;">
+                    The report has been reopened and the image remains under review.
+                </div>
+                {else if $report_notice_state == 'assigned'}
+                <div class="moderation-notice moderation-notice-success" style="margin-bottom: 14px;">
+                    The report assignment has been updated.
+                </div>
+                {else if $report_notice_state == 'unassigned'}
+                <div class="moderation-notice moderation-notice-success" style="margin-bottom: 14px;">
+                    The report is now open and unassigned.
+                </div>
+                {else if $report_notice_state == 'saved'}
+                <div class="moderation-notice moderation-notice-success" style="margin-bottom: 14px;">
+                    Staff notes and report updates have been saved.
+                </div>
+                {/if}
+
+                <section class="moderation-panel">
+                    <div class="moderation-panel-heading">
+                        <div>
+                            <h3>Report #{$report_id}</h3>
+                            <p>Submitted for image {$report_image_hash}.</p>
+                        </div>
+
+                        <div class="admin-row-actions">
+                            {if $report_can_assign_self}
+                            <form method="POST" action="/panel/image-reports/assign/{$report_id}">
+                                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                <button type="submit" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-user-check"></i> {if $report_assigned_to}Reassign to Me{else}Assign to Me{/if}</button>
+                            </form>
+                            {/if}
+
+                            {if $report_can_release_assignment}
+                            <form method="POST" action="/panel/image-reports/release/{$report_id}">
+                                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                <button type="submit" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-user-minus"></i> Release Assignment</button>
+                            </form>
+                            {/if}
+
+                            {if $report_is_open}
+                            <form method="POST" action="/panel/image-reports/close/{$report_id}">
+                                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                <button type="submit" class="moderation-btn"><i class="fa-solid fa-check"></i> Mark Closed</button>
+                            </form>
+                            {else}
+                            <form method="POST" action="/panel/image-reports/reopen/{$report_id}">
+                                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                <button type="submit" class="moderation-btn"><i class="fa-solid fa-rotate-left"></i> Reopen Report</button>
+                            </form>
+                            {/if}
+                        </div>
+                    </div>
+
+                    <div class="moderation-panel-body">
+                        <div class="pending-images-wrapper">
+                            <table class="pending-images-table security-log-details-table">
+                                <tbody>
+                                    <tr>
+                                        <td class="security-log-details-label">Status</td>
+                                        <td><span class="admin-status admin-status-{$report_status_class}">{$report_status_label}</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="security-log-details-label">Category</td>
+                                        <td><span class="admin-pill">{$report_category}</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="security-log-details-label">Summary</td>
+                                        <td>{$report_subject}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="security-log-details-label">Details</td>
+                                        <td class="is-wrap">{$report_message}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="security-log-details-label">Reporter</td>
+                                        <td>{$report_reporter}{if $report_reporter_user_id} (User ID: {$report_reporter_user_id}){/if}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="security-log-details-label">Assigned To</td>
+                                        <td>{if $report_assigned_to}{$report_assigned_to}{if $report_assigned_user_id} (User ID: {$report_assigned_user_id}){/if}{if $report_is_assigned_to_current_user} &middot; You{/if}{else}Not assigned{/if}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="security-log-details-label">Assigned At</td>
+                                        <td>{if $report_assigned_at}{$report_assigned_at}{else}Not assigned yet{/if}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="security-log-details-label">Submitted</td>
+                                        <td>{$report_created_at}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="security-log-details-label">Updated</td>
+                                        <td>{$report_updated_at}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="security-log-details-label">Resolved By</td>
+                                        <td>{if $report_resolved_by}{$report_resolved_by}{else}Not resolved yet{/if}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="security-log-details-label">Resolved At</td>
+                                        <td>{if $report_resolved_at}{$report_resolved_at}{else}Not resolved yet{/if}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="report-detail-grid">
+                    <section class="moderation-panel">
+                        <div class="moderation-panel-heading">
+                            <div>
+                                <h3>Image Context</h3>
+                                <p>Reference data for the image connected to this report.</p>
+                            </div>
+                        </div>
+
+                        <div class="moderation-panel-body">
+                            <div class="pending-images-wrapper">
+                                <table class="pending-images-table security-log-details-table">
+                                    <tbody>
+                                        <tr>
+                                            <td class="security-log-details-label">Image Hash</td>
+                                            <td class="is-wrap">{$report_image_hash}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="security-log-details-label">Image Status</td>
+                                            <td>{$report_image_status}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="security-log-details-label">Image Visibility</td>
+                                            <td>{$report_image_visibility}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="security-log-details-label">Image Uploaded</td>
+                                            <td>{$report_image_created_at}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="moderation-panel">
+                        <div class="moderation-panel-heading">
+                            <div>
+                                <h3>Reporter Context</h3>
+                                <p>Stored request details captured when the report was submitted.</p>
+                            </div>
+                        </div>
+
+                        <div class="moderation-panel-body">
+                            <div class="pending-images-wrapper">
+                                <table class="pending-images-table security-log-details-table">
+                                    <tbody>
+                                        <tr>
+                                            <td class="security-log-details-label">Session ID</td>
+                                            <td class="is-wrap">{if $report_session_id}{$report_session_id}{else}Not captured{/if}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="security-log-details-label">IP</td>
+                                            <td>{if $report_ip}{$report_ip}{else}Not captured{/if}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="security-log-details-label">User Agent</td>
+                                            <td class="is-wrap">{if $report_ua}{$report_ua}{else}Not captured{/if}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="report-workflow-grid">
+                    <section class="moderation-panel">
+                        <div class="moderation-panel-heading">
+                            <div>
+                                <h3>Staff Update</h3>
+                                <p>Add findings, update the image state when needed, and optionally close the report.</p>
+                            </div>
+                        </div>
+
+                        <div class="moderation-panel-body admin-dashboard">
+                            <form method="POST" action="/panel/image-reports/update/{$report_id}" class="report-form-shell">
+                                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+
+                                <div class="admin-field">
+                                    <label for="staff_comment">Staff Comment</label>
+                                    <textarea id="staff_comment" name="staff_comment" rows="7" placeholder="Document your findings, note any moderation decision, or explain why the image was kept as-is."></textarea>
+                                </div>
+
+                                <div class="admin-field">
+                                    <label for="image_action">Image Action</label>
+                                    <select id="image_action" name="image_action">
+                                        <option value="none">Keep current image settings</option>
+                                        <option value="set_standard">Mark image as standard</option>
+                                        <option value="set_sensitive">Mark image as sensitive</option>
+                                        <option value="set_pending">Move image back to pending review</option>
+                                        <option value="set_approved">Set image status to approved</option>
+                                        <option value="set_rejected">Reject image</option>
+                                        <option value="set_deleted">Delete image</option>
+                                    </select>
+                                </div>
+
+                                {if $report_is_open}
+                                <label class="moderation-check-option">
+                                    <input type="checkbox" name="take_assignment" value="1">
+                                    <span>Assign this report to me while saving this update.</span>
+                                </label>
+
+                                <label class="moderation-check-option">
+                                    <input type="checkbox" name="close_report" value="1">
+                                    <span>Close this report after saving the note and image action.</span>
+                                </label>
+                                {/if}
+
+                                <div class="admin-form-footer">
+                                    <button type="submit" class="moderation-btn"><i class="fa-solid fa-floppy-disk"></i> Save Staff Update</button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+
+                    <section class="moderation-panel">
+                        <div class="moderation-panel-heading">
+                            <div>
+                                <h3>Workflow Summary</h3>
+                                <p>Quick moderation reference for the current report state.</p>
+                            </div>
+                        </div>
+
+                        <div class="moderation-panel-body">
+                            <div class="report-summary-list">
+                                <div class="report-summary-item">
+                                    <span>Queue Status</span>
+                                    <strong>{$report_status_label}</strong>
+                                </div>
+
+                                <div class="report-summary-item">
+                                    <span>Assigned Staff</span>
+                                    <strong>{if $report_assigned_to}{$report_assigned_to}{else}Unassigned{/if}</strong>
+                                </div>
+
+                                <div class="report-summary-item">
+                                    <span>Staff Notes</span>
+                                    <strong>{$report_notes_count}</strong>
+                                </div>
+
+                                <div class="report-summary-item">
+                                    <span>Public Badge</span>
+                                    <strong>{if $report_is_open}Under Review{else}None{/if}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <section class="moderation-panel">
+                    <div class="moderation-panel-heading">
+                        <div>
+                            <h3>Staff Notes</h3>
+                            <p>Internal staff discussion and moderation findings for this report.</p>
+                        </div>
+                    </div>
+
+                    <div class="moderation-panel-body">
+                        {if empty($report_staff_notes)}
+                        <div class="moderation-empty-state">
+                            <p>No staff notes have been added yet.</p>
+                        </div>
+                        {else}
+                        <div class="report-note-list">
+                            {foreach $report_staff_notes as list($note_user_id, $note_username, $note_created_at, $note_body, $note_updated_at)}
+                            <article class="report-note-card">
+                                <div class="report-note-meta">
+                                    <strong>{$note_username}{if $note_user_id > 0} (User ID: {$note_user_id}){/if}</strong>
+                                    <span>{$note_created_at}</span>
+                                </div>
+                                <div class="report-note-body">{$note_body}</div>
+                                {if $note_updated_at && $note_updated_at != $note_created_at}
+                                <div class="report-note-updated">Updated {$note_updated_at}</div>
+                                {/if}
+                            </article>
+                            {/foreach}
+                        </div>
+                        {/if}
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+{include file="global/footer.html"}

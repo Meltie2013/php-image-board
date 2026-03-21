@@ -790,6 +790,12 @@
     text-transform: uppercase;
 }
 
+.gallery-image-pill-alert {
+    background: rgba(180, 71, 71, 0.20);
+    border-color: rgba(255, 125, 125, 0.34);
+    color: #ffd5d5;
+}
+
 .gallery-image-meta-strip,
 .gallery-view-page .gallery-image-meta-strip {
     display: grid;
@@ -1495,7 +1501,8 @@
 }
 
 .edit-image-modal-form textarea,
-.edit-image-modal-form input[type="text"] {
+.edit-image-modal-form input[type="text"],
+.edit-image-modal-form select {
     width: 100%;
     padding: 12px 12px;
     border-radius: var(--radius-md);
@@ -1507,7 +1514,8 @@
 }
 
 .edit-image-modal-form textarea:focus,
-.edit-image-modal-form input[type="text"]:focus {
+.edit-image-modal-form input[type="text"]:focus,
+.edit-image-modal-form select:focus {
     border-color: rgba(255, 255, 255, 0.18);
     box-shadow: 0 0 0 2px rgba(120, 140, 255, 0.18);
 }

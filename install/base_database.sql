@@ -103,6 +103,29 @@ CREATE TABLE `app_image_favorites` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `app_image_reports`
+--
+
+CREATE TABLE `app_image_reports` (
+    `id` bigint(20) UNSIGNED NOT NULL,
+    `image_id` bigint(20) UNSIGNED NOT NULL,
+    `reporter_user_id` bigint(20) UNSIGNED DEFAULT NULL,
+    `report_category` varchar(64) NOT NULL DEFAULT 'other',
+    `report_subject` varchar(150) NOT NULL,
+    `report_message` text NOT NULL,
+    `status` enum('open','closed') NOT NULL DEFAULT 'open',
+    `session_id` varchar(128) DEFAULT NULL,
+    `ip` varbinary(16) DEFAULT NULL,
+    `ua` varchar(255) DEFAULT NULL,
+    `resolved_by` bigint(20) UNSIGNED DEFAULT NULL,
+    `resolved_at` datetime DEFAULT NULL,
+    `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+    `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `app_image_hashes`
 --
 
@@ -407,6 +430,17 @@ ALTER TABLE `app_image_favorites`
     ADD KEY `fk_favorite_image` (`image_id`);
 
 --
+-- Indexes for table `app_image_reports`
+--
+ALTER TABLE `app_image_reports`
+    ADD PRIMARY KEY (`id`),
+    ADD KEY `idx_image_id` (`image_id`),
+    ADD KEY `idx_reporter_user_id` (`reporter_user_id`),
+    ADD KEY `idx_status` (`status`),
+    ADD KEY `idx_created_at` (`created_at`),
+    ADD KEY `idx_resolved_by` (`resolved_by`);
+
+--
 -- Indexes for table `app_image_hashes`
 --
 ALTER TABLE `app_image_hashes`
@@ -547,6 +581,12 @@ ALTER TABLE `app_image_favorites`
   MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT for table `app_image_reports`
+--
+ALTER TABLE `app_image_reports`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `app_image_upload_logs`
 --
 ALTER TABLE `app_image_upload_logs`
@@ -623,6 +663,14 @@ ALTER TABLE `app_image_comments`
 ALTER TABLE `app_image_favorites`
     ADD CONSTRAINT `fk_favorite_image` FOREIGN KEY (`image_id`) REFERENCES `app_images` (`id`) ON DELETE CASCADE,
     ADD CONSTRAINT `fk_favorite_user` FOREIGN KEY (`user_id`) REFERENCES `app_users` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `app_image_reports`
+--
+ALTER TABLE `app_image_reports`
+    ADD CONSTRAINT `fk_image_reports_image` FOREIGN KEY (`image_id`) REFERENCES `app_images` (`id`) ON DELETE CASCADE,
+    ADD CONSTRAINT `fk_image_reports_reporter` FOREIGN KEY (`reporter_user_id`) REFERENCES `app_users` (`id`) ON DELETE SET NULL,
+    ADD CONSTRAINT `fk_image_reports_resolved_by` FOREIGN KEY (`resolved_by`) REFERENCES `app_users` (`id`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `app_image_hashes`

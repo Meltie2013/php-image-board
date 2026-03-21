@@ -178,6 +178,23 @@ class ControlPanelController extends BaseController
     }
 
     /**
+     * Build one pagination URL for the image report list.
+     *
+     * @param int $page Page number.
+     * @return string
+     */
+    private static function buildImageReportListUrl(int $page): string
+    {
+        if ($page <= 1)
+        {
+            return '/panel/image-reports';
+        }
+
+        return '/panel/image-reports/page/' . $page;
+    }
+
+
+    /**
      * Resolve related account usernames linked through device or browser
      * fingerprints for a security log entry.
      *
@@ -314,6 +331,7 @@ class ControlPanelController extends BaseController
         $totalImagesResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status IN ('approved', 'pending', 'deleted', 'rejected')");
         $approvedCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'approved'");
         $pendingCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'pending'");
+        $openReportsResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_image_reports WHERE status = 'open'");
         $removedCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'deleted'");
         $rejectedCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'rejected'");
         $viewsCountResult = Database::fetch("SELECT COALESCE(SUM(views), 0) AS total_views FROM app_images WHERE status = 'approved';");
@@ -321,6 +339,7 @@ class ControlPanelController extends BaseController
         $totalImages = TypeHelper::toInt($totalImagesResult['cnt'] ?? null) ?? 0;
         $approvedCount = TypeHelper::toInt($approvedCountResult['cnt'] ?? null) ?? 0;
         $pendingCount = TypeHelper::toInt($pendingCountResult['cnt'] ?? null) ?? 0;
+        $openReportsCount = TypeHelper::toInt($openReportsResult['cnt'] ?? null) ?? 0;
         $removedCount = TypeHelper::toInt($removedCountResult['cnt'] ?? null) ?? 0;
         $rejectedCount = TypeHelper::toInt($rejectedCountResult['cnt'] ?? null) ?? 0;
         $combinedCount = TypeHelper::toInt($viewsCountResult['total_views'] ?? null) ?? 0;
@@ -346,6 +365,7 @@ class ControlPanelController extends BaseController
         $template->assign('total_images', NumericalHelper::formatCount($totalImages));
         $template->assign('approved_count', NumericalHelper::formatCount($approvedCount));
         $template->assign('pending_count', NumericalHelper::formatCount($pendingCount));
+        $template->assign('open_report_count', NumericalHelper::formatCount($openReportsCount));
         $template->assign('removed_count', NumericalHelper::formatCount($removedCount));
         $template->assign('rejected_count', NumericalHelper::formatCount($rejectedCount));
         $template->assign('total_view_count', NumericalHelper::formatCount($combinedCount));
@@ -2145,6 +2165,665 @@ class ControlPanelController extends BaseController
         // Redirect back to the pending list after action completes
         header('Location: /panel/image-pending');
         exit;
+    }
+
+    /**
+     * Render the image report queue for staff review.
+     *
+     * @param int|null $page Current pagination page.
+     * @return void
+     */
+    public static function imageReports($page = null): void
+    {
+        $template = self::initTemplate();
+        self::requirePanelAccess($template);
+
+        $page = TypeHelper::toInt($page ?? null) ?? 1;
+        if ($page < 1)
+        {
+            $page = 1;
+        }
+
+        $perPage = 15;
+        $offset = ($page - 1) * $perPage;
+
+        $totalRow = Database::fetch("SELECT COUNT(*) AS cnt FROM app_image_reports") ?? [];
+        $openRow = Database::fetch("SELECT COUNT(*) AS cnt FROM app_image_reports WHERE status = 'open'") ?? [];
+        $closedRow = Database::fetch("SELECT COUNT(*) AS cnt FROM app_image_reports WHERE status = 'closed'") ?? [];
+
+        $totalCount = TypeHelper::toInt($totalRow['cnt'] ?? 0) ?? 0;
+        $openCount = TypeHelper::toInt($openRow['cnt'] ?? 0) ?? 0;
+        $closedCount = TypeHelper::toInt($closedRow['cnt'] ?? 0) ?? 0;
+
+        $rows = Database::fetchAll(
+            "SELECT
+                r.id,
+                r.reporter_user_id,
+                r.report_category,
+                r.report_subject,
+                r.status,
+                r.created_at,
+                r.assigned_to_user_id,
+                i.image_hash,
+                au.username AS assigned_username
+             FROM app_image_reports r
+             INNER JOIN app_images i ON i.id = r.image_id
+             LEFT JOIN app_users au ON au.id = r.assigned_to_user_id
+             ORDER BY FIELD(r.status, 'open', 'closed'), r.created_at DESC
+             LIMIT {$perPage} OFFSET {$offset}"
+        );
+
+        $reportRows = [];
+        foreach ($rows as $row)
+        {
+            $reportId = TypeHelper::toInt($row['id'] ?? 0) ?? 0;
+            $reporterUserId = TypeHelper::toInt($row['reporter_user_id'] ?? 0) ?? 0;
+            $assignedUserId = TypeHelper::toInt($row['assigned_to_user_id'] ?? 0) ?? 0;
+            $reporterLabel = $reporterUserId > 0
+                ? ucfirst(self::getUsernameById($reporterUserId))
+                : 'Guest';
+            $assignedLabel = $assignedUserId > 0
+                ? ucfirst(TypeHelper::toString($row['assigned_username'] ?? self::getUsernameById($assignedUserId)))
+                : 'Unassigned';
+            $status = TypeHelper::toString($row['status'] ?? 'open');
+
+            $reportRows[] = [
+                $reportId,
+                TypeHelper::toString($row['image_hash'] ?? ''),
+                ImageReportHelper::categoryLabel(TypeHelper::toString($row['report_category'] ?? 'other')),
+                TypeHelper::toString($row['report_subject'] ?? ''),
+                $reporterLabel,
+                $assignedLabel,
+                ImageReportHelper::workflowStatusLabel($status, $assignedUserId),
+                ImageReportHelper::workflowStatusClass($status, $assignedUserId),
+                DateHelper::date_only_format(TypeHelper::toString($row['created_at'] ?? '')),
+                '/panel/image-reports/view?id=' . $reportId,
+            ];
+        }
+
+        $totalPages = (int)ceil($totalCount / $perPage);
+        if ($totalPages < 1)
+        {
+            $totalPages = 1;
+        }
+
+        if ($page > $totalPages)
+        {
+            $page = $totalPages;
+        }
+
+        $paginationPages = [];
+        for ($i = 1; $i <= $totalPages; $i++)
+        {
+            $paginationPages[] = [
+                self::buildImageReportListUrl($i),
+                $i,
+                $i === $page,
+            ];
+        }
+
+        self::assignPanelPage(
+            $template,
+            'reported',
+            'Reported Images',
+            'Review image reports, investigate the submitted details, and close or reopen moderation tickets as needed.',
+            'queue'
+        );
+
+        $template->assign('report_rows', $reportRows);
+        $template->assign('report_total_count', $totalCount);
+        $template->assign('report_open_count', $openCount);
+        $template->assign('report_closed_count', $closedCount);
+        $template->assign('pagination_prev', $page > 1 ? self::buildImageReportListUrl($page - 1) : null);
+        $template->assign('pagination_next', $page < $totalPages ? self::buildImageReportListUrl($page + 1) : null);
+        $template->assign('pagination_pages', $paginationPages);
+        $template->assign('report_notice_state', Security::sanitizeString($_GET['updated'] ?? ''));
+
+        $template->render('panel/control_panel_reports.html');
+    }
+
+    /**
+     * Render one image report detail page.
+     *
+     * @return void
+     */
+    public static function imageReportView(): void
+    {
+        $template = self::initTemplate();
+        self::requirePanelAccess($template);
+
+        $id = TypeHelper::toInt($_GET['id'] ?? 0) ?? 0;
+        if ($id < 1)
+        {
+            header('Location: /panel/image-reports');
+            exit();
+        }
+
+        $report = Database::fetch(
+            "SELECT
+                r.id,
+                r.image_id,
+                r.reporter_user_id,
+                r.report_category,
+                r.report_subject,
+                r.report_message,
+                r.status,
+                r.session_id,
+                r.ip,
+                r.ua,
+                r.assigned_to_user_id,
+                r.assigned_at,
+                r.resolved_by,
+                r.resolved_at,
+                r.created_at,
+                r.updated_at,
+                i.image_hash,
+                i.status AS image_status,
+                i.age_sensitive,
+                i.created_at AS image_created_at,
+                au.username AS assigned_username
+             FROM app_image_reports r
+             INNER JOIN app_images i ON i.id = r.image_id
+             LEFT JOIN app_users au ON au.id = r.assigned_to_user_id
+             WHERE r.id = :id
+             LIMIT 1",
+            [':id' => $id]
+        );
+
+        if (!$report)
+        {
+            header('Location: /panel/image-reports');
+            exit();
+        }
+
+        $staffNotes = Database::fetchAll(
+            "SELECT
+                c.comment_body,
+                c.created_at,
+                c.updated_at,
+                c.user_id,
+                u.username
+             FROM app_image_report_comments c
+             LEFT JOIN app_users u ON u.id = c.user_id
+             WHERE c.report_id = :report_id
+             ORDER BY c.created_at DESC, c.id DESC",
+            [':report_id' => $id]
+        );
+
+        $reporterUserId = TypeHelper::toInt($report['reporter_user_id'] ?? 0) ?? 0;
+        $assignedUserId = TypeHelper::toInt($report['assigned_to_user_id'] ?? 0) ?? 0;
+        $resolvedBy = TypeHelper::toInt($report['resolved_by'] ?? 0) ?? 0;
+        $status = TypeHelper::toString($report['status'] ?? 'open');
+        $normalizedStatus = ImageReportHelper::normalizeStatus($status);
+        $currentStaffUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+
+        $noteRows = [];
+        foreach ($staffNotes as $note)
+        {
+            $noteRows[] = [
+                TypeHelper::toInt($note['user_id'] ?? 0) ?? 0,
+                ucfirst(TypeHelper::toString($note['username'] ?? 'Unknown Staff')),
+                DateHelper::date_only_format(TypeHelper::toString($note['created_at'] ?? '')),
+                TypeHelper::toString($note['comment_body'] ?? ''),
+                DateHelper::date_only_format(TypeHelper::toString($note['updated_at'] ?? '')),
+            ];
+        }
+
+        self::assignPanelPage(
+            $template,
+            'reported',
+            'Image Report Details',
+            'Inspect the full report body, reporter context, assignment state, and staff findings for this image ticket.',
+            'queue'
+        );
+
+        $template->assign('report_id', TypeHelper::toInt($report['id'] ?? 0));
+        $template->assign('report_image_hash', TypeHelper::toString($report['image_hash'] ?? ''));
+        $template->assign('report_image_status', ucfirst(TypeHelper::toString($report['image_status'] ?? '')));
+        $template->assign('report_image_visibility', (TypeHelper::toInt($report['age_sensitive'] ?? 0) ?? 0) === 1 ? 'Sensitive' : 'Standard');
+        $template->assign('report_image_created_at', DateHelper::date_only_format(TypeHelper::toString($report['image_created_at'] ?? '')));
+        $template->assign('report_category', ImageReportHelper::categoryLabel(TypeHelper::toString($report['report_category'] ?? 'other')));
+        $template->assign('report_subject', TypeHelper::toString($report['report_subject'] ?? ''));
+        $template->assign('report_message', TypeHelper::toString($report['report_message'] ?? ''));
+        $template->assign('report_status_label', ImageReportHelper::workflowStatusLabel($status, $assignedUserId));
+        $template->assign('report_status_class', ImageReportHelper::workflowStatusClass($status, $assignedUserId));
+        $template->assign('report_created_at', DateHelper::date_only_format(TypeHelper::toString($report['created_at'] ?? '')));
+        $template->assign('report_updated_at', DateHelper::date_only_format(TypeHelper::toString($report['updated_at'] ?? '')));
+        $assignedAt = TypeHelper::toString($report['assigned_at'] ?? null, allowEmpty: true);
+        $resolvedAt = TypeHelper::toString($report['resolved_at'] ?? null, allowEmpty: true);
+        $template->assign('report_assigned_at', $assignedAt ? DateHelper::date_only_format($assignedAt) : '');
+        $template->assign('report_resolved_at', $resolvedAt ? DateHelper::date_only_format($resolvedAt) : '');
+        $template->assign('report_reporter', $reporterUserId > 0 ? ucfirst(self::getUsernameById($reporterUserId)) : 'Guest');
+        $template->assign('report_reporter_user_id', $reporterUserId > 0 ? (string)$reporterUserId : '');
+        $template->assign('report_session_id', TypeHelper::toString($report['session_id'] ?? ''));
+        $template->assign('report_ip', self::formatStoredIp($report['ip'] ?? null));
+        $template->assign('report_ua', TypeHelper::toString($report['ua'] ?? ''));
+        $template->assign('report_assigned_to', $assignedUserId > 0 ? ucfirst(TypeHelper::toString($report['assigned_username'] ?? self::getUsernameById($assignedUserId))) : '');
+        $template->assign('report_assigned_user_id', $assignedUserId > 0 ? (string)$assignedUserId : '');
+        $template->assign('report_resolved_by', $resolvedBy > 0 ? ucfirst(self::getUsernameById($resolvedBy)) : '');
+        $template->assign('report_public_image_url', '/gallery/' . TypeHelper::toString($report['image_hash'] ?? ''));
+        $template->assign('report_public_original_url', '/gallery/original/' . TypeHelper::toString($report['image_hash'] ?? ''));
+        $template->assign('report_is_open', $normalizedStatus === 'open' ? 1 : 0);
+        $template->assign('report_is_closed', $normalizedStatus === 'closed' ? 1 : 0);
+        $template->assign('report_can_assign_self', $normalizedStatus === 'open' && $currentStaffUserId > 0 && $assignedUserId !== $currentStaffUserId ? 1 : 0);
+        $template->assign('report_can_release_assignment', $normalizedStatus === 'open' && $assignedUserId > 0 ? 1 : 0);
+        $template->assign('report_is_assigned_to_current_user', $assignedUserId > 0 && $assignedUserId === $currentStaffUserId ? 1 : 0);
+        $template->assign('report_staff_notes', $noteRows);
+        $template->assign('report_notes_count', count($noteRows));
+        $template->assign('report_notice_state', Security::sanitizeString($_GET['updated'] ?? ''));
+
+        $template->render('panel/control_panel_report_view.html');
+    }
+
+    /**
+     * Assign one image report to the current staff member.
+     *
+     * @param int $id Report identifier.
+     * @return void
+     */
+    public static function assignImageReport(int $id): void
+    {
+        $staffUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        self::syncImageReportAssignment($id, $staffUserId > 0 ? $staffUserId : null, 'assigned');
+    }
+
+    /**
+     * Release any current staff assignment on one image report.
+     *
+     * @param int $id Report identifier.
+     * @return void
+     */
+    public static function releaseImageReport(int $id): void
+    {
+        self::syncImageReportAssignment($id, null, 'unassigned');
+    }
+
+    /**
+     * Close one open image report.
+     *
+     * @param int $id Report identifier.
+     * @return void
+     */
+    public static function closeImageReport(int $id): void
+    {
+        self::updateImageReportStatus($id, 'closed');
+    }
+
+    /**
+     * Re-open one closed image report.
+     *
+     * @param int $id Report identifier.
+     * @return void
+     */
+    public static function reopenImageReport(int $id): void
+    {
+        self::updateImageReportStatus($id, 'open');
+    }
+
+    /**
+     * Save one staff note and optional image/report workflow updates.
+     *
+     * @param int $id Report identifier.
+     * @return void
+     */
+    public static function updateImageReport(int $id): void
+    {
+        $template = self::initTemplate();
+        self::requirePanelAccess($template);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            http_response_code(405);
+            $template->assign('title', 'Method Not Allowed');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
+        if (!Security::verifyCsrfToken($csrfToken))
+        {
+            self::renderInvalidRequest($template);
+            return;
+        }
+
+        $id = TypeHelper::toInt($id) ?? 0;
+        if ($id < 1)
+        {
+            header('Location: /panel/image-reports');
+            exit();
+        }
+
+        $report = Database::fetch(
+            "SELECT id, image_id, status
+             FROM app_image_reports
+             WHERE id = :id
+             LIMIT 1",
+            [':id' => $id]
+        );
+
+        if (!$report)
+        {
+            header('Location: /panel/image-reports');
+            exit();
+        }
+
+        $staffUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        $staffComment = Security::sanitizeString($_POST['staff_comment'] ?? '');
+        $imageAction = strtolower(Security::sanitizeString($_POST['image_action'] ?? 'none'));
+        $takeAssignment = isset($_POST['take_assignment']) && (TypeHelper::toInt($_POST['take_assignment'] ?? 0) ?? 0) === 1;
+        $closeReport = isset($_POST['close_report']) && (TypeHelper::toInt($_POST['close_report'] ?? 0) ?? 0) === 1;
+
+        $allowedImageActions = [
+            'none',
+            'set_standard',
+            'set_sensitive',
+            'set_pending',
+            'set_approved',
+            'set_rejected',
+            'set_deleted',
+        ];
+
+        if (!in_array($imageAction, $allowedImageActions, true))
+        {
+            $imageAction = 'none';
+        }
+
+        $didUpdate = false;
+
+        if ($takeAssignment && $staffUserId > 0)
+        {
+            Database::execute(
+                "UPDATE app_image_reports
+                 SET assigned_to_user_id = :staff_user_id,
+                     assigned_at = CASE WHEN assigned_to_user_id IS NULL OR assigned_to_user_id != :staff_user_id_check THEN NOW() ELSE assigned_at END,
+                     updated_at = NOW()
+                 WHERE id = :id
+                   AND status = 'open'",
+                [
+                    ':id' => $id,
+                    ':staff_user_id' => $staffUserId,
+                    ':staff_user_id_check' => $staffUserId,
+                ]
+            );
+
+            $didUpdate = true;
+        }
+
+        if ($staffComment !== '')
+        {
+            Database::execute(
+                "INSERT INTO app_image_report_comments
+                    (report_id, user_id, comment_body, created_at, updated_at)
+                 VALUES
+                    (:report_id, :user_id, :comment_body, NOW(), NOW())",
+                [
+                    ':report_id' => $id,
+                    ':user_id' => $staffUserId > 0 ? $staffUserId : null,
+                    ':comment_body' => $staffComment,
+                ]
+            );
+
+            $didUpdate = true;
+        }
+
+        if ($imageAction !== 'none')
+        {
+            self::applyImageReportImageAction(TypeHelper::toInt($report['image_id'] ?? 0) ?? 0, $imageAction);
+            $didUpdate = true;
+        }
+
+        if ($closeReport)
+        {
+            Database::execute(
+                "UPDATE app_image_reports
+                 SET status = 'closed',
+                     resolved_by = :staff_user_id,
+                     resolved_at = NOW(),
+                     updated_at = NOW()
+                 WHERE id = :id",
+                [
+                    ':id' => $id,
+                    ':staff_user_id' => $staffUserId > 0 ? $staffUserId : null,
+                ]
+            );
+
+            header('Location: /panel/image-reports/view?id=' . $id . '&updated=closed');
+            exit();
+        }
+
+        if ($didUpdate)
+        {
+            Database::execute(
+                "UPDATE app_image_reports
+                 SET updated_at = NOW()
+                 WHERE id = :id",
+                [':id' => $id]
+            );
+
+            header('Location: /panel/image-reports/view?id=' . $id . '&updated=saved');
+            exit();
+        }
+
+        header('Location: /panel/image-reports/view?id=' . $id);
+        exit();
+    }
+
+    /**
+     * Apply one assignment change for an image report.
+     *
+     * @param int $id Report identifier.
+     * @param int|null $assignedUserId Assigned staff user id or null to clear.
+     * @param string $noticeState Redirect state flag.
+     * @return void
+     */
+    private static function syncImageReportAssignment(int $id, ?int $assignedUserId, string $noticeState): void
+    {
+        $template = self::initTemplate();
+        self::requirePanelAccess($template);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            http_response_code(405);
+            $template->assign('title', 'Method Not Allowed');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
+        if (!Security::verifyCsrfToken($csrfToken))
+        {
+            self::renderInvalidRequest($template);
+            return;
+        }
+
+        $id = TypeHelper::toInt($id) ?? 0;
+        if ($id < 1)
+        {
+            header('Location: /panel/image-reports');
+            exit();
+        }
+
+        if ($assignedUserId !== null && $assignedUserId > 0)
+        {
+            Database::execute(
+                "UPDATE app_image_reports
+                 SET assigned_to_user_id = :assigned_user_id,
+                     assigned_at = NOW(),
+                     updated_at = NOW()
+                 WHERE id = :id
+                   AND status = 'open'",
+                [
+                    ':id' => $id,
+                    ':assigned_user_id' => $assignedUserId,
+                ]
+            );
+        }
+        else
+        {
+            Database::execute(
+                "UPDATE app_image_reports
+                 SET assigned_to_user_id = NULL,
+                     assigned_at = NULL,
+                     updated_at = NOW()
+                 WHERE id = :id
+                   AND status = 'open'",
+                [':id' => $id]
+            );
+        }
+
+        header('Location: /panel/image-reports/view?id=' . $id . '&updated=' . rawurlencode($noticeState));
+        exit();
+    }
+
+    /**
+     * Apply one report-status transition for staff review workflows.
+     *
+     * @param int $id Report identifier.
+     * @param string $status Target status.
+     * @return void
+     */
+    private static function updateImageReportStatus(int $id, string $status): void
+    {
+        $template = self::initTemplate();
+        self::requirePanelAccess($template);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            http_response_code(405);
+            $template->assign('title', 'Method Not Allowed');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
+        if (!Security::verifyCsrfToken($csrfToken))
+        {
+            self::renderInvalidRequest($template);
+            return;
+        }
+
+        $id = TypeHelper::toInt($id) ?? 0;
+        if ($id < 1)
+        {
+            header('Location: /panel/image-reports');
+            exit();
+        }
+
+        $status = ImageReportHelper::normalizeStatus($status);
+        $staffUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+
+        if ($status === 'closed')
+        {
+            Database::execute(
+                "UPDATE app_image_reports
+                 SET status = 'closed',
+                     resolved_by = :staff_user_id,
+                     resolved_at = NOW(),
+                     updated_at = NOW()
+                 WHERE id = :id",
+                [
+                    ':id' => $id,
+                    ':staff_user_id' => $staffUserId > 0 ? $staffUserId : null,
+                ]
+            );
+
+            header('Location: /panel/image-reports/view?id=' . $id . '&updated=closed');
+            exit();
+        }
+
+        Database::execute(
+            "UPDATE app_image_reports
+             SET status = 'open',
+                 resolved_by = NULL,
+                 resolved_at = NULL,
+                 updated_at = NOW()
+             WHERE id = :id",
+            [':id' => $id]
+        );
+
+        header('Location: /panel/image-reports/view?id=' . $id . '&updated=reopened');
+        exit();
+    }
+
+    /**
+     * Apply one optional moderation action to the image linked to a report.
+     *
+     * @param int $imageId Image identifier.
+     * @param string $action Requested action key.
+     * @return void
+     */
+    private static function applyImageReportImageAction(int $imageId, string $action): void
+    {
+        if ($imageId < 1)
+        {
+            return;
+        }
+
+        switch ($action)
+        {
+            case 'set_standard':
+                Database::execute(
+                    "UPDATE app_images
+                     SET age_sensitive = 0,
+                         updated_at = NOW()
+                     WHERE id = :image_id",
+                    [':image_id' => $imageId]
+                );
+                break;
+
+            case 'set_sensitive':
+                Database::execute(
+                    "UPDATE app_images
+                     SET age_sensitive = 1,
+                         updated_at = NOW()
+                     WHERE id = :image_id",
+                    [':image_id' => $imageId]
+                );
+                break;
+
+            case 'set_pending':
+                Database::execute(
+                    "UPDATE app_images
+                     SET status = 'pending',
+                         updated_at = NOW()
+                     WHERE id = :image_id",
+                    [':image_id' => $imageId]
+                );
+                break;
+
+            case 'set_approved':
+                Database::execute(
+                    "UPDATE app_images
+                     SET status = 'approved',
+                         updated_at = NOW()
+                     WHERE id = :image_id",
+                    [':image_id' => $imageId]
+                );
+                break;
+
+            case 'set_rejected':
+                Database::execute(
+                    "UPDATE app_images
+                     SET status = 'rejected',
+                         updated_at = NOW()
+                     WHERE id = :image_id",
+                    [':image_id' => $imageId]
+                );
+                break;
+
+            case 'set_deleted':
+                Database::execute(
+                    "UPDATE app_images
+                     SET status = 'deleted',
+                         updated_at = NOW()
+                     WHERE id = :image_id",
+                    [':image_id' => $imageId]
+                );
+                break;
+        }
     }
 
     /**

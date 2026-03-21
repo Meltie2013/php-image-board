@@ -136,6 +136,41 @@ class GalleryController extends BaseController
     }
 
     /**
+     * Resolve one gallery report-form notice from the current query string.
+     *
+     * @return array{alert_class: string, alert_message: string, auto_open: int}
+     */
+    private static function resolveReportNoticeFromQuery(): array
+    {
+        $state = Security::sanitizeString($_GET['report'] ?? '');
+
+        return match ($state)
+        {
+            'submitted' => [
+                'alert_class' => 'alert-success',
+                'alert_message' => 'Your report has been submitted and this image is now under review.',
+                'auto_open' => 0,
+            ],
+            'exists' => [
+                'alert_class' => 'alert-warning',
+                'alert_message' => 'You already have an open report for this image.',
+                'auto_open' => 0,
+            ],
+            'invalid' => [
+                'alert_class' => 'alert-danger',
+                'alert_message' => 'Please choose a report category and include the details for your report.',
+                'auto_open' => 1,
+            ],
+            default => [
+                'alert_class' => '',
+                'alert_message' => '',
+                'auto_open' => 0,
+            ],
+        };
+    }
+
+
+    /**
      * Serve one stored image from cache or disk using trusted metadata.
      *
      * @param string $hash Image hash identifier.
@@ -458,6 +493,7 @@ class GalleryController extends BaseController
                 i.reject_reason,
                 COALESCE(v.votes, 0) AS votes,
                 COALESCE(f.favorites, 0) AS favorites,
+                COALESCE(r.open_reports, 0) AS open_reports,
                 i.views,
                 u.date_of_birth,
                 u.age_verified_at
@@ -473,6 +509,12 @@ class GalleryController extends BaseController
                 FROM app_image_votes
                 GROUP BY image_id
             ) v ON i.id = v.image_id
+            LEFT JOIN (
+                SELECT image_id, COUNT(*) AS open_reports
+                FROM app_image_reports
+                WHERE status = 'open'
+                GROUP BY image_id
+            ) r ON i.id = r.image_id
             WHERE i.image_hash = :hash
             AND i.status = 'approved'
             LIMIT 1
@@ -662,6 +704,14 @@ class GalleryController extends BaseController
         $template->assign('img_has_tag', $image_tags);
         $template->assign('gallery_back_url', $galleryBackUrl);
         $template->assign('gallery_back_url_encoded', rawurlencode($galleryBackUrl));
+
+        $openReportCount = TypeHelper::toInt($img['open_reports'] ?? 0) ?? 0;
+        $reportNotice = self::resolveReportNoticeFromQuery();
+        $template->assign('img_has_open_reports', $openReportCount > 0 ? 1 : 0);
+        $template->assign('img_open_report_count', $openReportCount);
+        $template->assign('report_notice_class', $reportNotice['alert_class']);
+        $template->assign('report_notice_message', $reportNotice['alert_message']);
+        $template->assign('report_modal_auto_open', (int)$reportNotice['auto_open']);
 
         // todo: clean this code up, so it looks cleaner
         $controlBlock = $config['control_server'] ?? ($config['maintenance_server'] ?? []);
@@ -1209,6 +1259,129 @@ class GalleryController extends BaseController
         }
 
         header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null));
+        exit;
+    }
+
+    /**
+     * Submit one image report from the public gallery view.
+     *
+     * Reports may be submitted by signed-in users or guests. Duplicate open
+     * reports from the same account/session for the same image are prevented so
+     * the control panel queue stays readable.
+     *
+     * @param string $hash Unique hash of the image.
+     * @return void
+     */
+    public static function report(string $hash): void
+    {
+        $template = self::initTemplate();
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            http_response_code(405);
+            $template->assign('title', 'Method Not Allowed');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        if (RequestGuard::isInteractiveActionRateLimited('report'))
+        {
+            self::renderInteractiveActionRateLimited($template);
+            return;
+        }
+
+        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
+        if (!Security::verifyCsrfToken($csrfToken))
+        {
+            self::renderInvalidRequest($template);
+            return;
+        }
+
+        $hash = TypeHelper::toString($hash);
+        if ($hash === '')
+        {
+            self::renderImageNotFound($template);
+            return;
+        }
+
+        $category = ImageReportHelper::normalizeCategory(Security::sanitizeString($_POST['report_category'] ?? ''));
+        $subject = Security::sanitizeString($_POST['report_subject'] ?? '');
+        $message = Security::sanitizeString($_POST['report_message'] ?? '');
+
+        if ($message === '')
+        {
+            header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null, ['report' => 'invalid']));
+            exit;
+        }
+
+        $image = Database::fetch(
+            "SELECT id FROM app_images WHERE image_hash = :hash AND status = 'approved' LIMIT 1",
+            [':hash' => $hash]
+        );
+
+        if (!$image)
+        {
+            self::renderImageNotFound($template);
+            return;
+        }
+
+        $imageId = TypeHelper::toInt($image['id'] ?? null) ?? 0;
+        if ($imageId < 1)
+        {
+            self::renderImageNotFound($template);
+            return;
+        }
+
+        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        $sessionId = TypeHelper::toString(session_id(), allowEmpty: true) ?? '';
+        $ip = inet_pton($_SERVER['REMOTE_ADDR'] ?? '') ?: null;
+        $userAgent = TypeHelper::toString($_SERVER['HTTP_USER_AGENT'] ?? '', allowEmpty: true) ?? '';
+
+        $duplicateSql = "SELECT id
+            FROM app_image_reports
+            WHERE image_id = :image_id
+            AND status = 'open'
+            AND ((reporter_user_id IS NOT NULL AND reporter_user_id = :reporter_user_id)
+                OR (:session_id_check != '' AND session_id = :session_id_match))
+            LIMIT 1";
+
+        $duplicate = Database::fetch($duplicateSql, [
+            ':image_id' => $imageId,
+            ':reporter_user_id' => $userId > 0 ? $userId : null,
+            ':session_id_check' => $sessionId,
+            ':session_id_match' => $sessionId,
+        ]);
+
+        if ($duplicate)
+        {
+            header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null, ['report' => 'exists']));
+            exit;
+        }
+
+        if ($subject === '')
+        {
+            $subject = ImageReportHelper::categoryLabel($category);
+        }
+
+        Database::execute(
+            "INSERT INTO app_image_reports
+                (image_id, reporter_user_id, report_category, report_subject, report_message, status, session_id, ip, ua, created_at, updated_at)
+             VALUES
+                (:image_id, :reporter_user_id, :report_category, :report_subject, :report_message, 'open', :session_id, :ip, :ua, NOW(), NOW())",
+            [
+                ':image_id' => $imageId,
+                ':reporter_user_id' => $userId > 0 ? $userId : null,
+                ':report_category' => $category,
+                ':report_subject' => $subject,
+                ':report_message' => $message,
+                ':session_id' => $sessionId !== '' ? $sessionId : null,
+                ':ip' => $ip,
+                ':ua' => $userAgent !== '' ? $userAgent : null,
+            ]
+        );
+
+        header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null, ['report' => 'submitted']));
         exit;
     }
 

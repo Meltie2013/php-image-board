@@ -316,6 +316,24 @@
     color: #d4dcff;
 }
 
+.admin-status-open {
+    background: rgba(191, 143, 48, 0.18);
+    border-color: rgba(244, 203, 104, 0.30);
+    color: #ffe8b4;
+}
+
+.admin-status-assigned {
+    background: rgba(90, 111, 204, 0.20);
+    border-color: rgba(140, 163, 255, 0.32);
+    color: #d4dcff;
+}
+
+.admin-status-closed {
+    background: rgba(68, 163, 106, 0.18);
+    border-color: rgba(95, 214, 145, 0.30);
+    color: #cbf5d9;
+}
+
 .admin-btn,
 .admin-dashboard button,
 .admin-dashboard .compare-button,
@@ -615,6 +633,11 @@
 
 
 @media (max-width: 980px) {
+    .report-detail-grid,
+    .report-workflow-grid {
+        grid-template-columns: 1fr;
+    }
+
     .admin-container {
         padding-left: 16px;
         padding-right: 16px;
@@ -1048,7 +1071,8 @@
 
 .moderation-dashboard select,
 .moderation-dashboard input[type="text"],
-.moderation-dashboard input[type="number"] {
+.moderation-dashboard input[type="number"],
+.moderation-dashboard textarea {
     width: 100%;
     min-height: 40px;
     padding: 9px 11px;
@@ -1059,9 +1083,15 @@
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
+.moderation-dashboard textarea {
+    min-height: 140px;
+    resize: vertical;
+}
+
 .moderation-dashboard select:focus,
 .moderation-dashboard input[type="text"]:focus,
-.moderation-dashboard input[type="number"]:focus {
+.moderation-dashboard input[type="number"]:focus,
+.moderation-dashboard textarea:focus {
     outline: none;
     border-color: rgba(141, 145, 255, 0.60);
     box-shadow: 0 0 0 3px rgba(111, 116, 255, 0.15);
@@ -1547,4 +1577,69 @@
 .moderation-table-wrap table th,
 .moderation-table-wrap table td {
     font-size: 12px;
+}
+
+
+.report-detail-grid,
+.report-workflow-grid {
+    display: grid;
+    gap: 14px;
+}
+
+.report-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.report-workflow-grid {
+    grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+}
+
+.report-form-shell {
+    display: grid;
+    gap: 14px;
+}
+
+.report-summary-list,
+.report-note-list {
+    display: grid;
+    gap: 12px;
+}
+
+.report-summary-item,
+.report-note-card {
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.report-summary-item {
+    display: grid;
+    gap: 6px;
+}
+
+.report-summary-item span,
+.report-note-updated,
+.report-note-meta span {
+    font-size: 12px;
+    color: #b9bfd7;
+}
+
+.report-summary-item strong,
+.report-note-meta strong {
+    color: #ffffff;
+}
+
+.report-note-meta {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.report-note-body {
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.6;
 }

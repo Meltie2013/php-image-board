@@ -57,6 +57,18 @@
         '.js-close-edit-image'
     );
 
+    // Report Image Modal
+    bindModal(
+        '.js-open-report-image',
+        '.js-report-image-overlay',
+        '.js-close-report-image',
+        function ()
+        {
+            const params = new URLSearchParams(window.location.search);
+            return (params.get('report') === 'invalid');
+        }
+    );
+
     // Comments Modal (supports auto-open from pagination)
     bindModal(
         '.js-open-comments',

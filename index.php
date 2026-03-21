@@ -221,6 +221,14 @@ $router->add([
     ['/panel/security/blocks/edit/(\d+)', function ($id) { ControlPanelController::blockEdit((int)$id); }, ['GET', 'POST']],
     ['/panel/security/blocks/remove/(\d+)', function ($id) { ControlPanelController::blockRemove((int)$id); }, ['POST']],
     ['/panel/security/blocks/remove-match', [ControlPanelController::class, 'blockRemoveMatch'], ['POST']],
+    ['/panel/image-reports', [ControlPanelController::class, 'imageReports'], ['GET']],
+    ['/panel/image-reports/page/(\d+)', [ControlPanelController::class, 'imageReports'], ['GET']],
+    ['/panel/image-reports/view', [ControlPanelController::class, 'imageReportView'], ['GET']],
+    ['/panel/image-reports/update/(\d+)', function ($id) { ControlPanelController::updateImageReport((int)$id); }, ['POST']],
+    ['/panel/image-reports/assign/(\d+)', function ($id) { ControlPanelController::assignImageReport((int)$id); }, ['POST']],
+    ['/panel/image-reports/release/(\d+)', function ($id) { ControlPanelController::releaseImageReport((int)$id); }, ['POST']],
+    ['/panel/image-reports/close/(\d+)', function ($id) { ControlPanelController::closeImageReport((int)$id); }, ['POST']],
+    ['/panel/image-reports/reopen/(\d+)', function ($id) { ControlPanelController::reopenImageReport((int)$id); }, ['POST']],
     ["/panel/image-pending/approve/$image_hash", function ($hash) { ControlPanelController::approveImage($hash); }, ['POST']],
     ["/panel/image-pending/approve/sensitive/$image_hash", function ($hash) { ControlPanelController::approveImageSensitive($hash); }, ['POST']],
     ["/panel/image-pending/reject/$image_hash", function ($hash) { ControlPanelController::rejectImage($hash); }, ['POST']],
@@ -234,6 +242,7 @@ $router->add([
     ["/gallery/$image_hash/upvote", function ($hash) { GalleryController::upvote($hash); }, ['POST']],
     ["/gallery/$image_hash/favorite", function ($hash) { GalleryController::favorite($hash); }, ['POST']],
     ["/gallery/$image_hash/comment", function ($hash) { GalleryController::comment($hash); }, ['POST']],
+    ["/gallery/$image_hash/report", function ($hash) { GalleryController::report($hash); }, ['POST']],
     ["/gallery/$image_hash/live", function ($hash) { GalleryController::live($hash); }, ['GET']],
 ]);
 

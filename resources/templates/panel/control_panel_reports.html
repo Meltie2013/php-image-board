@@ -1,0 +1,102 @@
+{include file="global/header.html"}
+
+    <main class="moderation-container">
+        <div class="moderation-shell moderation-layout">
+            <div class="moderation-sidebar">
+                <div class="moderation-sidebar-inner moderation-menu">
+                    {include file="panel/control_panel_menu.html"}
+                </div>
+            </div>
+
+            <div class="moderation-content moderation-dashboard">
+                <div class="moderation-page-header">
+                    <div>
+                        <div class="moderation-kicker">Control Panel</div>
+                        <h2>{$control_panel_page_title}</h2>
+                        <p>{$control_panel_page_description}</p>
+                    </div>
+
+                    <div class="moderation-page-actions">
+                        <a href="/panel/dashboard" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-gauge-high"></i> Dashboard</a>
+                        <a href="/panel/image-pending" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-clock"></i> Pending Queue</a>
+                    </div>
+                </div>
+
+                {if $report_notice_state == 'closed'}
+                <div class="moderation-notice moderation-notice-success" style="margin-bottom: 14px;">
+                    The report has been closed.
+                </div>
+                {else if $report_notice_state == 'reopened'}
+                <div class="moderation-notice moderation-notice-success" style="margin-bottom: 14px;">
+                    The report has been reopened and the image is back under review.
+                </div>
+                {/if}
+
+                <section class="moderation-panel">
+                    <div class="moderation-panel-heading">
+                        <div>
+                            <h3>Report Queue</h3>
+                            <p>{$report_total_count} report{if $report_total_count != 1}s{/if} total &middot; {$report_open_count} open &middot; {$report_closed_count} closed.</p>
+                        </div>
+                    </div>
+
+                    <div class="moderation-panel-body">
+                        {if empty($report_rows)}
+                        <div class="moderation-empty-state">
+                            <p>No image reports have been submitted yet.</p>
+                        </div>
+                        {else}
+                        <div class="pending-images-wrapper">
+                            <table class="pending-images-table">
+                                <thead>
+                                    <tr>
+                                        <th>Report #</th>
+                                        <th>Image Hash</th>
+                                        <th>Category</th>
+                                        <th>Summary</th>
+                                        <th>Reporter</th>
+                                        <th>Assigned To</th>
+                                        <th>Status</th>
+                                        <th>Submitted</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {foreach $report_rows as list($report_id, $image_hash, $report_category, $report_subject, $report_reporter, $report_assigned_to, $report_status, $report_status_class, $report_created_at, $report_view_url)}
+                                    <tr>
+                                        <td><a href="{$report_view_url}" class="admin-table-link">Report #{$report_id}</a></td>
+                                        <td class="is-wrap">{$image_hash}</td>
+                                        <td><span class="admin-pill">{$report_category}</span></td>
+                                        <td>{$report_subject}</td>
+                                        <td>{$report_reporter}</td>
+                                        <td>{$report_assigned_to}</td>
+                                        <td><span class="admin-status admin-status-{$report_status_class}">{$report_status}</span></td>
+                                        <td>{$report_created_at}</td>
+                                    </tr>
+                                    {/foreach}
+                                </tbody>
+                            </table>
+                        </div>
+
+                            {if $pagination_prev || $pagination_next}
+                            <div class="pending-pagination">
+                                {if $pagination_prev}
+                                <a href="{$pagination_prev}">Prev</a>
+                                {/if}
+
+                                {foreach $pagination_pages as list($page_url, $page_number, $current)}
+                                <a href="{$page_url}" class="{if $current}current{/if}">{$page_number}</a>
+                                {/foreach}
+
+                                {if $pagination_next}
+                                <a href="{$pagination_next}">Next</a>
+                                {/if}
+                            </div>
+                            {/if}
+                        {/if}
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+{include file="global/footer.html"}
