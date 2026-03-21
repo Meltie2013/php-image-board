@@ -4,7 +4,7 @@
         <h3>Control Panel</h3>
     </div>
 
-    <div class="admin-menu-group">
+    <div class="admin-menu-group admin-menu-group-overview">
         <span class="admin-menu-group-title">Overview</span>
         <div class="admin-menu-links">
             <a href="/panel/dashboard" class="admin-menu-link {if $current_control_panel_nav == 'dashboard'}is-active{/if}">
@@ -17,141 +17,189 @@
         </div>
     </div>
 
-    {if $cp_can_moderate_images}
-    <div class="admin-menu-group">
-        <span class="admin-menu-group-title">Image Queue</span>
-        <div class="admin-menu-links">
-            <a href="/panel/image-pending" class="admin-menu-link {if $current_control_panel_nav == 'pending'}is-active{/if}">
-                <span class="admin-menu-link-icon"><i class="fa-solid fa-clock"></i></span>
-                <span class="admin-menu-link-text">
-                    <span class="admin-menu-link-title">Pending</span>
-                    <span class="admin-menu-link-desc">Review uploaded images waiting for approval, sensitivity, or rejection.</span>
-                </span>
-            </a>
-
-            <a href="/panel/image-reports" class="admin-menu-link {if $current_control_panel_nav == 'reported'}is-active{/if}">
-                <span class="admin-menu-link-icon"><i class="fa-solid fa-flag"></i></span>
-                <span class="admin-menu-link-text">
-                    <span class="admin-menu-link-title">Reported</span>
-                    <span class="admin-menu-link-desc">Review image reports, investigate submissions, and close moderation tickets.</span>
-                </span>
-            </a>
-
-            <a href="#" class="admin-menu-link is-disabled" onclick="return false;">
-                <span class="admin-menu-link-icon"><i class="fa-solid fa-file-shield"></i></span>
-                <span class="admin-menu-link-text">
-                    <span class="admin-menu-link-title">DMCA Reports</span>
-                    <span class="admin-menu-link-desc">Reserved for takedown processing, rights review, and documentation.</span>
-                </span>
-            </a>
-        </div>
-    </div>
-
-    <div class="admin-menu-group">
-        <span class="admin-menu-group-title">Image Tools</span>
-        <div class="admin-menu-links">
-            <a href="/panel/image-comparison" class="admin-menu-link {if $current_control_panel_nav == 'comparison'}is-active{/if}">
-                <span class="admin-menu-link-icon"><i class="fa-solid fa-code-compare"></i></span>
-                <span class="admin-menu-link-text">
-                    <span class="admin-menu-link-title">Comparison</span>
-                    <span class="admin-menu-link-desc">Measure similarity between approved images before moderation decisions.</span>
-                </span>
-            </a>
-
-            {if $cp_can_rehash_images}
-            <a href="/panel/image-rehash" class="admin-menu-link {if $current_control_panel_nav == 'rehash'}is-active{/if}">
-                <span class="admin-menu-link-icon"><i class="fa-solid fa-arrows-rotate"></i></span>
-                <span class="admin-menu-link-text">
-                    <span class="admin-menu-link-title">Rehashing</span>
-                    <span class="admin-menu-link-desc">Rebuild aHash, pHash, and dHash values for approved image records.</span>
-                </span>
-            </a>
-            {/if}
-        </div>
-    </div>
-    {/if}
-
     {if $cp_can_manage_users}
-    <div class="admin-menu-group">
-        <span class="admin-menu-group-title">Accounts</span>
-        <div class="admin-menu-links">
-            <a href="/panel/users" class="admin-menu-link {if $current_control_panel_nav == 'users'}is-active{/if}">
-                <span class="admin-menu-link-icon"><i class="fa-solid fa-users"></i></span>
-                <span class="admin-menu-link-text">
-                    <span class="admin-menu-link-title">Users</span>
-                    <span class="admin-menu-link-desc">Review accounts, roles, statuses, and creation dates.</span>
-                </span>
-            </a>
+    <details class="admin-menu-dropdown" {if $current_control_panel_section == 'accounts'}open{/if}>
+        <summary class="admin-menu-dropdown-toggle">
+            <span class="admin-menu-dropdown-copy">
+                <span class="admin-menu-group-title admin-menu-dropdown-title">Accounts</span>
+                <span class="admin-menu-dropdown-desc">Account review, role assignment, and user provisioning tools.</span>
+            </span>
+            <span class="admin-menu-dropdown-icon" aria-hidden="true"><i class="fa-solid fa-chevron-down"></i></span>
+        </summary>
+        <div class="admin-menu-group admin-menu-group-dropdown">
+            <div class="admin-menu-links admin-menu-dropdown-links">
+                <a href="/panel/users/create" class="admin-menu-link {if $current_control_panel_nav == 'users_create'}is-active{/if}">
+                    <span class="admin-menu-link-icon"><i class="fa-solid fa-user-plus"></i></span>
+                    <span class="admin-menu-link-text">
+                        <span class="admin-menu-link-title">Create User</span>
+                        <span class="admin-menu-link-desc">Provision a new account with the proper permissions.</span>
+                    </span>
+                </a>
 
-            <a href="/panel/users/create" class="admin-menu-link {if $current_control_panel_nav == 'users_create'}is-active{/if}">
-                <span class="admin-menu-link-icon"><i class="fa-solid fa-user-plus"></i></span>
-                <span class="admin-menu-link-text">
-                    <span class="admin-menu-link-title">Create User</span>
-                    <span class="admin-menu-link-desc">Provision a new account with the proper permissions.</span>
-                </span>
-            </a>
+                <a href="/panel/users" class="admin-menu-link {if $current_control_panel_nav == 'users'}is-active{/if}">
+                    <span class="admin-menu-link-icon"><i class="fa-solid fa-users"></i></span>
+                    <span class="admin-menu-link-text">
+                        <span class="admin-menu-link-title">Users</span>
+                        <span class="admin-menu-link-desc">Review accounts, roles, statuses, and creation dates.</span>
+                    </span>
+                </a>
+            </div>
         </div>
-    </div>
+    </details>
     {/if}
+
+    <details class="admin-menu-dropdown">
+        <summary class="admin-menu-dropdown-toggle">
+            <span class="admin-menu-dropdown-copy">
+                <span class="admin-menu-group-title admin-menu-dropdown-title">Comments</span>
+                <span class="admin-menu-dropdown-desc">Reserved moderation space for future comment workflows.</span>
+            </span>
+            <span class="admin-menu-dropdown-icon" aria-hidden="true"><i class="fa-solid fa-chevron-down"></i></span>
+        </summary>
+        <div class="admin-menu-group admin-menu-group-dropdown">
+            <div class="admin-menu-links admin-menu-dropdown-links">
+                <a href="#" class="admin-menu-link is-disabled" onclick="return false;">
+                    <span class="admin-menu-link-icon"><i class="fa-solid fa-comment-dots"></i></span>
+                    <span class="admin-menu-link-text">
+                        <span class="admin-menu-link-title">Pending Comments</span>
+                        <span class="admin-menu-link-desc">Placeholder for future comment approval and escalation review.</span>
+                    </span>
+                </a>
+
+                <a href="#" class="admin-menu-link is-disabled" onclick="return false;">
+                    <span class="admin-menu-link-icon"><i class="fa-solid fa-comment-slash"></i></span>
+                    <span class="admin-menu-link-text">
+                        <span class="admin-menu-link-title">Reported Comments</span>
+                        <span class="admin-menu-link-desc">Placeholder for reported discussion moderation and enforcement.</span>
+                    </span>
+                </a>
+            </div>
+        </div>
+    </details>
 
     {if $cp_can_manage_settings}
-    <div class="admin-menu-group">
-        <span class="admin-menu-group-title">Configuration</span>
-        <div class="admin-menu-links">
-            <a href="/panel/settings" class="admin-menu-link {if $current_control_panel_nav == 'settings'}is-active{/if}">
-                <span class="admin-menu-link-icon"><i class="fa-solid fa-sliders"></i></span>
-                <span class="admin-menu-link-text">
-                    <span class="admin-menu-link-title">App Settings</span>
-                    <span class="admin-menu-link-desc">Manage configuration keys for gallery, forum, chat, and security.</span>
-                </span>
-            </a>
+    <details class="admin-menu-dropdown" {if $current_control_panel_section == 'configuration'}open{/if}>
+        <summary class="admin-menu-dropdown-toggle">
+            <span class="admin-menu-dropdown-copy">
+                <span class="admin-menu-group-title admin-menu-dropdown-title">Configuration</span>
+                <span class="admin-menu-dropdown-desc">Core gallery, integration, and behavior settings.</span>
+            </span>
+            <span class="admin-menu-dropdown-icon" aria-hidden="true"><i class="fa-solid fa-chevron-down"></i></span>
+        </summary>
+        <div class="admin-menu-group admin-menu-group-dropdown">
+            <div class="admin-menu-links admin-menu-dropdown-links">
+                <a href="/panel/settings" class="admin-menu-link {if $current_control_panel_nav == 'settings'}is-active{/if}">
+                    <span class="admin-menu-link-icon"><i class="fa-solid fa-sliders"></i></span>
+                    <span class="admin-menu-link-text">
+                        <span class="admin-menu-link-title">App Settings</span>
+                        <span class="admin-menu-link-desc">Manage configuration keys for gallery, forum, chat, and security.</span>
+                    </span>
+                </a>
+            </div>
         </div>
-    </div>
+    </details>
+    {/if}
+
+    {if $cp_can_moderate_images}
+    <details class="admin-menu-dropdown" {if $current_control_panel_section == 'queue'}open{/if}>
+        <summary class="admin-menu-dropdown-toggle">
+            <span class="admin-menu-dropdown-copy">
+                <span class="admin-menu-group-title admin-menu-dropdown-title">Image Queue</span>
+                <span class="admin-menu-dropdown-desc">Pending approvals, reports, and future takedown queues.</span>
+            </span>
+            <span class="admin-menu-dropdown-icon" aria-hidden="true"><i class="fa-solid fa-chevron-down"></i></span>
+        </summary>
+        <div class="admin-menu-group admin-menu-group-dropdown">
+            <div class="admin-menu-links admin-menu-dropdown-links">
+                <a href="#" class="admin-menu-link is-disabled" onclick="return false;">
+                    <span class="admin-menu-link-icon"><i class="fa-solid fa-file-shield"></i></span>
+                    <span class="admin-menu-link-text">
+                        <span class="admin-menu-link-title">DMCA Reports</span>
+                        <span class="admin-menu-link-desc">Reserved for takedown processing, rights review, and documentation.</span>
+                    </span>
+                </a>
+
+                <a href="/panel/image-pending" class="admin-menu-link {if $current_control_panel_nav == 'pending'}is-active{/if}">
+                    <span class="admin-menu-link-icon"><i class="fa-solid fa-clock"></i></span>
+                    <span class="admin-menu-link-text">
+                        <span class="admin-menu-link-title">Pending</span>
+                        <span class="admin-menu-link-desc">Review uploaded images waiting for approval, sensitivity, or rejection.</span>
+                    </span>
+                </a>
+
+                <a href="/panel/image-reports" class="admin-menu-link {if $current_control_panel_nav == 'reported'}is-active{/if}">
+                    <span class="admin-menu-link-icon"><i class="fa-solid fa-flag"></i></span>
+                    <span class="admin-menu-link-text">
+                        <span class="admin-menu-link-title">Reported</span>
+                        <span class="admin-menu-link-desc">Review image reports, investigate submissions, and close moderation tickets.</span>
+                    </span>
+                </a>
+            </div>
+        </div>
+    </details>
+
+    <details class="admin-menu-dropdown" {if $current_control_panel_section == 'tools'}open{/if}>
+        <summary class="admin-menu-dropdown-toggle">
+            <span class="admin-menu-dropdown-copy">
+                <span class="admin-menu-group-title admin-menu-dropdown-title">Image Tools</span>
+                <span class="admin-menu-dropdown-desc">Staff utilities for comparison and image hash maintenance.</span>
+            </span>
+            <span class="admin-menu-dropdown-icon" aria-hidden="true"><i class="fa-solid fa-chevron-down"></i></span>
+        </summary>
+        <div class="admin-menu-group admin-menu-group-dropdown">
+            <div class="admin-menu-links admin-menu-dropdown-links">
+                <a href="/panel/image-comparison" class="admin-menu-link {if $current_control_panel_nav == 'comparison'}is-active{/if}">
+                    <span class="admin-menu-link-icon"><i class="fa-solid fa-code-compare"></i></span>
+                    <span class="admin-menu-link-text">
+                        <span class="admin-menu-link-title">Comparison</span>
+                        <span class="admin-menu-link-desc">Measure similarity between approved images before moderation decisions.</span>
+                    </span>
+                </a>
+
+                {if $cp_can_rehash_images}
+                <a href="/panel/image-rehash" class="admin-menu-link {if $current_control_panel_nav == 'rehash'}is-active{/if}">
+                    <span class="admin-menu-link-icon"><i class="fa-solid fa-arrows-rotate"></i></span>
+                    <span class="admin-menu-link-text">
+                        <span class="admin-menu-link-title">Rehashing</span>
+                        <span class="admin-menu-link-desc">Rebuild aHash, pHash, and dHash values for approved image records.</span>
+                    </span>
+                </a>
+                {/if}
+            </div>
+        </div>
+    </details>
     {/if}
 
     {if $cp_can_view_security}
-    <div class="admin-menu-group">
-        <span class="admin-menu-group-title">Security</span>
-        <div class="admin-menu-links">
-            <a href="/panel/security/logs" class="admin-menu-link {if $current_control_panel_nav == 'security_logs'}is-active{/if}">
-                <span class="admin-menu-link-icon"><i class="fa-solid fa-shield-halved"></i></span>
-                <span class="admin-menu-link-text">
-                    <span class="admin-menu-link-title">Security Logs</span>
-                    <span class="admin-menu-link-desc">Inspect audit history, request traces, and event categories.</span>
-                </span>
-            </a>
+    <details class="admin-menu-dropdown" {if $current_control_panel_section == 'security'}open{/if}>
+        <summary class="admin-menu-dropdown-toggle">
+            <span class="admin-menu-dropdown-copy">
+                <span class="admin-menu-group-title admin-menu-dropdown-title">Security</span>
+                <span class="admin-menu-dropdown-desc">Audit trails, enforcement records, and platform protection tools.</span>
+            </span>
+            <span class="admin-menu-dropdown-icon" aria-hidden="true"><i class="fa-solid fa-chevron-down"></i></span>
+        </summary>
+        <div class="admin-menu-group admin-menu-group-dropdown">
+            <div class="admin-menu-links admin-menu-dropdown-links">
+                <a href="/panel/security/blocks" class="admin-menu-link {if $current_control_panel_nav == 'block_list'}is-active{/if}">
+                    <span class="admin-menu-link-icon"><i class="fa-solid fa-ban"></i></span>
+                    <span class="admin-menu-link-text">
+                        <span class="admin-menu-link-title">Block List</span>
+                        <span class="admin-menu-link-desc">Control bans, jails, rate-limits, and other enforcement records.</span>
+                    </span>
+                </a>
 
-            <a href="/panel/security/blocks" class="admin-menu-link {if $current_control_panel_nav == 'block_list'}is-active{/if}">
-                <span class="admin-menu-link-icon"><i class="fa-solid fa-ban"></i></span>
-                <span class="admin-menu-link-text">
-                    <span class="admin-menu-link-title">Block List</span>
-                    <span class="admin-menu-link-desc">Control bans, jails, rate-limits, and other enforcement records.</span>
-                </span>
-            </a>
+                <a href="/panel/security/logs" class="admin-menu-link {if $current_control_panel_nav == 'security_logs'}is-active{/if}">
+                    <span class="admin-menu-link-icon"><i class="fa-solid fa-shield-halved"></i></span>
+                    <span class="admin-menu-link-text">
+                        <span class="admin-menu-link-title">Security Logs</span>
+                        <span class="admin-menu-link-desc">Inspect audit history, request traces, and event categories.</span>
+                    </span>
+                </a>
+            </div>
         </div>
-    </div>
+    </details>
     {/if}
-
-    <div class="admin-menu-group">
-        <span class="admin-menu-group-title">Comments</span>
-        <div class="admin-menu-links">
-            <a href="#" class="admin-menu-link is-disabled" onclick="return false;">
-                <span class="admin-menu-link-icon"><i class="fa-solid fa-comment-dots"></i></span>
-                <span class="admin-menu-link-text">
-                    <span class="admin-menu-link-title">Pending Comments</span>
-                    <span class="admin-menu-link-desc">Placeholder for future comment approval and escalation review.</span>
-                </span>
-            </a>
-
-            <a href="#" class="admin-menu-link is-disabled" onclick="return false;">
-                <span class="admin-menu-link-icon"><i class="fa-solid fa-comment-slash"></i></span>
-                <span class="admin-menu-link-text">
-                    <span class="admin-menu-link-title">Reported Comments</span>
-                    <span class="admin-menu-link-desc">Placeholder for reported discussion moderation and enforcement.</span>
-                </span>
-            </a>
-        </div>
-    </div>
 
     <div class="admin-menu-footer">
     </div>
