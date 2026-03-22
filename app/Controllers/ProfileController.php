@@ -66,7 +66,15 @@ class ProfileController extends BaseController
         }
 
         $status = ucfirst(TypeHelper::toString($user['status'] ?? 'active') ?? 'Active');
-        $roleName = RoleHelper::getRoleNameById(TypeHelper::toInt($user['role_id'] ?? null));
+
+        $roleId = TypeHelper::toInt($user['role_id'] ?? null);
+        $roleName = null;
+        
+        if ($roleId !== null && $roleId > 0)
+        {
+            $roleName = RoleHelper::getRoleNameById($roleId);
+        }
+        
         $ageVerified = !empty($user['age_verified_at']) || !empty($user['date_of_birth']);
 
         $template->assign('profile_username', ucfirst($username));
@@ -331,7 +339,10 @@ class ProfileController extends BaseController
 
         if (!$user)
         {
-            $errors[] = "User not found.";
+            SessionManager::destroy();
+            RedirectHelper::rememberLoginDestination();
+            header('Location: /user/login');
+            exit();
         }
 
         // Handle form submission
