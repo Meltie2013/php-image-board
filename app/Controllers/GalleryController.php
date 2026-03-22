@@ -267,10 +267,7 @@ class GalleryController extends BaseController
         // Fetch logged-in user's DOB and verification status if available
         if ($userId > 0)
         {
-            $currentUser = Database::fetch(
-                "SELECT date_of_birth, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
-                [':id' => $userId]
-            );
+            $currentUser = UserModel::findAgeVerificationById($userId);
         }
 
         $requiredYears = TypeHelper::toInt($config['profile']['years'] ?? 0) ?? 0;
@@ -299,8 +296,7 @@ class GalleryController extends BaseController
             $where .= " AND age_sensitive = 0";
         }
 
-        $countRow = Database::fetch("SELECT COUNT(*) AS total FROM app_images {$where}", $params);
-        $totalImages = TypeHelper::toInt($countRow['total'] ?? 0) ?? 0;
+        $totalImages = ImageModel::countGalleryImages($canViewAgeSensitive);
         $totalPages = max(1, (int)ceil($totalImages / $limit));
         if ($page > $totalPages)
         {
@@ -309,22 +305,7 @@ class GalleryController extends BaseController
 
         $offset = ($page - 1) * $limit;
 
-        $sql = "SELECT image_hash, original_path, mime_type, age_sensitive, created_at, views
-                FROM app_images
-                {$where}
-                ORDER BY created_at DESC
-                LIMIT :limit OFFSET :offset";
-
-        $stmt = Database::getPDO()->prepare($sql);
-        foreach ($params as $key => $value)
-        {
-            $stmt->bindValue($key, $value);
-        }
-
-        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-        $stmt->execute();
-        $pageImages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $pageImages = ImageModel::fetchGalleryPage($canViewAgeSensitive, $limit, $offset);
 
         $galleryPageToken = GalleryPageTokenStore::issue(
             $pageImages,
@@ -468,57 +449,10 @@ class GalleryController extends BaseController
 
         if ($userId > 0)
         {
-            $currentUser = Database::fetch("SELECT date_of_birth, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
-                [':id' => $userId]
-            );
+            $currentUser = UserModel::findAgeVerificationById($userId);
         }
 
-        $img = Database::fetch("
-            SELECT
-                i.id,
-                i.user_id,
-                i.image_hash,
-                i.status,
-                i.description,
-                i.age_sensitive,
-                i.created_at,
-                i.mime_type,
-                i.width,
-                i.height,
-                i.size_bytes,
-                i.md5,
-                i.sha1,
-                i.sha256,
-                i.sha512,
-                i.reject_reason,
-                COALESCE(v.votes, 0) AS votes,
-                COALESCE(f.favorites, 0) AS favorites,
-                COALESCE(r.open_reports, 0) AS open_reports,
-                i.views,
-                u.date_of_birth,
-                u.age_verified_at
-            FROM app_images i
-            LEFT JOIN app_users u ON i.user_id = u.id
-            LEFT JOIN (
-                SELECT image_id, COUNT(*) AS favorites
-                FROM app_image_favorites
-                GROUP BY image_id
-            ) f ON i.id = f.image_id
-            LEFT JOIN (
-                SELECT image_id, COUNT(*) AS votes
-                FROM app_image_votes
-                GROUP BY image_id
-            ) v ON i.id = v.image_id
-            LEFT JOIN (
-                SELECT image_id, COUNT(*) AS open_reports
-                FROM app_image_reports
-                WHERE status = 'open'
-                GROUP BY image_id
-            ) r ON i.id = r.image_id
-            WHERE i.image_hash = :hash
-            AND i.status = 'approved'
-            LIMIT 1
-        ", [':hash' => $hash]);
+        $img = ImageModel::findApprovedGalleryImageByHash($hash);
 
         if (!$img)
         {
@@ -561,7 +495,7 @@ class GalleryController extends BaseController
         $imgHash = TypeHelper::toString($img['image_hash'] ?? null, allowEmpty: false) ?? '';
         if ($imgHash !== '' && !in_array($imgHash, $viewedImages, true))
         {
-            Database::execute("UPDATE app_images SET views = views + 1 WHERE id = :id LIMIT 1", [':id' => $imageId]);
+            ImageModel::incrementViews($imageId);
             ControlServer::bumpImageLiveTick($config, $imgHash);
 
             $viewedImages[] = $imgHash;
@@ -598,27 +532,17 @@ class GalleryController extends BaseController
         $hasVoted = false;
         if ($userId > 0)
         {
-            $voted = Database::fetch("SELECT 1 FROM app_image_votes WHERE user_id = :user_id AND image_id = :image_id LIMIT 1",
-                [':user_id' => $userId, ':image_id' => $imageId]
-            );
-            $hasVoted = TypeHelper::rowExists($voted);
+            $hasVoted = ImageModel::hasUserVote($userId, $imageId);
         }
 
         $hasFavorited = false;
         if ($userId > 0)
         {
-            $favorited = Database::fetch("SELECT 1 FROM app_image_favorites WHERE user_id = :user_id AND image_id = :image_id LIMIT 1",
-                [':user_id' => $userId, ':image_id' => $imageId]
-            );
-            $hasFavorited = TypeHelper::rowExists($favorited);
+            $hasFavorited = ImageModel::hasUserFavorite($userId, $imageId);
         }
 
         // Fetch comments count (pagination)
-        $commentCountRow = Database::fetch("SELECT COUNT(*) AS count FROM app_image_comments WHERE image_id = :image_id AND is_deleted = 0",
-            [':image_id' => $imageId]
-        );
-
-        $commentCount = TypeHelper::toInt($commentCountRow['count']) ?? 0;
+        $commentCount = ImageModel::countVisibleComments($imageId);
         $commentsTotalPages = (int)ceil($commentCount / $commentsPerPage);
 
         if ($commentsTotalPages < 1)
@@ -633,10 +557,7 @@ class GalleryController extends BaseController
 
         $commentsOffset = ($commentsPage - 1) * $commentsPerPage;
 
-        $comments = Database::fetchAll( "SELECT c.comment_body, c.created_at, u.username FROM app_image_comments c LEFT JOIN app_users u ON c.user_id = u.id
-              WHERE c.image_id = :image_id AND c.is_deleted = 0 ORDER BY c.created_at DESC LIMIT {$commentsPerPage} OFFSET {$commentsOffset}",
-            [':image_id' => $imageId]
-        );
+        $comments = ImageModel::fetchVisibleCommentsPage($imageId, $commentsPerPage, $commentsOffset);
 
         $commentRows = [];
         foreach ($comments as $row)
@@ -657,11 +578,7 @@ class GalleryController extends BaseController
             $imgUserId = TypeHelper::toInt($img['user_id']) ?? 0;
             $isOwner = ($imgUserId === $appUserId);
 
-            $userRole = Database::fetch("SELECT role_id FROM app_users WHERE id = :id LIMIT 1",
-                [':id' => $appUserId]
-            );
-
-            $roleId = TypeHelper::toInt($userRole['role_id']) ?? 0;
+            $roleId = UserModel::getRoleIdByUserId($appUserId);
             $roleName = RoleHelper::getRoleNameById($roleId);
             $isStaff = in_array($roleName, ['administrator', 'moderator'], true);
 
@@ -834,18 +751,7 @@ class GalleryController extends BaseController
      */
     private static function getLiveInteractionState(int $imageId, int $userId = 0): array
     {
-        $stats = Database::fetch(
-            "SELECT
-                i.image_hash,
-                i.views,
-                (SELECT COUNT(*) FROM app_image_votes WHERE image_id = i.id) AS votes,
-                (SELECT COUNT(*) FROM app_image_favorites WHERE image_id = i.id) AS favorites,
-                (SELECT COUNT(*) FROM app_image_comments WHERE image_id = i.id AND is_deleted = 0) AS comments
-             FROM app_images i
-             WHERE i.id = :image_id
-             LIMIT 1",
-            [':image_id' => $imageId]
-        );
+        $stats = ImageModel::getInteractionStatsByImageId($imageId);
 
         if (!$stats)
         {
@@ -856,15 +762,8 @@ class GalleryController extends BaseController
         $hasFavorited = false;
         if ($userId > 0)
         {
-            $hasVoted = TypeHelper::rowExists(Database::fetch(
-                "SELECT 1 FROM app_image_votes WHERE user_id = :user_id AND image_id = :image_id LIMIT 1",
-                [':user_id' => $userId, ':image_id' => $imageId]
-            ));
-
-            $hasFavorited = TypeHelper::rowExists(Database::fetch(
-                "SELECT 1 FROM app_image_favorites WHERE user_id = :user_id AND image_id = :image_id LIMIT 1",
-                [':user_id' => $userId, ':image_id' => $imageId]
-            ));
+            $hasVoted = ImageModel::hasUserVote($userId, $imageId);
+            $hasFavorited = ImageModel::hasUserFavorite($userId, $imageId);
         }
 
         $votes = TypeHelper::toInt($stats['votes'] ?? null) ?? 0;
@@ -921,8 +820,7 @@ class GalleryController extends BaseController
             return;
         }
 
-        $image = Database::fetch("SELECT id FROM app_images WHERE image_hash = :hash AND status = 'approved' LIMIT 1", [':hash' => $hash]);
-        $imageId = TypeHelper::toInt($image['id'] ?? null) ?? 0;
+        $imageId = ImageModel::findApprovedImageIdByHash($hash);
         if ($imageId < 1)
         {
             self::sendJsonResponse(false, 'Image not found.', [], 404);
@@ -1004,10 +902,7 @@ class GalleryController extends BaseController
             return;
         }
 
-        $img = Database::fetch(
-            "SELECT id, user_id, image_hash FROM app_images WHERE image_hash = :hash LIMIT 1",
-            [':hash' => $hash]
-        );
+        $img = ImageModel::findEditableImageByHash($hash);
 
         if (!$img)
         {
@@ -1020,9 +915,7 @@ class GalleryController extends BaseController
         $description = TypeHelper::toString($_POST['description'] ?? null, allowEmpty: true) ?? '';
         $description = TypeHelper::toString($description); // todo: this line might not be needed
 
-        Database::execute("UPDATE app_images SET description = :description, updated_at = NOW() WHERE image_hash = :image_hash LIMIT 1",
-            [':description' => $description, ':image_hash' => $image]
-        );
+        ImageModel::updateDescriptionByHash($image, $description);
 
         ControlServer::bumpImageLiveTick(self::getConfig(), $hash);
 
@@ -1088,18 +981,8 @@ class GalleryController extends BaseController
         }
 
         // Find the image by hash
-        $image = Database::fetch("SELECT id FROM app_images WHERE image_hash = :hash LIMIT 1", [':hash' => $hash]);
+        $imageId = ImageModel::findImageIdByHash($hash);
 
-        if (!$image)
-        {
-            $template->assign('title', "Favorite Failed");
-            $template->assign('message', "The image you attempted to favorite does not exist.");
-            $template->assign('link', null);
-            $template->render('errors/error_page.html');
-            return;
-        }
-
-        $imageId = TypeHelper::toInt($image['id'] ?? null) ?? 0;
         if ($imageId < 1)
         {
             $template->assign('title', "Favorite Failed");
@@ -1110,12 +993,7 @@ class GalleryController extends BaseController
         }
 
         // Check if user already favorited
-        $existing = Database::fetch(
-            "SELECT 1 FROM app_image_favorites WHERE user_id = :user_id AND image_id = :image_id LIMIT 1",
-            [':user_id' => $userId, ':image_id' => $imageId]
-        );
-
-        if (TypeHelper::rowExists($existing))
+        if (ImageModel::hasUserFavorite($userId, $imageId))
         {
             if (self::wantsJsonResponse())
             {
@@ -1127,10 +1005,7 @@ class GalleryController extends BaseController
         }
 
         // Insert favorite
-        Database::execute(
-            "INSERT INTO app_image_favorites (user_id, image_id) VALUES (:user_id, :image_id)",
-            [':user_id' => $userId, ':image_id' => $imageId]
-        );
+        ImageModel::insertFavorite($userId, $imageId);
 
         ControlServer::bumpImageLiveTick(self::getConfig(), $hash);
 
@@ -1204,18 +1079,8 @@ class GalleryController extends BaseController
         }
 
         // Find the image by hash
-        $image = Database::fetch("SELECT id FROM app_images WHERE image_hash = :hash LIMIT 1", [':hash' => $hash]);
+        $imageId = ImageModel::findImageIdByHash($hash);
 
-        if (!$image)
-        {
-            $template->assign('title', "Upvote Failed");
-            $template->assign('message', "The image you attempted to upvote does not exist.");
-            $template->assign('link', null);
-            $template->render('errors/error_page.html');
-            return;
-        }
-
-        $imageId = TypeHelper::toInt($image['id'] ?? null) ?? 0;
         if ($imageId < 1)
         {
             $template->assign('title', "Upvote Failed");
@@ -1226,12 +1091,7 @@ class GalleryController extends BaseController
         }
 
         // Check if user already voted
-        $existing = Database::fetch(
-            "SELECT 1 FROM app_image_votes WHERE user_id = :user_id AND image_id = :image_id LIMIT 1",
-            [':user_id' => $userId, ':image_id' => $imageId]
-        );
-
-        if (TypeHelper::rowExists($existing))
+        if (ImageModel::hasUserVote($userId, $imageId))
         {
             if (self::wantsJsonResponse())
             {
@@ -1243,10 +1103,7 @@ class GalleryController extends BaseController
         }
 
         // Insert vote
-        Database::execute(
-            "INSERT INTO app_image_votes (user_id, image_id) VALUES (:user_id, :image_id)",
-            [':user_id' => $userId, ':image_id' => $imageId]
-        );
+        ImageModel::insertVote($userId, $imageId);
 
         ControlServer::bumpImageLiveTick(self::getConfig(), $hash);
 
@@ -1315,18 +1172,7 @@ class GalleryController extends BaseController
             exit;
         }
 
-        $image = Database::fetch(
-            "SELECT id FROM app_images WHERE image_hash = :hash AND status = 'approved' LIMIT 1",
-            [':hash' => $hash]
-        );
-
-        if (!$image)
-        {
-            self::renderImageNotFound($template);
-            return;
-        }
-
-        $imageId = TypeHelper::toInt($image['id'] ?? null) ?? 0;
+        $imageId = ImageModel::findApprovedImageIdByHash($hash);
         if ($imageId < 1)
         {
             self::renderImageNotFound($template);
@@ -1338,22 +1184,7 @@ class GalleryController extends BaseController
         $ip = inet_pton($_SERVER['REMOTE_ADDR'] ?? '') ?: null;
         $userAgent = TypeHelper::toString($_SERVER['HTTP_USER_AGENT'] ?? '', allowEmpty: true) ?? '';
 
-        $duplicateSql = "SELECT id
-            FROM app_image_reports
-            WHERE image_id = :image_id
-            AND status = 'open'
-            AND ((reporter_user_id IS NOT NULL AND reporter_user_id = :reporter_user_id)
-                OR (:session_id_check != '' AND session_id = :session_id_match))
-            LIMIT 1";
-
-        $duplicate = Database::fetch($duplicateSql, [
-            ':image_id' => $imageId,
-            ':reporter_user_id' => $userId > 0 ? $userId : null,
-            ':session_id_check' => $sessionId,
-            ':session_id_match' => $sessionId,
-        ]);
-
-        if ($duplicate)
+        if (ImageReportModel::hasOpenDuplicate($imageId, $userId > 0 ? $userId : null, $sessionId))
         {
             header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null, ['report' => 'exists']));
             exit;
@@ -1364,22 +1195,16 @@ class GalleryController extends BaseController
             $subject = ImageReportHelper::categoryLabel($category);
         }
 
-        Database::execute(
-            "INSERT INTO app_image_reports
-                (image_id, reporter_user_id, report_category, report_subject, report_message, status, session_id, ip, ua, created_at, updated_at)
-             VALUES
-                (:image_id, :reporter_user_id, :report_category, :report_subject, :report_message, 'open', :session_id, :ip, :ua, NOW(), NOW())",
-            [
-                ':image_id' => $imageId,
-                ':reporter_user_id' => $userId > 0 ? $userId : null,
-                ':report_category' => $category,
-                ':report_subject' => $subject,
-                ':report_message' => $message,
-                ':session_id' => $sessionId !== '' ? $sessionId : null,
-                ':ip' => $ip,
-                ':ua' => $userAgent !== '' ? $userAgent : null,
-            ]
-        );
+        ImageReportModel::create([
+            ':image_id' => $imageId,
+            ':reporter_user_id' => $userId > 0 ? $userId : null,
+            ':report_category' => $category,
+            ':report_subject' => $subject,
+            ':report_message' => $message,
+            ':session_id' => $sessionId !== '' ? $sessionId : null,
+            ':ip' => $ip,
+            ':ua' => $userAgent !== '' ? $userAgent : null,
+        ]);
 
         header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null, ['report' => 'submitted']));
         exit;
@@ -1451,17 +1276,7 @@ class GalleryController extends BaseController
         }
 
         // Find the approved image by hash
-        $image = Database::fetch("SELECT id FROM app_images WHERE image_hash = :hash AND status = 'approved' LIMIT 1",
-            [':hash' => $hash]
-        );
-
-        if (!$image)
-        {
-            self::renderImageNotFound($template);
-            return;
-        }
-
-        $imageId = TypeHelper::toInt($image['id'] ?? null) ?? 0;
+        $imageId = ImageModel::findApprovedImageIdByHash($hash);
         if ($imageId < 1)
         {
             self::renderImageNotFound($template);
@@ -1469,15 +1284,7 @@ class GalleryController extends BaseController
         }
 
         // Insert comment
-        Database::execute(
-            "INSERT INTO app_image_comments (image_id, user_id, comment_body)
-             VALUES (:image_id, :user_id, :comment_body)",
-            [
-                ':image_id' => $imageId,
-                ':user_id' => $userId,
-                ':comment_body' => $commentBody
-            ]
-        );
+        ImageModel::insertComment($imageId, $userId, $commentBody);
 
         ControlServer::bumpImageLiveTick(self::getConfig(), $hash);
 
@@ -1629,22 +1436,11 @@ class GalleryController extends BaseController
         // Fetch current user data for age-sensitive checks
         if ($userId > 0)
         {
-            $currentUser = Database::fetch("SELECT date_of_birth, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
-                [':id' => $userId]
-            );
+            $currentUser = UserModel::findAgeVerificationById($userId);
         }
 
         // Fetch image metadata from the database
-        $sql = "SELECT
-                original_path,
-                mime_type,
-                age_sensitive
-            FROM app_images
-            WHERE image_hash = :hash
-            AND status = 'approved'
-            LIMIT 1";
-
-        $image = Database::fetch($sql, [':hash' => $hash]);
+        $image = ImageModel::findApprovedServableImageByHash($hash);
         if (!$image)
         {
             self::renderImageNotFound($template);

@@ -227,15 +227,7 @@ class ControlPanelController extends BaseController
 
         try
         {
-            $rows = Database::fetchAll(
-                "SELECT DISTINCT u.id, u.username
-                 FROM app_user_devices d
-                 INNER JOIN app_users u ON u.id = d.user_id
-                 WHERE " . implode(' OR ', $where) . "
-                 ORDER BY u.username ASC
-                 LIMIT 25",
-                $params
-            );
+            $rows = SecurityLogModel::findLinkedUsers($deviceFingerprint, $browserFingerprint);
         }
         catch (Throwable $e)
         {
@@ -291,8 +283,7 @@ class ControlPanelController extends BaseController
         {
             try
             {
-                $row = Database::fetch("SELECT COUNT(*) AS total FROM app_users WHERE status != 'deleted'") ?? [];
-                $totalUsers = TypeHelper::toInt($row['total'] ?? 0) ?? 0;
+                $totalUsers = UserModel::countNonDeletedUsers();
             }
             catch (Throwable $e)
             {
@@ -301,8 +292,7 @@ class ControlPanelController extends BaseController
 
             try
             {
-                $row = Database::fetch("SELECT COUNT(*) AS total FROM app_block_list WHERE expires_at IS NULL OR expires_at > NOW()") ?? [];
-                $activeBlocks = TypeHelper::toInt($row['total'] ?? 0) ?? 0;
+                $activeBlocks = BlockListModel::countActive();
             }
             catch (Throwable $e)
             {
@@ -311,7 +301,7 @@ class ControlPanelController extends BaseController
 
             try
             {
-                $rows = Database::fetchAll("SELECT id, user_id, category, message, created_at FROM app_security_logs ORDER BY id DESC LIMIT 5");
+                $rows = SecurityLogModel::listRecent(5);
                 foreach ($rows as $r)
                 {
                     $recentLogs[] = [
@@ -328,21 +318,14 @@ class ControlPanelController extends BaseController
             }
         }
 
-        $totalImagesResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status IN ('approved', 'pending', 'deleted', 'rejected')");
-        $approvedCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'approved'");
-        $pendingCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'pending'");
-        $openReportsResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_image_reports WHERE status = 'open'");
-        $removedCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'deleted'");
-        $rejectedCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'rejected'");
-        $viewsCountResult = Database::fetch("SELECT COALESCE(SUM(views), 0) AS total_views FROM app_images WHERE status = 'approved';");
-
-        $totalImages = TypeHelper::toInt($totalImagesResult['cnt'] ?? null) ?? 0;
-        $approvedCount = TypeHelper::toInt($approvedCountResult['cnt'] ?? null) ?? 0;
-        $pendingCount = TypeHelper::toInt($pendingCountResult['cnt'] ?? null) ?? 0;
-        $openReportsCount = TypeHelper::toInt($openReportsResult['cnt'] ?? null) ?? 0;
-        $removedCount = TypeHelper::toInt($removedCountResult['cnt'] ?? null) ?? 0;
-        $rejectedCount = TypeHelper::toInt($rejectedCountResult['cnt'] ?? null) ?? 0;
-        $combinedCount = TypeHelper::toInt($viewsCountResult['total_views'] ?? null) ?? 0;
+        $imageCounts = ImageModel::getDashboardCounts();
+        $totalImages = TypeHelper::toInt($imageCounts['total'] ?? 0) ?? 0;
+        $approvedCount = TypeHelper::toInt($imageCounts['approved'] ?? 0) ?? 0;
+        $pendingCount = TypeHelper::toInt($imageCounts['pending'] ?? 0) ?? 0;
+        $openReportsCount = ImageReportModel::countOpen();
+        $removedCount = TypeHelper::toInt($imageCounts['removed'] ?? 0) ?? 0;
+        $rejectedCount = TypeHelper::toInt($imageCounts['rejected'] ?? 0) ?? 0;
+        $combinedCount = TypeHelper::toInt($imageCounts['views'] ?? 0) ?? 0;
 
         $storageUsed = StorageHelper::getUsedStorageReadable();
         $storageRemaining = StorageHelper::getRemainingStorageReadable();
@@ -393,13 +376,7 @@ class ControlPanelController extends BaseController
 
         $template = self::initTemplate();
 
-        $rows = Database::fetchAll(
-            "SELECT u.id, u.username, u.display_name, u.email, u.status, u.created_at, r.name AS role_name
-             FROM app_users u
-             INNER JOIN app_roles r ON u.role_id = r.id
-             WHERE u.status != 'deleted'
-             ORDER BY u.id ASC"
-        );
+        $rows = UserModel::listPanelUsers();
 
         $users = [];
         foreach ($rows as $u)
@@ -414,7 +391,7 @@ class ControlPanelController extends BaseController
             ];
         }
 
-        $roleRows = Database::fetchAll("SELECT id, name FROM app_roles ORDER BY id ASC");
+        $roleRows = UserModel::listRoles();
         $roles = [];
         foreach ($roleRows as $r)
         {
@@ -484,18 +461,7 @@ class ControlPanelController extends BaseController
 
                 try
                 {
-                    Database::query(
-                        "INSERT INTO app_users (role_id, username, display_name, email, password_hash, status, created_at, updated_at)
-                         VALUES (:role, :username, :display, :email, :hash, :status, NOW(), NOW())",
-                        [
-                            'role' => $roleId,
-                            'username' => $username,
-                            'display' => $display !== '' ? $display : null,
-                            'email' => $email,
-                            'hash' => $hash,
-                            'status' => $status,
-                        ]
-                    );
+                    UserModel::createPanelUser($roleId, $username, $display !== '' ? $display : null, $email, $hash, $status);
 
                     $success = 'User created.';
                 }
@@ -507,7 +473,7 @@ class ControlPanelController extends BaseController
         }
 
         $template = self::initTemplate();
-        $roleRows = Database::fetchAll("SELECT id, name FROM app_roles ORDER BY id ASC");
+        $roleRows = UserModel::listRoles();
         $roles = [];
         foreach ($roleRows as $r)
         {
@@ -548,13 +514,7 @@ class ControlPanelController extends BaseController
         $errors = [];
         $success = '';
 
-        $user = Database::fetch(
-            "SELECT u.id, u.role_id, u.username, u.display_name, u.email, u.status, r.name AS role_name
-             FROM app_users u
-             INNER JOIN app_roles r ON u.role_id = r.id
-             WHERE u.id = :id LIMIT 1",
-            ['id' => $id]
-        );
+        $user = UserModel::findPanelUserById($id);
 
         if (!$user)
         {
@@ -595,35 +555,16 @@ class ControlPanelController extends BaseController
             {
                 try
                 {
-                    Database::query(
-                        "UPDATE app_users SET role_id = :role, username = :username, display_name = :display, email = :email, status = :status, updated_at = NOW()
-                         WHERE id = :id",
-                        [
-                            'role' => $roleId,
-                            'username' => $username,
-                            'display' => $display !== '' ? $display : null,
-                            'email' => $email,
-                            'status' => $status,
-                            'id' => $id,
-                        ]
-                    );
+                    UserModel::updatePanelUser($id, $roleId, $username, $display !== '' ? $display : null, $email, $status);
 
                     if ($password !== '')
                     {
                         $hash = Security::hashPassword($password);
-                        Database::query("UPDATE app_users SET password_hash = :hash WHERE id = :id",
-                            ['hash' => $hash, 'id' => $id]
-                        );
+                        UserModel::updatePasswordHash($id, $hash);
                     }
 
                     $success = 'User updated.';
-                    $user = Database::fetch(
-                        "SELECT u.id, u.role_id, u.username, u.display_name, u.email, u.status, r.name AS role_name
-                         FROM app_users u
-                         INNER JOIN app_roles r ON u.role_id = r.id
-                         WHERE u.id = :id LIMIT 1",
-                        ['id' => $id]
-                    );
+                    $user = UserModel::findPanelUserById($id);
                 }
                 catch (Throwable $e)
                 {
@@ -633,7 +574,7 @@ class ControlPanelController extends BaseController
         }
 
         $template = self::initTemplate();
-        $roleRows = Database::fetchAll("SELECT id, name FROM app_roles ORDER BY id ASC");
+        $roleRows = UserModel::listRoles();
         $roles = [];
         foreach ($roleRows as $r)
         {
@@ -863,11 +804,7 @@ class ControlPanelController extends BaseController
             ];
         }
 
-        $categoryRows = Database::fetchAll(
-            "SELECT `id`, `slug`, `title`, `description`, `icon`, `sort_order`, `is_system`, `updated_at`
-             FROM app_settings_categories
-             ORDER BY `sort_order` ASC, `title` ASC"
-        );
+        $categoryRows = SettingsModel::listCategories();
 
         $categoryIdMap = [];
         foreach ($categoryRows as $row)
@@ -891,13 +828,7 @@ class ControlPanelController extends BaseController
             ];
         }
 
-        $settingsRows = Database::fetchAll(
-            "SELECT d.`id`, d.`category_id`, d.`key`, d.`title`, d.`description`, d.`value`, d.`type`, d.`input_type`, d.`sort_order`, d.`is_system`, d.`updated_at`,
-                    c.`slug` AS category_slug
-             FROM app_settings_data d
-             LEFT JOIN app_settings_categories c ON c.`id` = d.`category_id`
-             ORDER BY COALESCE(c.`sort_order`, 9999) ASC, d.`sort_order` ASC, d.`title` ASC"
-        );
+        $settingsRows = SettingsModel::listSettingRows();
 
         $rowMap = [];
         foreach ($settingsRows as $row)
@@ -1294,7 +1225,7 @@ class ControlPanelController extends BaseController
 
         $definitionCatalog = self::getSettingsDefinitionCatalog();
         $builtInDefinition = $definitionCatalog[$key] ?? null;
-        $existing = Database::fetch("SELECT * FROM app_settings_data WHERE `key` = :key LIMIT 1", ['key' => $key]);
+        $existing = SettingsModel::findSettingByKey($key);
 
         if ($builtInDefinition !== null)
         {
@@ -1328,30 +1259,17 @@ class ControlPanelController extends BaseController
             exit();
         }
 
-        Database::query(
-            "INSERT INTO app_settings_data (`category_id`, `key`, `title`, `description`, `value`, `type`, `input_type`, `sort_order`, `is_system`)
-             VALUES (:category_id, :key_name, :title, :description, :value_data, :type_name, :input_type, :sort_order, :is_system)
-             ON DUPLICATE KEY UPDATE
-                `category_id` = VALUES(`category_id`),
-                `title` = VALUES(`title`),
-                `description` = VALUES(`description`),
-                `value` = VALUES(`value`),
-                `type` = VALUES(`type`),
-                `input_type` = VALUES(`input_type`),
-                `sort_order` = VALUES(`sort_order`),
-                `is_system` = VALUES(`is_system`)",
-            [
-                'category_id' => $categoryId,
-                'key_name' => $key,
-                'title' => $title,
-                'description' => $description,
-                'value_data' => $normalized['value'],
-                'type_name' => $type,
-                'input_type' => $inputType,
-                'sort_order' => $sortOrder,
-                'is_system' => $isSystem,
-            ]
-        );
+        SettingsModel::upsertSetting([
+            'category_id' => $categoryId,
+            'key_name' => $key,
+            'title' => $title,
+            'description' => $description,
+            'value_data' => $normalized['value'],
+            'type_name' => $type,
+            'input_type' => $inputType,
+            'sort_order' => $sortOrder,
+            'is_system' => $isSystem,
+        ]);
 
         header('Location: ' . self::buildSettingsCategoryUrl($category) . '?notice=saved');
         exit();
@@ -1421,12 +1339,11 @@ class ControlPanelController extends BaseController
             exit();
         }
 
-        $existing = Database::fetch("SELECT `id`, `sort_order`, `is_system` FROM app_settings_categories WHERE `slug` = :slug LIMIT 1", ['slug' => $category]);
+        $existing = SettingsModel::findCategoryBySlug($category);
         $sortOrder = TypeHelper::toInt($existing['sort_order'] ?? ($baseMeta['sort_order'] ?? 0)) ?? 0;
         if ($sortOrder <= 0)
         {
-            $maxSort = Database::fetch("SELECT COALESCE(MAX(`sort_order`), 0) AS sort_order FROM app_settings_categories");
-            $sortOrder = (TypeHelper::toInt($maxSort['sort_order'] ?? 0) ?? 0) + 10;
+            $sortOrder = SettingsModel::getNextCategorySortOrder();
         }
 
         if (!empty($existing['is_system']))
@@ -1434,24 +1351,14 @@ class ControlPanelController extends BaseController
             $isSystem = 1;
         }
 
-        Database::query(
-            "INSERT INTO app_settings_categories (`slug`, `title`, `description`, `icon`, `sort_order`, `is_system`)
-             VALUES (:slug, :title, :description, :icon, :sort_order, :is_system)
-             ON DUPLICATE KEY UPDATE
-                `title` = VALUES(`title`),
-                `description` = VALUES(`description`),
-                `icon` = VALUES(`icon`),
-                `sort_order` = VALUES(`sort_order`),
-                `is_system` = VALUES(`is_system`)",
-            [
-                'slug' => $category,
-                'title' => $title,
-                'description' => $description,
-                'icon' => $icon,
-                'sort_order' => $sortOrder,
-                'is_system' => $isSystem,
-            ]
-        );
+        SettingsModel::upsertCategory([
+            'slug' => $category,
+            'title' => $title,
+            'description' => $description,
+            'icon' => $icon,
+            'sort_order' => $sortOrder,
+            'is_system' => $isSystem,
+        ]);
 
         header('Location: ' . $redirectBase . '?notice=category_saved');
         exit();
@@ -1500,30 +1407,20 @@ class ControlPanelController extends BaseController
         if ($isSystemCategory)
         {
             $baseMeta = $baseCategoryCatalog[$category];
-            Database::query(
-                "INSERT INTO app_settings_categories (`slug`, `title`, `description`, `icon`, `sort_order`, `is_system`)
-                 VALUES (:slug, :title, :description, :icon, :sort_order, :is_system)
-                 ON DUPLICATE KEY UPDATE
-                    `title` = VALUES(`title`),
-                    `description` = VALUES(`description`),
-                    `icon` = VALUES(`icon`),
-                    `sort_order` = VALUES(`sort_order`),
-                    `is_system` = VALUES(`is_system`)",
-                [
-                    'slug' => $category,
-                    'title' => self::normalizeSettingsCategoryDisplayTitle(TypeHelper::toString($baseMeta['title'] ?? self::humanizeSettingsToken($category))),
-                    'description' => TypeHelper::toString($baseMeta['description'] ?? ''),
-                    'icon' => TypeHelper::toString($baseMeta['icon'] ?? 'fa-sliders'),
-                    'sort_order' => TypeHelper::toInt($baseMeta['sort_order'] ?? 0) ?? 0,
-                    'is_system' => 1,
-                ]
-            );
+            SettingsModel::upsertCategory([
+                'slug' => $category,
+                'title' => self::normalizeSettingsCategoryDisplayTitle(TypeHelper::toString($baseMeta['title'] ?? self::humanizeSettingsToken($category))),
+                'description' => TypeHelper::toString($baseMeta['description'] ?? ''),
+                'icon' => TypeHelper::toString($baseMeta['icon'] ?? 'fa-sliders'),
+                'sort_order' => TypeHelper::toInt($baseMeta['sort_order'] ?? 0) ?? 0,
+                'is_system' => 1,
+            ]);
 
             header('Location: ' . $redirectBase . '?notice=category_reset');
             exit();
         }
 
-        Database::query("DELETE FROM app_settings_categories WHERE `slug` = :slug", ['slug' => $category]);
+        SettingsModel::deleteCategoryBySlug($category);
         header('Location: ' . $redirectBase . '?notice=category_deleted');
         exit();
     }
@@ -1580,36 +1477,23 @@ class ControlPanelController extends BaseController
             $categorySlug = self::normalizeSettingsCategorySlug(TypeHelper::toString($builtInDefinition['category'] ?? ''));
             $categoryId = self::ensureSettingsCategoryExists($categorySlug, 1);
 
-            Database::query(
-                "INSERT INTO app_settings_data (`category_id`, `key`, `title`, `description`, `value`, `type`, `input_type`, `sort_order`, `is_system`)
-                 VALUES (:category_id, :key_name, :title, :description, :value_data, :type_name, :input_type, :sort_order, :is_system)
-                 ON DUPLICATE KEY UPDATE
-                    `category_id` = VALUES(`category_id`),
-                    `title` = VALUES(`title`),
-                    `description` = VALUES(`description`),
-                    `value` = VALUES(`value`),
-                    `type` = VALUES(`type`),
-                    `input_type` = VALUES(`input_type`),
-                    `sort_order` = VALUES(`sort_order`),
-                    `is_system` = VALUES(`is_system`)",
-                [
-                    'category_id' => $categoryId,
-                    'key_name' => $key,
-                    'title' => TypeHelper::toString($builtInDefinition['label'] ?? self::humanizeSettingsToken($key)),
-                    'description' => TypeHelper::toString($builtInDefinition['description'] ?? ''),
-                    'value_data' => $normalized['value'],
-                    'type_name' => $type,
-                    'input_type' => TypeHelper::toString($builtInDefinition['input'] ?? 'text'),
-                    'sort_order' => TypeHelper::toInt($builtInDefinition['sort_order'] ?? 0) ?? 0,
-                    'is_system' => 1,
-                ]
-            );
+            SettingsModel::upsertSetting([
+                'category_id' => $categoryId,
+                'key_name' => $key,
+                'title' => TypeHelper::toString($builtInDefinition['label'] ?? self::humanizeSettingsToken($key)),
+                'description' => TypeHelper::toString($builtInDefinition['description'] ?? ''),
+                'value_data' => $normalized['value'],
+                'type_name' => $type,
+                'input_type' => TypeHelper::toString($builtInDefinition['input'] ?? 'text'),
+                'sort_order' => TypeHelper::toInt($builtInDefinition['sort_order'] ?? 0) ?? 0,
+                'is_system' => 1,
+            ]);
 
             header('Location: ' . self::buildSettingsCategoryUrl($categorySlug) . '?notice=reset');
             exit();
         }
 
-        Database::query("DELETE FROM app_settings_data WHERE `key` = :key", ['key' => $key]);
+        SettingsModel::deleteSettingByKey($key);
         header('Location: ' . $redirectBase . '?notice=deleted');
         exit();
     }
@@ -1657,8 +1541,7 @@ class ControlPanelController extends BaseController
             return 0;
         }
 
-        $existing = Database::fetch("SELECT `id` FROM app_settings_categories WHERE `slug` = :slug LIMIT 1", ['slug' => $category]);
-        $existingId = TypeHelper::toInt($existing['id'] ?? 0) ?? 0;
+        $existingId = SettingsModel::getCategoryIdBySlug($category);
         if ($existingId > 0)
         {
             return $existingId;
@@ -1672,25 +1555,19 @@ class ControlPanelController extends BaseController
         $sortOrder = TypeHelper::toInt($baseMeta['sort_order'] ?? 0) ?? 0;
         if ($sortOrder <= 0)
         {
-            $maxSort = Database::fetch("SELECT COALESCE(MAX(`sort_order`), 0) AS sort_order FROM app_settings_categories");
-            $sortOrder = (TypeHelper::toInt($maxSort['sort_order'] ?? 0) ?? 0) + 10;
+            $sortOrder = SettingsModel::getNextCategorySortOrder();
         }
 
-        Database::query(
-            "INSERT INTO app_settings_categories (`slug`, `title`, `description`, `icon`, `sort_order`, `is_system`)
-             VALUES (:slug, :title, :description, :icon, :sort_order, :is_system)",
-            [
-                'slug' => $category,
-                'title' => $title,
-                'description' => $description,
-                'icon' => $icon,
-                'sort_order' => $sortOrder,
-                'is_system' => $isSystem || !empty($baseMeta['is_system']) ? 1 : 0,
-            ]
-        );
+        SettingsModel::createCategory([
+            'slug' => $category,
+            'title' => $title,
+            'description' => $description,
+            'icon' => $icon,
+            'sort_order' => $sortOrder,
+            'is_system' => $isSystem || !empty($baseMeta['is_system']) ? 1 : 0,
+        ]);
 
-        $created = Database::fetch("SELECT `id` FROM app_settings_categories WHERE `slug` = :slug LIMIT 1", ['slug' => $category]);
-        return TypeHelper::toInt($created['id'] ?? 0) ?? 0;
+        return SettingsModel::getCategoryIdBySlug($category);
     }
 
     /**
@@ -1860,30 +1737,17 @@ class ControlPanelController extends BaseController
         $category = class_exists('SettingsRegistry') ? SettingsRegistry::inferCategoryFromKey($key) : self::normalizeSettingsCategorySlug(explode('.', $key, 2)[0] ?? 'custom');
         $categoryId = self::ensureSettingsCategoryExists($category, 0);
 
-        Database::query(
-            "INSERT INTO app_settings_data (`category_id`, `key`, `title`, `description`, `value`, `type`, `input_type`, `sort_order`, `is_system`)
-             VALUES (:category_id, :key_name, :title, :description, :value_data, :type_name, :input_type, :sort_order, :is_system)
-             ON DUPLICATE KEY UPDATE
-                `category_id` = VALUES(`category_id`),
-                `title` = VALUES(`title`),
-                `description` = VALUES(`description`),
-                `value` = VALUES(`value`),
-                `type` = VALUES(`type`),
-                `input_type` = VALUES(`input_type`),
-                `sort_order` = VALUES(`sort_order`),
-                `is_system` = VALUES(`is_system`)",
-            [
-                'category_id' => $categoryId,
-                'key_name' => $key,
-                'title' => self::humanizeSettingsToken($key),
-                'description' => 'Custom database-backed setting.',
-                'value_data' => $normalized['value'],
-                'type_name' => $type,
-                'input_type' => class_exists('SettingsRegistry') ? SettingsRegistry::defaultInputForType($type) : 'text',
-                'sort_order' => 9999,
-                'is_system' => 0,
-            ]
-        );
+        SettingsModel::upsertSetting([
+            'category_id' => $categoryId,
+            'key_name' => $key,
+            'title' => self::humanizeSettingsToken($key),
+            'description' => 'Custom database-backed setting.',
+            'value_data' => $normalized['value'],
+            'type_name' => $type,
+            'input_type' => class_exists('SettingsRegistry') ? SettingsRegistry::defaultInputForType($type) : 'text',
+            'sort_order' => 9999,
+            'is_system' => 0,
+        ]);
     }
 
     /**
@@ -1900,7 +1764,7 @@ class ControlPanelController extends BaseController
             return;
         }
 
-        Database::query("DELETE FROM app_settings_categories WHERE `slug` = :slug AND `is_system` = 0", ['slug' => $category]);
+        SettingsModel::deleteCategoryBySlug($category, true);
     }
 
     /**
@@ -1917,18 +1781,7 @@ class ControlPanelController extends BaseController
             return 0;
         }
 
-        $row = Database::fetch(
-            "SELECT COUNT(*) AS total
-             FROM app_settings_data d
-             LEFT JOIN app_settings_categories c ON c.`id` = d.`category_id`
-             WHERE c.`slug` = :slug OR d.`key` LIKE :prefix",
-            [
-                'slug' => $category,
-                'prefix' => $category . '.%',
-            ]
-        );
-
-        return TypeHelper::toInt($row['total'] ?? 0) ?? 0;
+        return SettingsModel::countEntriesForCategory($category);
     }
 
     /**
@@ -2265,13 +2118,7 @@ class ControlPanelController extends BaseController
         // Total matching rows for pagination.
         try
         {
-            $row = Database::fetch(
-                "SELECT COUNT(*) AS cnt
-                 FROM app_security_logs l
-                 {$sqlWhere}",
-                $params
-            );
-            $total = TypeHelper::toInt($row['cnt'] ?? 0) ?? 0;
+            $total = SecurityLogModel::countMatching($sqlWhere, $params);
         }
         catch (Throwable $e)
         {
@@ -2281,14 +2128,7 @@ class ControlPanelController extends BaseController
         // Fetch the current page of results.
         try
         {
-            $logs = Database::fetchAll(
-                "SELECT l.id, l.user_id, l.session_id, l.ip, l.fingerprint, l.device_fingerprint, l.browser_fingerprint, l.category, l.created_at
-                 FROM app_security_logs l
-                 {$sqlWhere}
-                 ORDER BY l.id DESC
-                 LIMIT {$perPage} OFFSET {$offset}",
-                $params
-            );
+            $logs = SecurityLogModel::fetchPage($sqlWhere, $params, $perPage, $offset);
         }
         catch (Throwable $e)
         {
@@ -2298,7 +2138,7 @@ class ControlPanelController extends BaseController
         // Fetch category options for filter dropdown.
         try
         {
-            $categories = Database::fetchAll("SELECT DISTINCT category FROM app_security_logs ORDER BY category ASC LIMIT 100");
+            $categories = SecurityLogModel::listCategories();
         }
         catch (Throwable $e)
         {
@@ -2506,13 +2346,7 @@ class ControlPanelController extends BaseController
         $log = null;
         try
         {
-            $log = Database::fetch(
-                "SELECT l.id, l.user_id, l.session_id, l.ip, l.ua, l.fingerprint, l.device_fingerprint, l.browser_fingerprint, l.category, l.message, l.created_at
-                 FROM app_security_logs l
-                 WHERE l.id = :id
-                 LIMIT 1",
-                ['id' => $id]
-            );
+            $log = SecurityLogModel::findById($id);
         }
         catch (Throwable $e)
         {
@@ -2671,14 +2505,7 @@ class ControlPanelController extends BaseController
         $blocks = [];
         try
         {
-            $blocks = Database::fetchAll(
-                "SELECT id, scope, status, reason, user_id, ip, ua, fingerprint, device_fingerprint, browser_fingerprint, created_at, last_seen, expires_at
-                 FROM app_block_list
-                 {$sqlWhere}
-                 ORDER BY id DESC
-                 LIMIT 500",
-                $params
-            );
+            $blocks = BlockListModel::listFiltered($sqlWhere, $params);
         }
         catch (Throwable $e)
         {
@@ -2899,27 +2726,22 @@ class ControlPanelController extends BaseController
             $valueHash = hash('sha256', mb_strtolower($uaStore));
         }
 
-        Database::query(
-            "INSERT INTO app_block_list (scope, value_hash, user_id, ip, ua, fingerprint, device_fingerprint, browser_fingerprint, status, reason, created_at, last_seen, expires_at)
-             VALUES (:scope, :vh, :uid, :ip, :ua, :fp, :dfp, :bfp, :status, :reason, NOW(), NOW(), :exp)
-             ON DUPLICATE KEY UPDATE status = :status_upd, reason = :reason_upd, last_seen = NOW(), expires_at = :exp_upd",
-            [
-                'scope' => $scope,
-                'vh' => $valueHash,
-                'status' => $status,
-                'reason' => $reason !== '' ? $reason : null,
-                'uid' => $uidStore,
-                'ip' => $ipStore,
-                'ua' => $uaStore,
-                'fp' => $fpStore,
-                'dfp' => $dfpStore,
-                'bfp' => $bfpStore,
-                'exp' => $expires,
-                'status_upd' => $status,
-                'reason_upd' => $reason !== '' ? $reason : null,
-                'exp_upd' => $expires,
-            ]
-        );
+        BlockListModel::upsert([
+            'scope' => $scope,
+            'vh' => $valueHash,
+            'status' => $status,
+            'reason' => $reason !== '' ? $reason : null,
+            'uid' => $uidStore,
+            'ip' => $ipStore,
+            'ua' => $uaStore,
+            'fp' => $fpStore,
+            'dfp' => $dfpStore,
+            'bfp' => $bfpStore,
+            'exp' => $expires,
+            'status_upd' => $status,
+            'reason_upd' => $reason !== '' ? $reason : null,
+            'exp_upd' => $expires,
+        ]);
 
         header('Location: /panel/security/blocks?created=1');
         exit();
@@ -2940,12 +2762,7 @@ class ControlPanelController extends BaseController
         $errors = [];
         $success = '';
 
-        $block = Database::fetch(
-            "SELECT id, scope, status, reason, user_id, ip, ua, fingerprint, device_fingerprint, browser_fingerprint, created_at, last_seen, expires_at
-             FROM app_block_list
-             WHERE id = :id LIMIT 1",
-            ['id' => $id]
-        );
+        $block = BlockListModel::findById($id);
 
         if (!$block)
         {
@@ -2984,25 +2801,10 @@ class ControlPanelController extends BaseController
             {
                 try
                 {
-                    Database::query(
-                        "UPDATE app_block_list
-                         SET status = :status, reason = :reason, expires_at = :exp, last_seen = NOW()
-                         WHERE id = :id",
-                        [
-                            'status' => $status,
-                            'reason' => $reason !== '' ? $reason : null,
-                            'exp' => $expires,
-                            'id' => $id,
-                        ]
-                    );
+                    BlockListModel::updateById($id, $status, $reason !== '' ? $reason : null, $expires);
 
                     $success = 'Block entry updated.';
-                    $block = Database::fetch(
-                        "SELECT id, scope, status, reason, user_id, ip, ua, fingerprint, device_fingerprint, browser_fingerprint, created_at, last_seen, expires_at
-                         FROM app_block_list
-                         WHERE id = :id LIMIT 1",
-                        ['id' => $id]
-                    );
+                    $block = BlockListModel::findById($id);
                 }
                 catch (Throwable $e)
                 {
@@ -3160,10 +2962,7 @@ class ControlPanelController extends BaseController
             exit();
         }
 
-        Database::query(
-            'DELETE FROM app_block_list WHERE ' . implode(' OR ', $where),
-            $params
-        );
+        BlockListModel::deleteWhere(implode(' OR ', $where), $params);
 
         header('Location: /panel/security/blocks?removed=1');
         exit();
@@ -3194,7 +2993,7 @@ class ControlPanelController extends BaseController
             exit();
         }
 
-        Database::query("DELETE FROM app_block_list WHERE id = :id", ['id' => $id]);
+        BlockListModel::deleteById($id);
 
         header('Location: /panel/security/blocks?removed=1');
         exit();
@@ -3217,25 +3016,10 @@ class ControlPanelController extends BaseController
         $offset = ($page - 1) * $perPage;
 
         // Fetch total pending images count
-        $totalCountResult = Database::fetch("SELECT COUNT(*) AS cnt FROM app_images WHERE status = 'pending'");
-        $totalCount = TypeHelper::toInt($totalCountResult['cnt'] ?? null) ?? 0;
+        $totalCount = ImageModel::countPendingImages();
 
         // Fetch paginated pending images
-        $rows = Database::fetchAll("
-            SELECT 
-                image_hash,
-                user_id,
-                age_sensitive,
-                mime_type,
-                created_at
-            FROM app_images
-            WHERE status = 'pending'
-            ORDER BY created_at DESC
-            LIMIT :offset, :perpage
-        ", [
-            'offset' => $offset,
-            'perpage' => $perPage
-        ]);
+        $rows = ImageModel::fetchPendingImagesPage($offset, $perPage);
 
         // Flatten each row for template engine
         $flattenedRows = [];
@@ -3332,7 +3116,7 @@ class ControlPanelController extends BaseController
         $sql = "SELECT image_hash, status
                 FROM app_images
                 WHERE image_hash = :hash LIMIT 1";
-        $image = Database::fetch($sql, [':hash' => $hash]);
+        $image = ImageModel::findModerationStatusByHash($hash);
 
         if (!$image)
         {
@@ -3351,15 +3135,8 @@ class ControlPanelController extends BaseController
         // Approve image
         // - Record the moderator user id for audit/history tracking
         // - Store moderation timestamps for UI / reporting
-        $appUserId = SessionManager::get('user_id');
-        $sql = "UPDATE app_images
-                SET status = 'approved',
-                    approved_by = $appUserId,
-                    moderated_at = NOW(),
-                    updated_at = NOW()
-                WHERE image_hash = :hash
-                AND status = 'pending'";
-        Database::execute($sql, [':hash' => $hash]);
+        $appUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        ImageModel::approvePendingImage($hash, $appUserId, false);
 
         // Redirect back to the pending list after action completes
         header('Location: /panel/image-pending');
@@ -3415,7 +3192,7 @@ class ControlPanelController extends BaseController
         $sql = "SELECT image_hash, status
                 FROM app_images
                 WHERE image_hash = :hash LIMIT 1";
-        $image = Database::fetch($sql, [':hash' => $hash]);
+        $image = ImageModel::findModerationStatusByHash($hash);
 
         if (!$image)
         {
@@ -3434,16 +3211,8 @@ class ControlPanelController extends BaseController
         // Approve image
         // - Record the moderator user id for audit/history tracking
         // - Store moderation timestamps for UI / reporting
-        $appUserId = SessionManager::get('user_id');
-        $sql = "UPDATE app_images
-                SET age_sensitive = 1,
-                    status = 'approved',
-                    approved_by = $appUserId,
-                    moderated_at = NOW(),
-                    updated_at = NOW()
-                WHERE image_hash = :hash
-                AND status = 'pending'";
-        Database::execute($sql, [':hash' => $hash]);
+        $appUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        ImageModel::approvePendingImage($hash, $appUserId, true);
 
         // Redirect back to the pending list after action completes
         header('Location: /panel/image-pending');
@@ -3499,7 +3268,7 @@ class ControlPanelController extends BaseController
         $sql = "SELECT image_hash, status
                 FROM app_images
                 WHERE image_hash = :hash LIMIT 1";
-        $image = Database::fetch($sql, [':hash' => $hash]);
+        $image = ImageModel::findModerationStatusByHash($hash);
 
         if (!$image)
         {
@@ -3518,15 +3287,8 @@ class ControlPanelController extends BaseController
         // Reject image
         // - Record the moderator user id for audit/history tracking
         // - Store moderation timestamps for UI / reporting
-        $rejUserId = SessionManager::get('user_id');
-        $sql = "UPDATE app_images
-                SET status = 'rejected',
-                    rejected_by = $rejUserId,
-                    moderated_at = NOW(),
-                    updated_at = NOW()
-                WHERE image_hash = :hash
-                AND status = 'pending'";
-        Database::execute($sql, [':hash' => $hash]);
+        $rejUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        ImageModel::rejectPendingImage($hash, $rejUserId);
 
         // Redirect back to the pending list after action completes
         header('Location: /panel/image-pending');
@@ -3553,31 +3315,12 @@ class ControlPanelController extends BaseController
         $perPage = 15;
         $offset = ($page - 1) * $perPage;
 
-        $totalRow = Database::fetch("SELECT COUNT(*) AS cnt FROM app_image_reports") ?? [];
-        $openRow = Database::fetch("SELECT COUNT(*) AS cnt FROM app_image_reports WHERE status = 'open'") ?? [];
-        $closedRow = Database::fetch("SELECT COUNT(*) AS cnt FROM app_image_reports WHERE status = 'closed'") ?? [];
+        $reportCounts = ImageReportModel::getQueueCounts();
+        $totalCount = TypeHelper::toInt($reportCounts['total'] ?? 0) ?? 0;
+        $openCount = TypeHelper::toInt($reportCounts['open'] ?? 0) ?? 0;
+        $closedCount = TypeHelper::toInt($reportCounts['closed'] ?? 0) ?? 0;
 
-        $totalCount = TypeHelper::toInt($totalRow['cnt'] ?? 0) ?? 0;
-        $openCount = TypeHelper::toInt($openRow['cnt'] ?? 0) ?? 0;
-        $closedCount = TypeHelper::toInt($closedRow['cnt'] ?? 0) ?? 0;
-
-        $rows = Database::fetchAll(
-            "SELECT
-                r.id,
-                r.reporter_user_id,
-                r.report_category,
-                r.report_subject,
-                r.status,
-                r.created_at,
-                r.assigned_to_user_id,
-                i.image_hash,
-                au.username AS assigned_username
-             FROM app_image_reports r
-             INNER JOIN app_images i ON i.id = r.image_id
-             LEFT JOIN app_users au ON au.id = r.assigned_to_user_id
-             ORDER BY FIELD(r.status, 'open', 'closed'), r.created_at DESC
-             LIMIT {$perPage} OFFSET {$offset}"
-        );
+        $rows = ImageReportModel::fetchQueuePage($perPage, $offset);
 
         $reportRows = [];
         foreach ($rows as $row)
@@ -3665,36 +3408,7 @@ class ControlPanelController extends BaseController
             exit();
         }
 
-        $report = Database::fetch(
-            "SELECT
-                r.id,
-                r.image_id,
-                r.reporter_user_id,
-                r.report_category,
-                r.report_subject,
-                r.report_message,
-                r.status,
-                r.session_id,
-                r.ip,
-                r.ua,
-                r.assigned_to_user_id,
-                r.assigned_at,
-                r.resolved_by,
-                r.resolved_at,
-                r.created_at,
-                r.updated_at,
-                i.image_hash,
-                i.status AS image_status,
-                i.age_sensitive,
-                i.created_at AS image_created_at,
-                au.username AS assigned_username
-             FROM app_image_reports r
-             INNER JOIN app_images i ON i.id = r.image_id
-             LEFT JOIN app_users au ON au.id = r.assigned_to_user_id
-             WHERE r.id = :id
-             LIMIT 1",
-            [':id' => $id]
-        );
+        $report = ImageReportModel::findDetailedById($id);
 
         if (!$report)
         {
@@ -3702,19 +3416,7 @@ class ControlPanelController extends BaseController
             exit();
         }
 
-        $staffNotes = Database::fetchAll(
-            "SELECT
-                c.comment_body,
-                c.created_at,
-                c.updated_at,
-                c.user_id,
-                u.username
-             FROM app_image_report_comments c
-             LEFT JOIN app_users u ON u.id = c.user_id
-             WHERE c.report_id = :report_id
-             ORDER BY c.created_at DESC, c.id DESC",
-            [':report_id' => $id]
-        );
+        $staffNotes = ImageReportModel::fetchCommentsByReportId($id);
 
         $reporterUserId = TypeHelper::toInt($report['reporter_user_id'] ?? 0) ?? 0;
         $assignedUserId = TypeHelper::toInt($report['assigned_to_user_id'] ?? 0) ?? 0;
@@ -3860,13 +3562,7 @@ class ControlPanelController extends BaseController
             exit();
         }
 
-        $report = Database::fetch(
-            "SELECT id, image_id, status
-             FROM app_image_reports
-             WHERE id = :id
-             LIMIT 1",
-            [':id' => $id]
-        );
+        $report = ImageReportModel::findWorkflowRowById($id);
 
         if (!$report)
         {
@@ -3899,36 +3595,14 @@ class ControlPanelController extends BaseController
 
         if ($takeAssignment && $staffUserId > 0)
         {
-            Database::execute(
-                "UPDATE app_image_reports
-                 SET assigned_to_user_id = :staff_user_id,
-                     assigned_at = CASE WHEN assigned_to_user_id IS NULL OR assigned_to_user_id != :staff_user_id_check THEN NOW() ELSE assigned_at END,
-                     updated_at = NOW()
-                 WHERE id = :id
-                   AND status = 'open'",
-                [
-                    ':id' => $id,
-                    ':staff_user_id' => $staffUserId,
-                    ':staff_user_id_check' => $staffUserId,
-                ]
-            );
+            ImageReportModel::takeAssignmentIfOpen($id, $staffUserId);
 
             $didUpdate = true;
         }
 
         if ($staffComment !== '')
         {
-            Database::execute(
-                "INSERT INTO app_image_report_comments
-                    (report_id, user_id, comment_body, created_at, updated_at)
-                 VALUES
-                    (:report_id, :user_id, :comment_body, NOW(), NOW())",
-                [
-                    ':report_id' => $id,
-                    ':user_id' => $staffUserId > 0 ? $staffUserId : null,
-                    ':comment_body' => $staffComment,
-                ]
-            );
+            ImageReportModel::addComment($id, $staffUserId > 0 ? $staffUserId : null, $staffComment);
 
             $didUpdate = true;
         }
@@ -3941,18 +3615,7 @@ class ControlPanelController extends BaseController
 
         if ($closeReport)
         {
-            Database::execute(
-                "UPDATE app_image_reports
-                 SET status = 'closed',
-                     resolved_by = :staff_user_id,
-                     resolved_at = NOW(),
-                     updated_at = NOW()
-                 WHERE id = :id",
-                [
-                    ':id' => $id,
-                    ':staff_user_id' => $staffUserId > 0 ? $staffUserId : null,
-                ]
-            );
+            ImageReportModel::close($id, $staffUserId > 0 ? $staffUserId : null);
 
             header('Location: /panel/image-reports/view?id=' . $id . '&updated=closed');
             exit();
@@ -3960,12 +3623,7 @@ class ControlPanelController extends BaseController
 
         if ($didUpdate)
         {
-            Database::execute(
-                "UPDATE app_image_reports
-                 SET updated_at = NOW()
-                 WHERE id = :id",
-                [':id' => $id]
-            );
+            ImageReportModel::touch($id);
 
             header('Location: /panel/image-reports/view?id=' . $id . '&updated=saved');
             exit();
@@ -4013,30 +3671,11 @@ class ControlPanelController extends BaseController
 
         if ($assignedUserId !== null && $assignedUserId > 0)
         {
-            Database::execute(
-                "UPDATE app_image_reports
-                 SET assigned_to_user_id = :assigned_user_id,
-                     assigned_at = NOW(),
-                     updated_at = NOW()
-                 WHERE id = :id
-                   AND status = 'open'",
-                [
-                    ':id' => $id,
-                    ':assigned_user_id' => $assignedUserId,
-                ]
-            );
+            ImageReportModel::assignOpenReport($id, $assignedUserId);
         }
         else
         {
-            Database::execute(
-                "UPDATE app_image_reports
-                 SET assigned_to_user_id = NULL,
-                     assigned_at = NULL,
-                     updated_at = NOW()
-                 WHERE id = :id
-                   AND status = 'open'",
-                [':id' => $id]
-            );
+            ImageReportModel::releaseOpenAssignment($id);
         }
 
         header('Location: /panel/image-reports/view?id=' . $id . '&updated=' . rawurlencode($noticeState));
@@ -4083,32 +3722,13 @@ class ControlPanelController extends BaseController
 
         if ($status === 'closed')
         {
-            Database::execute(
-                "UPDATE app_image_reports
-                 SET status = 'closed',
-                     resolved_by = :staff_user_id,
-                     resolved_at = NOW(),
-                     updated_at = NOW()
-                 WHERE id = :id",
-                [
-                    ':id' => $id,
-                    ':staff_user_id' => $staffUserId > 0 ? $staffUserId : null,
-                ]
-            );
+            ImageReportModel::close($id, $staffUserId > 0 ? $staffUserId : null);
 
             header('Location: /panel/image-reports/view?id=' . $id . '&updated=closed');
             exit();
         }
 
-        Database::execute(
-            "UPDATE app_image_reports
-             SET status = 'open',
-                 resolved_by = NULL,
-                 resolved_at = NULL,
-                 updated_at = NOW()
-             WHERE id = :id",
-            [':id' => $id]
-        );
+        ImageReportModel::reopen($id);
 
         header('Location: /panel/image-reports/view?id=' . $id . '&updated=reopened');
         exit();
@@ -4131,63 +3751,15 @@ class ControlPanelController extends BaseController
         switch ($action)
         {
             case 'set_standard':
-                Database::execute(
-                    "UPDATE app_images
-                     SET age_sensitive = 0,
-                         updated_at = NOW()
-                     WHERE id = :image_id",
-                    [':image_id' => $imageId]
-                );
+                ImageModel::applyReportImageAction($imageId, $action);
                 break;
 
             case 'set_sensitive':
-                Database::execute(
-                    "UPDATE app_images
-                     SET age_sensitive = 1,
-                         updated_at = NOW()
-                     WHERE id = :image_id",
-                    [':image_id' => $imageId]
-                );
-                break;
-
             case 'set_pending':
-                Database::execute(
-                    "UPDATE app_images
-                     SET status = 'pending',
-                         updated_at = NOW()
-                     WHERE id = :image_id",
-                    [':image_id' => $imageId]
-                );
-                break;
-
             case 'set_approved':
-                Database::execute(
-                    "UPDATE app_images
-                     SET status = 'approved',
-                         updated_at = NOW()
-                     WHERE id = :image_id",
-                    [':image_id' => $imageId]
-                );
-                break;
-
             case 'set_rejected':
-                Database::execute(
-                    "UPDATE app_images
-                     SET status = 'rejected',
-                         updated_at = NOW()
-                     WHERE id = :image_id",
-                    [':image_id' => $imageId]
-                );
-                break;
-
             case 'set_deleted':
-                Database::execute(
-                    "UPDATE app_images
-                     SET status = 'deleted',
-                         updated_at = NOW()
-                     WHERE id = :image_id",
-                    [':image_id' => $imageId]
-                );
+                ImageModel::applyReportImageAction($imageId, $action);
                 break;
         }
     }
@@ -4232,8 +3804,8 @@ class ControlPanelController extends BaseController
             if ($hash1 && $hash2)
             {
                 // Fetch image hash data for both selected images
-                $selectedImage1 = Database::fetch("SELECT * FROM app_image_hashes WHERE image_hash = :hash LIMIT 1", ['hash' => $hash1]);
-                $selectedImage2 = Database::fetch("SELECT * FROM app_image_hashes WHERE image_hash = :hash LIMIT 1", ['hash' => $hash2]);
+                $selectedImage1 = ImageModel::findImageHashRow($hash1);
+                $selectedImage2 = ImageModel::findImageHashRow($hash2);
 
                 if ($selectedImage1 && $selectedImage2)
                 {
@@ -4262,7 +3834,7 @@ class ControlPanelController extends BaseController
         }
 
         // Fetch all approved image hashes for dropdown selection
-        $imageHashes = Database::fetchAll("SELECT image_hash FROM app_images WHERE status IN ('approved') ORDER BY id DESC");
+        $imageHashes = ImageModel::listApprovedImageHashes();
         $flatImageHashes = array_column($imageHashes, 'image_hash');
 
         // Calculate similarity percentage if comparison was performed
@@ -4336,8 +3908,8 @@ class ControlPanelController extends BaseController
             if ($mode === 'single' && $imageHash)
             {
                 // Check both tables for existence
-                $image = Database::fetch("SELECT * FROM app_images WHERE image_hash = :hash AND status IN ('approved') LIMIT 1", ['hash' => $imageHash]);
-                $hashRow = Database::fetch("SELECT * FROM app_image_hashes WHERE image_hash = :hash LIMIT 1", ['hash' => $imageHash]);
+                $image = ImageModel::findApprovedImageByHash($imageHash);
+                $hashRow = ImageModel::findImageHashRow($imageHash);
 
                 if (!$image || !$hashRow)
                 {
@@ -4352,7 +3924,7 @@ class ControlPanelController extends BaseController
             elseif ($mode === 'batch')
             {
                 // Batch: select images not yet rehashed
-                $images = Database::fetchAll("SELECT * FROM app_images WHERE rehashed = 0 OR rehashed_on IS NULL AND status IN ('approved')  ORDER BY id ASC LIMIT 10");
+                $images = ImageModel::fetchImagesPendingRehash(10);
             }
             else
             {
@@ -4379,37 +3951,7 @@ class ControlPanelController extends BaseController
                     }
 
                     // Insert or update app_image_hashes
-                    Database::execute("
-                        INSERT INTO app_image_hashes (image_hash, ahash, dhash, phash, phash_block_0, phash_block_1, phash_block_2, phash_block_3,
-                                                     phash_block_4, phash_block_5, phash_block_6, phash_block_7,
-                                                     phash_block_8, phash_block_9, phash_block_10, phash_block_11,
-                                                     phash_block_12, phash_block_13, phash_block_14, phash_block_15)
-                        VALUES (:image_hash, :ahash, :dhash, :phash,
-                                :phash_block_0, :phash_block_1, :phash_block_2, :phash_block_3,
-                                :phash_block_4, :phash_block_5, :phash_block_6, :phash_block_7,
-                                :phash_block_8, :phash_block_9, :phash_block_10, :phash_block_11,
-                                :phash_block_12, :phash_block_13, :phash_block_14, :phash_block_15)
-                        ON DUPLICATE KEY UPDATE
-                            ahash = VALUES(ahash),
-                            dhash = VALUES(dhash),
-                            phash = VALUES(phash),
-                            phash_block_0 = VALUES(phash_block_0),
-                            phash_block_1 = VALUES(phash_block_1),
-                            phash_block_2 = VALUES(phash_block_2),
-                            phash_block_3 = VALUES(phash_block_3),
-                            phash_block_4 = VALUES(phash_block_4),
-                            phash_block_5 = VALUES(phash_block_5),
-                            phash_block_6 = VALUES(phash_block_6),
-                            phash_block_7 = VALUES(phash_block_7),
-                            phash_block_8 = VALUES(phash_block_8),
-                            phash_block_9 = VALUES(phash_block_9),
-                            phash_block_10 = VALUES(phash_block_10),
-                            phash_block_11 = VALUES(phash_block_11),
-                            phash_block_12 = VALUES(phash_block_12),
-                            phash_block_13 = VALUES(phash_block_13),
-                            phash_block_14 = VALUES(phash_block_14),
-                            phash_block_15 = VALUES(phash_block_15)
-                    ", array_merge([
+                    ImageModel::upsertImageHashes(array_merge([
                         'image_hash' => $img['image_hash'],
                         'ahash' => $newAhash,
                         'dhash' => $newDhash,
@@ -4417,14 +3959,7 @@ class ControlPanelController extends BaseController
                     ], $phashBlocks));
 
                     // Mark image as rehashed in app_images
-                    Database::execute("
-                        UPDATE app_images SET
-                            rehashed = 1,
-                            rehashed_on = NOW()
-                        WHERE id = :id
-                    ", [
-                        'id' => $img['id']
-                    ]);
+                    ImageModel::markImageRehashed((int) $img['id']);
 
                     $processedImages[] = $img['image_hash'];
                 }
@@ -4435,7 +3970,7 @@ class ControlPanelController extends BaseController
         }
 
         // Fetch all image hashes for selection dropdown
-        $imageHashes = Database::fetchAll("SELECT image_hash FROM app_images WHERE status IN ('approved') ORDER BY id DESC");
+        $imageHashes = ImageModel::listApprovedImageHashes();
         $flatImageHashes = array_column($imageHashes, 'image_hash');
 
         // Assign template variables
@@ -4478,7 +4013,7 @@ class ControlPanelController extends BaseController
               AND (status = 'pending')
             LIMIT 1
         ";
-        $image = Database::fetch($sql, ['hash' => $hash]);
+        $image = ImageModel::findPendingServableImageByHash($hash);
 
         if (!$image)
         {

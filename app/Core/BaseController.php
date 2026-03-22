@@ -73,13 +73,7 @@ abstract class BaseController
      */
     protected static function getUsernameById(?int $userId): string
     {
-        if ($userId === null)
-        {
-            return '';
-        }
-
-        $result = Database::fetch("SELECT username FROM app_users WHERE id = :id LIMIT 1", [':id' => $userId]);
-        return TypeHelper::toString($result['username'] ?? '') ?? '';
+        return UserModel::getUsernameById($userId);
     }
 
     /**

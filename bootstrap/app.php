@@ -15,6 +15,7 @@ if (!defined('APP_ROOT'))
     define('APP_CONTROLLER_PATH', APP_PATH . '/Controllers');
     define('APP_CORE_PATH', APP_PATH . '/Core');
     define('APP_HELPER_PATH', APP_PATH . '/Helpers');
+    define('APP_MODEL_PATH', APP_PATH . '/Models');
 
     define('BOOTSTRAP_PATH', APP_ROOT . '/bootstrap');
     define('CONFIG_PATH', APP_ROOT . '/config');
@@ -39,6 +40,7 @@ spl_autoload_register(function (string $class): void
         APP_CORE_PATH . '/' . $class . '.php',
         APP_CONTROLLER_PATH . '/' . $class . '.php',
         APP_HELPER_PATH . '/' . $class . '.php',
+        APP_MODEL_PATH . '/' . $class . '.php',
     ];
 
     foreach ($paths as $file)

@@ -173,40 +173,10 @@ class ProfileController extends BaseController
 
         // Fetch current user data from database
         $userId = TypeHelper::toInt(SessionManager::get('user_id'));
-        $user = Database::fetch(
-            "SELECT
-                u.id,
-                u.role_id,
-                u.username,
-                u.display_name,
-                u.email,
-                u.avatar_path,
-                u.date_of_birth,
-                u.age_verified_at,
-                u.status,
-                u.last_login,
-                u.created_at,
-                COALESCE(f.favorite_count, 0) AS favorite_count,
-                COALESCE(v.vote_count, 0) AS vote_count
-             FROM app_users u
-             LEFT JOIN (
-                SELECT user_id, COUNT(*) AS favorite_count
-                  FROM app_image_favorites
-                 GROUP BY user_id
-             ) f ON u.id = f.user_id
-             LEFT JOIN (
-                SELECT user_id, COUNT(*) AS vote_count
-                  FROM app_image_votes
-                 GROUP BY user_id
-             ) v ON u.id = v.user_id
-             WHERE u.id = :id LIMIT 1",
-            ['id' => $userId]
-        );
-
-        $uploadedImages = Database::fetch(
-            "SELECT COUNT(*) AS count FROM app_images WHERE user_id = :id AND status = 'approved'",
-            ['id' => $userId]
-        );
+        $user = UserModel::findProfileOverviewById($userId);
+        $uploadedImages = [
+            'count' => UserModel::countApprovedImagesByUserId($userId),
+        ];
 
         // Initialize template engine with caching support
         $template = self::initTemplate();
@@ -318,24 +288,7 @@ class ProfileController extends BaseController
             $errors[] = "User not found.";
         }
 
-        $user = Database::fetch(
-            "SELECT
-                id,
-                role_id,
-                username,
-                display_name,
-                email,
-                avatar_path,
-                date_of_birth,
-                status,
-                last_login,
-                created_at,
-                password_hash,
-                age_verified_at
-             FROM app_users
-             WHERE id = :id LIMIT 1",
-            ['id' => $userId]
-        );
+        $user = UserModel::findProfileSettingsUserById($userId);
 
         if (!$user)
         {
@@ -367,10 +320,7 @@ class ProfileController extends BaseController
                     }
                     else
                     {
-                        Database::query(
-                            "UPDATE app_users SET email = :email WHERE id = :id",
-                            ['email' => $newEmail, 'id' => $userId]
-                        );
+                        UserModel::updateEmail($userId, $newEmail);
 
                         $success = "Email updated successfully.";
                         $user['email'] = $newEmail;
@@ -392,10 +342,7 @@ class ProfileController extends BaseController
                     }
                     else
                     {
-                        Database::query(
-                            "UPDATE app_users SET date_of_birth = :dob, age_verified_at = NOW() WHERE id = :id",
-                            ['dob' => $dob, 'id' => $userId]
-                        );
+                        UserModel::updateDobAndVerify($userId, $dob);
 
                         $success = "Date of birth updated successfully.";
                         $user['date_of_birth'] = $dob;
@@ -577,10 +524,7 @@ class ProfileController extends BaseController
                                     if (empty($errors))
                                     {
                                         // Update DB with new avatar path
-                                        Database::query(
-                                            "UPDATE app_users SET avatar_path = :path WHERE id = :id",
-                                            ['path' => '/uploads/avatars/' . $filename, 'id' => $userId]
-                                        );
+                                        UserModel::updateAvatarPath($userId, '/uploads/avatars/' . $filename);
 
                                         $success = "Avatar updated successfully.";
                                         $user['avatar_path'] = '/uploads/avatars/' . $filename;
@@ -626,10 +570,7 @@ class ProfileController extends BaseController
                     if (empty($errors))
                     {
                         $hashedPassword = Security::hashPassword($newPassword);
-                        Database::query(
-                            "UPDATE app_users SET password_hash = :hash WHERE id = :id",
-                            ['hash' => $hashedPassword, 'id' => $userId]
-                        );
+                        UserModel::updatePasswordHash($userId, $hashedPassword);
 
                         $success = "Password updated successfully.";
 

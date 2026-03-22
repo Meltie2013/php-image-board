@@ -87,10 +87,7 @@ class AuthController extends BaseController
             }
 
             // Fetch user by email with role details
-            $user = Database::fetch("SELECT u.id, u.username, u.email, u.password_hash, u.avatar_path, u.failed_logins, u.last_failed_login, u.status, r.name AS role_name
-                 FROM app_users u INNER JOIN app_roles r ON u.role_id = r.id WHERE u.email = :email LIMIT 1",
-                ['email' => $email]
-            );
+            $user = UserModel::findLoginUserByEmail($email);
 
             // If user exists, enforce status and lockout checks before password validation
             $userIdToCheck = TypeHelper::toInt($user['id'] ?? null);
@@ -119,9 +116,7 @@ class AuthController extends BaseController
                 // Check for permanent suspension (12 failed attempts)
                 if ((TypeHelper::toInt($user['failed_logins'] ?? null) ?? 0) >= 12 && empty($errors))
                 {
-                    Database::query("UPDATE app_users SET status = 'suspended' WHERE id = :id",
-                        ['id' => $userIdToCheck]
-                    );
+                    UserModel::suspendById($userIdToCheck);
 
                     $errors[] = "Account locked.";
                 }
@@ -151,9 +146,7 @@ class AuthController extends BaseController
                         if (empty($errors))
                         {
                             // Successful login: reset failed login counter
-                            Database::query("UPDATE app_users SET failed_logins = 0, last_failed_login = NULL, last_login = NOW() WHERE id = :id",
-                                ['id' => $userIdToCheck]
-                            );
+                            UserModel::resetLoginState($userIdToCheck);
 
                             // Regenerate session ID to prevent session fixation
                             SessionManager::regenerate();
@@ -198,9 +191,7 @@ class AuthController extends BaseController
                     }
 
                     // Update user's failed login info
-                    Database::query("UPDATE app_users SET failed_logins = :fails, last_failed_login = NOW() WHERE id = :id",
-                        ['fails' => $failedLogins, 'id' => $userIdToCheck]
-                    );
+                    UserModel::updateFailedLoginState($userIdToCheck, $failedLogins);
 
                     // Jail user if threshold reached
                     if ($failedLogins >= $threshold)
@@ -331,9 +322,7 @@ class AuthController extends BaseController
             // --- Check for duplicates ---
             if (empty($errors))
             {
-                $exists = Database::fetch("SELECT id FROM app_users WHERE username = :username OR email = :email LIMIT 1",
-                    ['username' => $username, 'email' => $email]
-                );
+                $exists = UserModel::usernameOrEmailExists($username, $email);
 
                 if ($exists)
                 {
@@ -358,15 +347,7 @@ class AuthController extends BaseController
             {
                 $hashedPassword = Security::hashPassword($password);
 
-                $newId = Database::insert("INSERT INTO app_users (username, email, password_hash, role_id, status, created_at) VALUES (:username, :email, :password_hash, :role_id, :status, NOW())",
-                    [
-                        'username'      => $username,
-                        'email'         => $email,
-                        'password_hash' => $hashedPassword,
-                        'role_id'       => 3, // default role = member
-                        'status'        => 'pending'
-                    ]
-                );
+                $newId = UserModel::createPendingUser($username, $email, $hashedPassword, 3, 'pending');
 
                 if ($newId > 0)
                 {

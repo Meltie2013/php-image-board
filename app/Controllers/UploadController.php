@@ -207,24 +207,17 @@ class UploadController extends BaseController
         $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
         $failureReason = !empty($errors) ? implode("; ", $errors) : null;
 
-        Database::insert("
-            INSERT INTO app_image_upload_logs
-                (user_id, ip_address, filename_original, mime_reported, mime_detected,
-                 file_extension, file_size, status, failure_reason, stored_path, created_at)
-            VALUES
-                (:user_id, :ip_address, :filename_original, :mime_reported, :mime_detected,
-                 :file_extension, :file_size, :status, :failure_reason, :stored_path, NOW())
-        ", [
-            ':user_id'          => $userId,
-            ':ip_address'       => $ip,
-            ':filename_original'=> $originalName,
-            ':mime_reported'    => $mimeReported,
-            ':mime_detected'    => $mimeDetected,
-            ':file_extension'   => $extension,
-            ':file_size'        => $size,
-            ':status'           => $status,
-            ':failure_reason'   => $failureReason,
-            ':stored_path'      => $storedPath
+        ImageModel::logUploadAttempt([
+            ':user_id'           => $userId,
+            ':ip_address'        => $ip,
+            ':filename_original' => $originalName,
+            ':mime_reported'     => $mimeReported,
+            ':mime_detected'     => $mimeDetected,
+            ':file_extension'    => $extension,
+            ':file_size'         => $size,
+            ':status'            => $status,
+            ':failure_reason'    => $failureReason,
+            ':stored_path'       => $storedPath,
         ]);
     }
 
@@ -481,8 +474,6 @@ class UploadController extends BaseController
                     // Generate a unique, user-facing image identifier
                     $imageHash = self::generateImageHashFormatted();
 
-                    // Optionally auto-approve uploads (debug/development mode)
-                    $moderated = $config['debugging']['allow_approve_uploads'] ? 'NOW()' : 'NULL';
 
                     // Use updated safe hash functions
                     $fullPath = $finalPath;
@@ -498,51 +489,29 @@ class UploadController extends BaseController
                     }
 
                     // Insert MD5/SHA hashes into app_images
-                    Database::insert("
-                        INSERT INTO app_images
-                            (image_hash, user_id, description, status,
-                             original_path, mime_type, width, height, size_bytes,
-                             md5, sha1, sha256, sha512, moderated_at, created_at, updated_at)
-                        VALUES
-                            (:image_hash, :user_id, :description, :status,
-                             :original_path, :mime_type, :width, :height, :size_bytes,
-                             :md5, :sha1, :sha256, :sha512, $moderated, NOW(), NOW())
-                    ", [
-                        ':image_hash' => $imageHash,
-                        ':user_id' => $userId,
-                        ':description' => $description,
-                        ':status' => $config['debugging']['allow_approve_uploads'] ? 'approved' : 'pending',
-                        ':original_path' => $originalPath,
-                        ':mime_type' => $mimeType,
-                        ':width' => $width,
-                        ':height' => $height,
-                        ':size_bytes' => $sizeBytes,
-                        ':md5' => $md5,
-                        ':sha1' => $sha1,
-                        ':sha256' => $sha256,
-                        ':sha512' => $sha512
-                    ]);
+                    ImageModel::createUploadedImage([
+                        ':image_hash'   => $imageHash,
+                        ':user_id'      => $userId,
+                        ':description'  => $description,
+                        ':status'       => $config['debugging']['allow_approve_uploads'] ? 'approved' : 'pending',
+                        ':original_path'=> $originalPath,
+                        ':mime_type'    => $mimeType,
+                        ':width'        => $width,
+                        ':height'       => $height,
+                        ':size_bytes'   => $sizeBytes,
+                        ':md5'          => $md5,
+                        ':sha1'         => $sha1,
+                        ':sha256'       => $sha256,
+                        ':sha512'       => $sha512,
+                    ], (bool)$config['debugging']['allow_approve_uploads']);
 
                     // Insert into app_image_hashes
-                    Database::insert("
-                        INSERT INTO app_image_hashes
-                            (image_hash, phash, ahash, dhash,
-                             phash_block_0, phash_block_1, phash_block_2, phash_block_3,
-                             phash_block_4, phash_block_5, phash_block_6, phash_block_7,
-                             phash_block_8, phash_block_9, phash_block_10, phash_block_11,
-                             phash_block_12, phash_block_13, phash_block_14, phash_block_15)
-                        VALUES
-                            (:image_hash, :phash, :ahash, :dhash,
-                             :phash_block_0, :phash_block_1, :phash_block_2, :phash_block_3,
-                             :phash_block_4, :phash_block_5, :phash_block_6, :phash_block_7,
-                             :phash_block_8, :phash_block_9, :phash_block_10, :phash_block_11,
-                             :phash_block_12, :phash_block_13, :phash_block_14, :phash_block_15)
-                    ", array_merge([
+                    ImageModel::createImageHashes(array_merge([
                         ':image_hash' => $imageHash,
-                        ':phash' => $phash,
-                        ':ahash' => $ahash,
-                        ':dhash' => $dhash
-                    ], array_combine(array_map(fn($i)=>":phash_block_$i", range(0,15)), $phashBlocks)));
+                        ':phash'      => $phash,
+                        ':ahash'      => $ahash,
+                        ':dhash'      => $dhash,
+                    ], array_combine(array_map(fn($i) => ":phash_block_$i", range(0, 15)), $phashBlocks)));
 
                     $success = "Uploaded successfully! Image pending approval!";
                     self::logUploadAttempt($userId, $file, 'success');
@@ -672,9 +641,7 @@ class UploadController extends BaseController
             }
 
             // Batch check for collisions
-            $placeholders = implode(',', array_fill(0, count($hashes), '?'));
-            $sql = "SELECT image_hash FROM app_images WHERE image_hash IN ($placeholders)";
-            $existing = Database::fetchAll($sql, $hashes);
+            $existing = ImageModel::findExistingHashes($hashes);
             $existingHashes = array_column($existing, 'image_hash');
 
             // Pick first non-colliding hash
