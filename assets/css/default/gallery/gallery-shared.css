@@ -1,0 +1,162 @@
+/*
+ * gallery.css
+ * Section: SHARED GALLERY ELEMENTS
+ */
+
+/* =========================================================
+   SHARED GALLERY ELEMENTS
+========================================================= */
+.gallery-panel-kicker {
+    display: inline-block;
+    margin-bottom: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #c5c8ff;
+}
+
+.gallery-panel-heading h2,
+.gallery-image-header h1 {
+    margin: 0 0 5px;
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 1.2;
+    color: #ffffff;
+}
+
+.gallery-panel-heading p,
+.gallery-index-board-header p,
+.gallery-view-hero-copy p,
+.gallery-image-header p,
+.gallery-image-reference {
+    margin: 6px 0 0;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.gallery-hero-btn,
+.gallery-hero-btn-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    min-height: 40px;
+    padding: 0 15px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: rgba(34, 36, 38, 0.92);
+    color: #f4f5ff;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+    transition:
+        transform 0.15s ease,
+        box-shadow 0.15s ease,
+        border-color 0.15s ease,
+        background 0.15s ease,
+        filter 0.15s ease,
+        color 0.15s ease;
+}
+
+.gallery-hero-btn-button {
+    appearance: none;
+    cursor: pointer;
+}
+
+.gallery-hero-btn:hover,
+.gallery-hero-btn-button:hover {
+    transform: translateY(-1px);
+    border-color: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    filter: brightness(1.05);
+}
+
+.gallery-hero-btn.is-primary {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-strong));
+    color: #ffffff;
+}
+
+.gallery-hero-btn-subtle {
+    background: rgba(19, 22, 30, 0.96);
+}
+
+.gallery-hero-btn-danger,
+.gallery-hero-btn-button.gallery-hero-btn-danger {
+    border-color: rgba(255, 122, 122, 0.20);
+    background: linear-gradient(180deg, rgba(88, 30, 36, 0.94), rgba(68, 20, 25, 0.94));
+    color: #ffe6e6;
+}
+
+.gallery-hero-btn-danger:hover,
+.gallery-hero-btn-danger:focus-visible,
+.gallery-hero-btn-button.gallery-hero-btn-danger:hover,
+.gallery-hero-btn-button.gallery-hero-btn-danger:focus-visible {
+    border-color: rgba(255, 145, 145, 0.30);
+    background: linear-gradient(180deg, rgba(105, 37, 44, 0.96), rgba(80, 24, 31, 0.96));
+    color: #fff4f4;
+}
+
+.gallery-action-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.gallery-index-hero,
+.gallery-index-board,
+.gallery-empty-state,
+.gallery-view-hero,
+.gallery-toolbar-panel,
+.gallery-details-view,
+.gallery-image-wrapper,
+.gallery-upload-card {
+    position: relative;
+    background: var(--color-surface);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    box-shadow: var(--shadow-strong), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.gallery-index-hero::before,
+.gallery-index-board::before,
+.gallery-empty-state::before,
+.gallery-view-hero::before,
+.gallery-toolbar-panel::before,
+.gallery-details-view::before,
+.gallery-image-wrapper::before,
+.gallery-upload-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border-top: 3px solid rgba(114, 119, 255, 0.88);
+    pointer-events: none;
+}
+
+.gallery-index-board::after,
+.gallery-view-hero::after,
+.gallery-index-hero::after,
+.gallery-details-view::after,
+.gallery-image-wrapper::after,
+.gallery-upload-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle at top right, rgba(111, 116, 255, 0.14), transparent 36%);
+    pointer-events: none;
+}

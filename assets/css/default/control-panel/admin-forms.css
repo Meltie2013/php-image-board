@@ -1,0 +1,102 @@
+/*
+ * control-panel.css
+ * Section: FORMS
+ */
+
+/* =========================================================
+   FORMS
+========================================================= */
+.admin-form,
+.admin-dashboard form {
+    display: grid;
+    gap: 14px;
+}
+
+.admin-field {
+    display: grid;
+    gap: 7px;
+}
+
+.admin-field label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #cfd1dc;
+}
+
+.admin-dashboard input[type="text"],
+.admin-dashboard input[type="email"],
+.admin-dashboard input[type="password"],
+.admin-dashboard input[type="number"],
+.admin-dashboard select,
+.admin-dashboard textarea {
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 11px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    background: rgba(10, 11, 14, 0.38);
+    color: #ffffff;
+    outline: none;
+}
+
+.admin-dashboard textarea {
+    min-height: 120px;
+    resize: vertical;
+}
+
+.admin-dashboard input[disabled] {
+    opacity: 0.78;
+    cursor: not-allowed;
+}
+
+.admin-dashboard input[type="text"]::placeholder,
+.admin-dashboard input[type="email"]::placeholder,
+.admin-dashboard input[type="password"]::placeholder,
+.admin-dashboard textarea::placeholder {
+    color: rgba(255, 255, 255, 0.40);
+}
+
+.admin-dashboard select {
+    cursor: pointer;
+}
+
+.admin-dashboard input:focus,
+.admin-dashboard select:focus,
+.admin-dashboard textarea:focus {
+    border-color: rgba(126, 111, 255, 0.75);
+    box-shadow: 0 0 0 3px rgba(126, 111, 255, 0.15);
+}
+
+.admin-form-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 4px;
+}
+
+.admin-settings-editor {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) 110px auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.admin-dashboard .admin-form-grid-settings-add {
+    display: grid;
+    grid-template-columns: minmax(200px, 1.2fr) minmax(200px, 2fr) 150px auto;
+    gap: 12px;
+    align-items: end;
+}
+
+.admin-dashboard .admin-form-grid-settings-add .admin-btn {
+    justify-self: start;
+}
+
+.admin-cell-edit {
+    white-space: normal !important;
+    vertical-align: middle;
+}

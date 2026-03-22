@@ -1,0 +1,215 @@
+/*
+ * control-panel.css
+ * Section: ALERTS / BADGES / BUTTONS
+ */
+
+/* =========================================================
+   ALERTS / BADGES / BUTTONS
+========================================================= */
+.admin-notice,
+.success,
+.error-box {
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.admin-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.admin-notice p,
+.success p,
+.error-box p,
+.success,
+.error-box {
+    margin: 0;
+}
+
+.admin-notice-success,
+.success {
+    background: rgba(74, 156, 101, 0.16);
+    border-color: rgba(111, 214, 147, 0.30);
+    color: #d5ffe4;
+}
+
+.admin-notice-error,
+.error-box {
+    background: rgba(185, 73, 73, 0.16);
+    border-color: rgba(255, 135, 135, 0.30);
+    color: #ffd9d9;
+}
+
+.error-box {
+    display: grid;
+    gap: 6px;
+}
+
+.admin-pill,
+.admin-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+
+.admin-pill {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #e5e7f6;
+}
+
+.admin-status {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    color: #ffffff;
+}
+
+.admin-status-active,
+.admin-status-string {
+    background: rgba(68, 163, 106, 0.18);
+    border-color: rgba(95, 214, 145, 0.30);
+    color: #cbf5d9;
+}
+
+.admin-status-pending,
+.admin-status-int {
+    background: rgba(191, 143, 48, 0.18);
+    border-color: rgba(244, 203, 104, 0.30);
+    color: #ffe8b4;
+}
+
+.admin-status-suspended,
+.admin-status-banned,
+.admin-status-deleted,
+.admin-status-bool {
+    background: rgba(180, 71, 71, 0.20);
+    border-color: rgba(255, 125, 125, 0.30);
+    color: #ffd5d5;
+}
+
+.admin-status-jailed,
+.admin-status-blocked,
+.admin-status-rate_limited,
+.admin-status-json {
+    background: rgba(90, 111, 204, 0.20);
+    border-color: rgba(140, 163, 255, 0.32);
+    color: #d4dcff;
+}
+
+.admin-status-open {
+    background: rgba(191, 143, 48, 0.18);
+    border-color: rgba(244, 203, 104, 0.30);
+    color: #ffe8b4;
+}
+
+.admin-status-assigned {
+    background: rgba(90, 111, 204, 0.20);
+    border-color: rgba(140, 163, 255, 0.32);
+    color: #d4dcff;
+}
+
+.admin-status-closed {
+    background: rgba(68, 163, 106, 0.18);
+    border-color: rgba(95, 214, 145, 0.30);
+    color: #cbf5d9;
+}
+
+.admin-btn,
+.admin-dashboard button,
+.admin-dashboard .compare-button,
+.admin-dashboard .rehash-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 9px 13px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: linear-gradient(135deg, rgba(111, 116, 255, 0.96), rgba(136, 101, 255, 0.94));
+    color: #ffffff;
+    cursor: pointer;
+    text-decoration: none;
+    font-weight: 600;
+    line-height: 1;
+    transition: filter var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.26);
+}
+
+.admin-btn:hover,
+.admin-dashboard button:hover,
+.admin-dashboard .compare-button:hover,
+.admin-dashboard .rehash-button:hover {
+    filter: brightness(1.05);
+    transform: translateY(-1px);
+}
+
+.admin-btn:active,
+.admin-dashboard button:active,
+.admin-dashboard .compare-button:active,
+.admin-dashboard .rehash-button:active {
+    transform: translateY(1px);
+}
+
+.admin-btn[disabled],
+.admin-dashboard button[disabled] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.admin-btn-primary {
+    background: linear-gradient(135deg, rgba(111, 116, 255, 0.96), rgba(136, 101, 255, 0.94));
+}
+
+.admin-btn-secondary {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.11);
+    box-shadow: none;
+}
+
+.admin-btn-link {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    color: var(--color-primary-soft);
+    min-height: auto;
+    padding: 0;
+}
+
+.admin-btn-link:hover {
+    background: transparent;
+    color: #c8caf5;
+}
+
+.admin-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.admin-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-row-actions form {
+    margin: 0;
+}
+
+.admin-btn-icon {
+    min-width: 40px;
+    padding: 10px;
+}

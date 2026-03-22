@@ -1,0 +1,231 @@
+/*
+ * main.css
+ * Section: AUTH PAGES
+ */
+
+/* =========================================================
+   AUTH PAGES
+========================================================= */
+.auth-page {
+    width: 100%;
+    max-width: 1220px;
+    margin: 0 auto;
+    padding: 26px 20px 34px;
+}
+
+.auth-shell {
+    display: grid;
+    grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
+    gap: 18px;
+    align-items: stretch;
+}
+
+.auth-shell-login {
+    max-width: 980px;
+    margin: 0 auto;
+}
+
+.auth-shell-register {
+    max-width: 1080px;
+    margin: 0 auto;
+}
+
+.auth-brand-panel,
+.auth-form-panel {
+    position: relative;
+    background: linear-gradient(180deg, rgba(31, 33, 38, 0.94), rgba(24, 26, 30, 0.96));
+    border-radius: 20px;
+    border: 1px solid rgba(84, 98, 255, 0.34);
+    box-shadow:
+        0 16px 38px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    overflow: hidden;
+}
+
+.auth-brand-panel::before,
+.auth-form-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(135deg, rgba(110, 116, 255, 0.12), rgba(154, 99, 255, 0.05) 38%, transparent 70%);
+}
+
+.auth-brand-panel {
+    padding: 26px 22px;
+}
+
+.auth-form-panel {
+    padding: 28px 26px;
+}
+
+.auth-brand-eyebrow,
+.auth-panel-eyebrow {
+    margin-bottom: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #d3d7ff;
+}
+
+.auth-brand-panel h1,
+.auth-form-panel h2 {
+    margin: 0;
+    font-size: clamp(1.65rem, 2vw, 2.2rem);
+    line-height: 1.08;
+}
+
+.auth-form-panel h2 {
+    font-size: clamp(1.45rem, 1.9vw, 1.9rem);
+}
+
+.auth-brand-copy,
+.auth-panel-header p,
+.auth-feature-item p,
+.auth-links p {
+    color: rgba(227, 230, 242, 0.78);
+}
+
+.auth-brand-copy {
+    margin: 14px 0 0;
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+.auth-panel-header p {
+    margin: 10px 0 0;
+    font-size: 0.92rem;
+    line-height: 1.65;
+}
+
+.auth-feature-list {
+    display: grid;
+    gap: 14px;
+    margin-top: 24px;
+}
+
+.auth-feature-item {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 12px;
+    align-items: flex-start;
+    padding: 13px 14px;
+    border-radius: 14px;
+    background: rgba(13, 16, 22, 0.34);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.auth-feature-icon {
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(110, 116, 255, 0.2), rgba(154, 99, 255, 0.16));
+    border: 1px solid rgba(130, 135, 255, 0.25);
+    color: #f5f6ff;
+    font-size: 0.95rem;
+}
+
+.auth-feature-item strong {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 0.94rem;
+    color: #ffffff;
+}
+
+.auth-feature-item p {
+    margin: 0;
+    font-size: 0.84rem;
+    line-height: 1.6;
+}
+
+.auth-panel-header {
+    margin-bottom: 18px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.auth-alert-stack {
+    margin-bottom: 16px;
+}
+
+.auth-form {
+    gap: 14px;
+}
+
+.auth-field-grid {
+    display: grid;
+    gap: 14px;
+}
+
+.auth-field-grid-two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.auth-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.auth-field-group label {
+    margin: 0;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #eceefe;
+}
+
+.auth-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.auth-label-helper {
+    font-size: 0.74rem;
+    color: rgba(201, 205, 220, 0.65);
+}
+
+.auth-form input[type="text"],
+.auth-form input[type="email"],
+.auth-form input[type="password"] {
+    min-height: 46px;
+    border-radius: 12px;
+    border-color: rgba(255, 255, 255, 0.07);
+    background: rgba(14, 17, 22, 0.78);
+    font-size: 0.92rem;
+}
+
+.auth-form input[type="text"]:focus,
+.auth-form input[type="email"]:focus,
+.auth-form input[type="password"]:focus {
+    border-color: rgba(132, 138, 255, 0.82);
+    box-shadow: 0 0 0 1px rgba(132, 138, 255, 0.32);
+}
+
+.auth-submit-button {
+    width: 100%;
+    min-height: 48px;
+    margin-top: 4px;
+    font-size: 0.92rem;
+}
+
+.auth-links {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.auth-links p {
+    margin: 0 0 8px;
+    font-size: 0.86rem;
+    line-height: 1.6;
+}
+
+.auth-links p:last-child {
+    margin-bottom: 0;
+}

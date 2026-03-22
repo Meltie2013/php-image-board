@@ -1,0 +1,161 @@
+/*
+ * gallery.css
+ * Section: RESPONSIVE GALLERY LAYOUT
+ */
+
+/* =========================================================
+   RESPONSIVE GALLERY LAYOUT
+========================================================= */
+@media (max-width: 1280px) {
+    .gallery-item-view,
+    .gallery-view-page .gallery-item-view {
+        grid-template-columns: 360px minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 1080px) {
+    .gallery-index-board-header {
+        align-items: flex-start;
+    }
+
+    .gallery-index-board-actions {
+        justify-content: flex-start;
+    }
+
+    .gallery-item-view,
+    .gallery-view-page .gallery-item-view {
+        grid-template-columns: 1fr;
+    }
+
+    .gallery-left-side,
+    .gallery-view-page .gallery-left-side {
+        position: static;
+        gap: 18px;
+    }
+
+    .gallery-image-meta-strip,
+    .gallery-view-page .gallery-image-meta-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .gallery-view-primary-actions,
+    .gallery-view-feedback-actions,
+    .gallery-view-page .gallery-view-primary-actions,
+    .gallery-view-page .gallery-view-feedback-actions {
+        width: 100%;
+    }
+
+    .gallery-image-stage-inner,
+    .gallery-view-page .gallery-image-stage-restored .gallery-image-stage-inner {
+        min-height: 420px;
+    }
+}
+
+@media (max-width: 720px) {
+    .gallery-index-board,
+    .gallery-empty-state,
+    .gallery-details-view,
+    .gallery-image-wrapper,
+    .gallery-view-page .gallery-details-view,
+    .gallery-view-page .gallery-image-wrapper {
+        padding: 16px;
+        border-radius: 18px;
+    }
+
+    .gallery-index-board-notes {
+        margin-top: 12px;
+    }
+
+    .gallery-grid {
+        gap: 12px;
+    }
+
+    .gallery-card-link,
+    .gallery-item img {
+        border-radius: 16px;
+    }
+
+    .gallery-view-primary-actions,
+    .gallery-view-feedback-actions,
+    .gallery-view-page .gallery-view-primary-actions,
+    .gallery-view-page .gallery-view-feedback-actions {
+        padding: 10px;
+        border-radius: 16px;
+    }
+
+    .gallery-image-meta-strip,
+    .gallery-view-page .gallery-image-meta-strip {
+        grid-template-columns: 1fr;
+    }
+
+    .gallery-image-toolbar-row,
+    .gallery-view-page .gallery-image-toolbar-row,
+    .gallery-image-stage-caption {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .gallery-view-primary-actions,
+    .gallery-view-feedback-actions,
+    .gallery-view-page .gallery-view-primary-actions,
+    .gallery-view-page .gallery-view-feedback-actions,
+    .gallery-view-primary-actions > *,
+    .gallery-view-feedback-actions > *,
+    .gallery-view-feedback-actions form,
+    .gallery-view-page .gallery-view-primary-actions > *,
+    .gallery-view-page .gallery-view-feedback-actions > *,
+    .gallery-view-page .gallery-view-feedback-actions form {
+        width: 100%;
+    }
+
+    .gallery-feedback-btn,
+    .gallery-hero-btn,
+    .gallery-hero-btn-button,
+    .gallery-view-page .gallery-feedback-btn,
+    .gallery-view-page .gallery-hero-btn,
+    .gallery-view-page .gallery-hero-btn-button {
+        width: 100%;
+    }
+
+    .gallery-details-view-refined {
+        padding: 16px;
+    }
+
+    .gallery-details-view-refined li {
+        grid-template-columns: 90px minmax(0, 1fr);
+        align-items: flex-start;
+    }
+
+    .gallery-image-stage,
+    .gallery-view-page .gallery-image-stage-restored {
+        min-height: 340px;
+        padding: 14px;
+    }
+
+    .gallery-image-stage-inner,
+    .gallery-view-page .gallery-image-stage-restored .gallery-image-stage-inner {
+        min-height: 320px;
+        padding: 12px;
+    }
+
+    .gallery-hash-list li small {
+        font-size: 10px;
+        padding: 9px 10px;
+    }
+}
+
+@media (max-width: 540px) {
+    .gallery-index-board-actions,
+    .gallery-index-board-notes,
+    .gallery-view-side-summary {
+        width: 100%;
+    }
+
+    .gallery-view-side-summary {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .gallery-image-stage-caption {
+        align-items: flex-start;
+    }
+}

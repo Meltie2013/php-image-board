@@ -1,0 +1,43 @@
+/*
+ * main.css
+ * Section: RESET / BASIC STRUCTURE
+ */
+
+/* =========================================================
+   RESET / BASIC STRUCTURE
+========================================================= */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    min-height: 100%;
+}
+
+body {
+    min-height: 100vh;
+    font-family: var(--font-main);
+    color: var(--color-text-main);
+
+    background-image: var(--color-bg);
+    background-color: #0c0d0f;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    background-size: cover;
+
+    display: flex;
+    flex-direction: column;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+}

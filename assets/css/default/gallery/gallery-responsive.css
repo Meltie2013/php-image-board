@@ -1,0 +1,119 @@
+/*
+ * gallery.css
+ * Section: RESPONSIVE
+ */
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+@media (max-width: 1460px) {
+    .gallery-grid {
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 1280px) {
+    .gallery-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .gallery-item-view {
+        grid-template-columns: 380px minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 1080px) {
+    .gallery-index-hero,
+    .gallery-view-hero {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .gallery-index-hero-actions,
+    .gallery-view-hero-links {
+        justify-content: flex-start;
+    }
+
+    .gallery-item-view {
+        grid-template-columns: 1fr;
+    }
+
+    .gallery-left-side {
+        position: static;
+    }
+
+    .gallery-image-stage {
+        min-height: 420px;
+    }
+}
+
+@media (max-width: 980px) {
+    .gallery-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 720px) {
+    .gallery-container,
+    .gallery-container-view {
+        width: min(100%, calc(100vw - 24px));
+    }
+
+    .gallery-index-hero,
+    .gallery-index-board,
+    .gallery-empty-state,
+    .gallery-view-hero,
+    .gallery-toolbar-panel,
+    .gallery-details-view,
+    .gallery-image-wrapper {
+        padding: 18px;
+        border-radius: 18px;
+    }
+
+    .gallery-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .gallery-item img {
+        height: 150px;
+    }
+
+    .gallery-details-view li {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+
+    .gallery-image-header {
+        flex-direction: column;
+    }
+
+    .gallery-image-statuses {
+        justify-content: flex-start;
+    }
+
+    .gallery-image-view {
+        max-height: 70vh;
+    }
+
+    .comments-pagination {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+@media (max-width: 540px) {
+    .gallery-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .gallery-index-hero-copy h1,
+    .gallery-view-hero-copy h1 {
+        font-size: 28px;
+    }
+
+    .gallery-thumb-meta {
+        left: 8px;
+        bottom: 8px;
+    }
+}

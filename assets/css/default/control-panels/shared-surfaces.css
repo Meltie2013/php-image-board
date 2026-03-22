@@ -1,0 +1,49 @@
+/*
+ * control-panels.css
+ * Section: SHARED SHELL SURFACES
+ */
+
+/* =========================================================
+   SHARED SHELL SURFACES
+========================================================= */
+.admin-sidebar-inner,
+.moderation-sidebar-inner,
+.profile-sidebar-inner {
+    position: relative;
+    padding: 0;
+    overflow: hidden;
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-strong), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.admin-sidebar-inner::before,
+.admin-content::before,
+.moderation-sidebar-inner::before,
+.moderation-content::before,
+.profile-sidebar-inner::before,
+.profile-content::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border-top: 3px solid rgba(114, 119, 255, 0.9);
+    pointer-events: none;
+}
+
+.admin-content,
+.moderation-content,
+.profile-content {
+    position: relative;
+    margin-bottom: 20px;
+    padding: 14px;
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-strong), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}

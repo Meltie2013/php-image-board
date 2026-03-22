@@ -1,0 +1,91 @@
+/*
+ * control-panel.css
+ * Section: TABLES
+ */
+
+/* =========================================================
+   TABLES
+========================================================= */
+.pending-images-wrapper {
+    overflow-x: auto;
+}
+
+.pending-images-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+}
+
+.pending-images-table thead th {
+    padding: 13px 14px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #d0d3e9;
+    background: rgba(111, 116, 255, 0.10);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pending-images-table thead th:first-child {
+    border-top-left-radius: 12px;
+}
+
+.pending-images-table thead th:last-child {
+    border-top-right-radius: 12px;
+}
+
+.pending-images-table tbody td {
+    padding: 13px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    vertical-align: middle;
+    color: #f2f2f2;
+}
+
+.pending-images-table tbody tr {
+    background: rgba(10, 11, 14, 0.28);
+    transition: background var(--transition-fast);
+}
+
+.pending-images-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.pending-images-table tbody tr:last-child td:first-child {
+    border-bottom-left-radius: 12px;
+}
+
+.pending-images-table tbody tr:last-child td:last-child {
+    border-bottom-right-radius: 12px;
+}
+
+.pending-images-table td.is-wrap,
+.security-log-details-table tbody td,
+.admin-table-wrap {
+    white-space: normal;
+    word-break: break-word;
+}
+
+.pending-images-table .admin-table-link {
+    color: #dde0ff;
+    font-weight: 600;
+}
+
+.pending-images-table .admin-table-link:hover {
+    color: #ffffff;
+}
+
+.security-log-details-table tbody td.security-log-details-label {
+    width: 190px;
+    font-weight: 700;
+    color: #cfd1dc;
+}
+
+.admin-empty-state {
+    padding: 16px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+}

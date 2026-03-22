@@ -1,0 +1,59 @@
+/*
+ * control-panel.css
+ * Section: RESPONSIVE
+ */
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+@media (max-width: 1180px) {
+    .moderation-split-panels {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 980px) {
+    .moderation-container {
+        padding: 0 16px 20px;
+    }
+
+    .moderation-shell.moderation-layout,
+    .moderation-stat-grid,
+    .moderation-shortcuts-grid,
+    .compare-dropdowns .selects-row,
+    .compare-images {
+        grid-template-columns: 1fr;
+    }
+
+    .moderation-menu {
+        position: relative;
+        top: auto;
+    }
+
+    .moderation-page-header,
+    .moderation-results-header {
+        flex-direction: column;
+    }
+
+    .moderation-page-actions {
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 640px) {
+    .moderation-container {
+        padding: 0 12px 18px;
+    }
+
+    .moderation-content,
+    .moderation-panel-body,
+    .dashboard-comparison-wrapper,
+    .dashboard-rehash-wrapper {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    .pending-images-table {
+        min-width: 760px;
+    }
+}

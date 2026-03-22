@@ -1,0 +1,128 @@
+/*
+ * control-panel.css
+ * Section: PENDING TABLE
+ */
+
+/* =========================================================
+   PENDING TABLE
+========================================================= */
+.pending-images-wrapper {
+    overflow-x: auto;
+}
+
+.pending-images-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 10px;
+    font-size: 13px;
+}
+
+.pending-images-table thead th {
+    padding: 9px 11px;
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #cfd1dc;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.pending-images-table tbody tr {
+    background: rgba(10, 11, 14, 0.35);
+}
+
+.pending-images-table tbody td {
+    padding: 12px 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.pending-images-table tbody td.is-wrap,
+.pending-images-table tbody td .is-wrap {
+    white-space: normal;
+    word-break: break-word;
+}
+
+.pending-images-table tbody td:first-child {
+    border-left: 1px solid rgba(255, 255, 255, 0.05);
+    border-top-left-radius: var(--radius-md);
+    border-bottom-left-radius: var(--radius-md);
+}
+
+.pending-images-table tbody td:last-child {
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    border-top-right-radius: var(--radius-md);
+    border-bottom-right-radius: var(--radius-md);
+}
+
+.pending-images-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.pending-images-table .btn-view,
+.pending-images-table .btn-edit,
+.pending-images-table .btn-approve,
+.pending-images-table .btn-warning,
+.pending-images-table .btn-reject {
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: rgba(34, 36, 38, 0.95);
+    color: #ffffff;
+    box-shadow: none;
+}
+
+.pending-images-table .btn-edit {
+    background: rgba(34, 36, 38, 0.95);
+}
+
+.pending-images-table .btn-approve {
+    background: rgba(46, 204, 113, 0.18);
+    border-color: rgba(46, 204, 113, 0.45);
+}
+
+.pending-images-table .btn-warning {
+    background: rgba(241, 196, 15, 0.18);
+    border-color: rgba(241, 196, 15, 0.45);
+}
+
+.pending-images-table .btn-reject {
+    background: rgba(231, 76, 60, 0.18);
+    border-color: rgba(231, 76, 60, 0.45);
+}
+
+.pending-pagination {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+}
+
+.pending-pagination a {
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(34, 36, 38, 0.92);
+    color: #e3e4f0;
+    transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.pending-pagination a.current {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-strong));
+    border-color: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+}
+
+.pending-pagination a:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+}

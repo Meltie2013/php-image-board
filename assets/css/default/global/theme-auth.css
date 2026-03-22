@@ -1,0 +1,63 @@
+/*
+ * main.css
+ * Section: DEFAULT MAIN CONTENT (AUTH PAGES) Templates like login/register use <main> without a class. We style only those mains so gallery pages remain full-width.
+ */
+
+/* =========================================================
+   DEFAULT MAIN CONTENT (AUTH PAGES)
+   Templates like login/register use <main> without a class.
+   We style only those mains so gallery pages remain full-width.
+========================================================= */
+main:not([class]) {
+    width: 100%;
+    max-width: 460px;
+    margin: clamp(28px, 7vh, 70px) auto 0;
+    padding: 32px 28px 26px;
+
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-strong), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+
+    position: relative;
+}
+
+main:not([class])::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border-top: 3px solid rgba(114, 119, 255, 0.9);
+    pointer-events: none;
+}
+
+main:not([class]) > h1 {
+    text-align: center;
+    font-size: 26px;
+    margin: 0 0 22px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+main:not([class]) > p {
+    text-align: left;
+    color: var(--color-text-muted);
+    font-size: 13px !important;
+}
+
+/* Tighten auth form spacing without affecting the rest of the app */
+main:not([class]) form {
+    gap: 8px;
+}
+
+main:not([class]) form button {
+    width: 100%;
+    margin-top: 6px;
+    margin-bottom: 10px;
+}
+
+main:not([class]) > p {
+    margin-top: 10px;
+}

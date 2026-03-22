@@ -1,0 +1,184 @@
+/*
+ * profile.css
+ * Section: PROFILE SIDEBAR
+ */
+
+/* =========================================================
+   PROFILE SIDEBAR
+========================================================= */
+
+.profile-menu-top {
+    padding: 18px 16px 2px;
+}
+
+.profile-menu-kicker,
+.profile-kicker,
+.profile-panel-kicker,
+.profile-stat-label {
+    margin: 0 0 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #c8caf5;
+}
+
+.profile-menu-user {
+    display: grid;
+    grid-template-columns: 60px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+}
+
+.profile-menu-avatar-wrap {
+    position: relative;
+}
+
+.profile-menu-avatar,
+.profile-page-avatar,
+.profile-avatar-upload {
+    display: block;
+    object-fit: cover;
+    background: rgba(255, 255, 255, 0.03);
+    border: 2px solid rgba(119, 124, 255, 0.72);
+    box-shadow: 0 14px 24px rgba(0, 0, 0, 0.32);
+}
+
+.profile-menu-avatar,
+.profile-menu-avatar-placeholder {
+    width: 60px;
+    height: 60px;
+    border-radius: 18px;
+}
+
+.profile-menu-avatar-placeholder,
+.profile-page-avatar-placeholder,
+.profile-avatar-upload-placeholder {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #d9dcff;
+    background: radial-gradient(circle at top, rgba(111, 116, 255, 0.26), rgba(12, 14, 18, 0.72));
+}
+
+.profile-menu-avatar-placeholder i,
+.profile-page-avatar-placeholder i,
+.profile-avatar-upload-placeholder i {
+    font-size: 22px;
+}
+
+.profile-menu-user-copy h3 {
+    margin: 0 0 4px;
+    font-size: 20px;
+    line-height: 1.12;
+    letter-spacing: 0.01em;
+}
+
+.profile-menu-user-copy p {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: 13px;
+}
+
+.profile-menu-badges,
+.profile-badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.profile-badge,
+.profile-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(141, 145, 255, 0.28);
+    background: linear-gradient(180deg, rgba(111, 116, 255, 0.18), rgba(111, 116, 255, 0.08));
+    color: #ececff;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.profile-badge-muted,
+.profile-pill-muted {
+    border-color: rgba(255, 255, 255, 0.09);
+    background: rgba(255, 255, 255, 0.04);
+    color: #d3d6ea;
+}
+
+.profile-menu-group {
+    padding: 0 10px 0;
+}
+
+
+.profile-menu-link {
+    display: grid;
+    grid-template-columns: 38px 1fr;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 11px;
+    border-radius: 12px;
+    color: var(--color-text-main);
+    border: 1px solid transparent;
+    background: rgba(10, 11, 14, 0.18);
+    transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), color var(--transition-fast), opacity var(--transition-fast);
+}
+
+
+.profile-menu-link.is-disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.profile-menu-link.is-disabled:hover {
+    transform: none;
+    color: var(--color-text-main);
+    background: rgba(10, 11, 14, 0.18);
+    border-color: transparent;
+}
+
+
+.profile-menu-link-copy strong,
+.profile-shortcut-card strong,
+.profile-detail-item strong,
+.profile-summary-row strong {
+    display: block;
+    font-size: 14px;
+    line-height: 1.32;
+    color: #ffffff;
+}
+
+.profile-menu-link-copy small,
+.profile-shortcut-card small,
+.profile-note-card p {
+    display: block;
+    margin-top: 2px;
+    color: var(--color-text-muted);
+    line-height: 1.45;
+    font-size: 12px;
+}
+
+.profile-menu-footer {
+    margin: 0 10px 12px;
+    padding: 14px 14px 15px;
+    border-radius: 14px;
+    background: rgba(10, 11, 14, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.profile-menu-footer-title {
+    margin-bottom: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #bfc2d8;
+}
+
+.profile-menu-footer-value {
+    color: #ffffff;
+    font-size: 14px;
+}

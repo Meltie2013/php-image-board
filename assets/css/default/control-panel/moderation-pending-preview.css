@@ -1,0 +1,62 @@
+/*
+ * control-panel.css
+ * Section: PENDING IMAGE PREVIEW
+ */
+
+/* =========================================================
+   PENDING IMAGE PREVIEW
+========================================================= */
+.hover-preview {
+    display: inline-flex;
+    align-items: center;
+}
+
+.moderation-preview-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.moderation-preview-trigger:focus-visible {
+    outline: 2px solid rgba(124, 92, 255, 0.75);
+    outline-offset: 2px;
+}
+
+.moderation-preview-portal {
+    position: fixed;
+    z-index: 100000;
+    width: max-content;
+    max-width: min(360px, calc(100vw - 24px));
+    padding: 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.92);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(6px);
+    transition: opacity 0.14s ease, transform 0.14s ease, visibility 0.14s ease;
+}
+
+.moderation-preview-portal.is-visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.moderation-preview-portal-link {
+    display: block;
+}
+
+.moderation-preview-portal-image {
+    display: block;
+    width: auto;
+    max-width: min(344px, calc(100vw - 40px));
+    max-height: min(260px, calc(100vh - 40px));
+    border-radius: 8px;
+    object-fit: contain;
+}

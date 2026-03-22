@@ -1,0 +1,87 @@
+/*
+ * control-panel.css
+ * Section: RESPONSIVE
+ */
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+@media (max-width: 1200px) {
+    .admin-shell.admin-layout {
+        grid-template-columns: 264px minmax(0, 1fr);
+    }
+
+    .admin-page-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .admin-page-actions {
+        justify-content: flex-start;
+    }
+
+    .admin-split-panels,
+    .admin-form-grid-three {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 980px) {
+    .report-detail-grid,
+    .report-workflow-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-container {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .admin-shell.admin-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-menu {
+        position: relative;
+        top: auto;
+    }
+
+    .admin-stat-grid,
+    .admin-shortcuts-grid,
+    .admin-form-grid-two,
+    .admin-dashboard .admin-form-grid-settings-add,
+    .admin-settings-editor {
+        grid-template-columns: 1fr;
+    }
+
+    .security-log-details-table tbody td.security-log-details-label {
+        width: 140px;
+    }
+}
+
+@media (max-width: 640px) {
+    .admin-container {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    .admin-page-header,
+    .admin-panel-body,
+    .admin-panel-heading {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    .admin-page-header h2 {
+        font-size: 22px;
+    }
+
+    .pending-images-table {
+        font-size: 13px;
+    }
+
+    .pending-images-table thead th,
+    .pending-images-table tbody td {
+        padding: 11px 10px;
+    }
+}

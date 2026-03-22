@@ -1,0 +1,48 @@
+/*
+ * gallery.css
+ * Section: PAGINATION
+ */
+
+/* =========================================================
+   PAGINATION
+========================================================= */
+.gallery-pagination {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+}
+
+.gallery-pagination a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    min-height: 38px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(34, 36, 38, 0.92);
+    color: #e3e4f0;
+    font-weight: 600;
+    transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform 0.15s ease;
+}
+
+.gallery-pagination a.current {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-strong));
+    border-color: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+}
+
+.gallery-pagination a:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.20);
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+.gallery-pagination a.disabled {
+    opacity: 0.48;
+    pointer-events: none;
+}
