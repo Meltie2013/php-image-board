@@ -6,18 +6,19 @@
  * Centralized application settings loader with safe database overrides.
  *
  * Responsibilities:
- * - Keep sensitive configuration (DB credentials, security keys, hashing options, etc.) in config.php
- * - Allow non-sensitive runtime settings (site name, version, template options, UI defaults, etc.) to be stored in DB
+ * - Keep boot/runtime configuration (DB credentials, security keys, request guard, control server, etc.) in config.php
+ * - Load application-facing board settings from the database-backed settings registry
  * - Provide typed getters and a merged config array for backwards compatibility
  *
  * Security considerations:
- * - Only whitelisted top-level config sections can be overridden from the database
- * - Keys are validated and normalized (dot-notation supported for nested arrays)
- * - Fail-closed: if settings table is missing or an error occurs, defaults from config.php are used
+ * - Sensitive runtime sections remain on disk and are not replaced by database values
+ * - Database-backed settings still use normalized dot-notation keys
+ * - Fail-closed: if settings tables are missing or an error occurs, registry defaults are used
  *
  * Notes:
  * - Call SettingsManager::init($config) once during bootstrap AFTER Database::init()
  * - Controllers should use SettingsManager::getConfig() instead of re-requiring config.php
+ * - Managed settings sections in config.php are ignored so database values remain authoritative
  */
 class SettingsManager
 {
@@ -68,24 +69,19 @@ class SettingsManager
      */
     public static function init(array $config): void
     {
-        // Load full defaults from config.php.dist so the application still has
-        // a complete configuration tree even when config.php intentionally
-        // omits non-sensitive sections (moved to DB).
-        $defaults = self::loadDefaultConfig();
+        $runtimeDefaults = self::loadDefaultConfig();
+        $registryDefaults = class_exists('SettingsRegistry') ? SettingsRegistry::getFallbackConfig() : [];
+        $config = self::stripManagedSections($config);
 
-        // Merge defaults with the provided config.php (config.php wins)
-        self::$baseConfig = self::deepMerge($defaults, $config);
+        self::$baseConfig = self::deepMerge($runtimeDefaults, $config);
+        self::$baseConfig = self::deepMerge(self::$baseConfig, $registryDefaults);
 
-        // Allow overriding the default allow-list from config.php if desired
         if (!empty(self::$baseConfig['settings_manager']['override_allow_list']) && is_array(self::$baseConfig['settings_manager']['override_allow_list']))
         {
             self::$overrideAllowList = array_values(array_unique(array_filter(self::$baseConfig['settings_manager']['override_allow_list'], 'is_string')));
         }
 
-        // Load settings from DB safely (fail-closed)
         self::$settings = self::loadFromDatabase();
-
-        // Build merged config once per request
         self::$mergedConfig = self::applyOverrides(self::$baseConfig, self::$settings);
     }
 
@@ -106,7 +102,7 @@ class SettingsManager
             $defaults = require $distPath;
             if (is_array($defaults))
             {
-                return $defaults;
+                return self::stripManagedSections($defaults);
             }
         }
 
@@ -138,6 +134,25 @@ class SettingsManager
         }
 
         return $base;
+    }
+
+    /**
+     * Remove database-managed settings sections from a config array.
+     *
+     * @param array $config
+     * @return array
+     */
+    private static function stripManagedSections(array $config): array
+    {
+        foreach (self::$overrideAllowList as $section)
+        {
+            if (array_key_exists($section, $config))
+            {
+                unset($config[$section]);
+            }
+        }
+
+        return $config;
     }
 
     /**
@@ -331,7 +346,7 @@ class SettingsManager
     /**
      * Load settings from the database.
      *
-     * Table expected: app_settings (key/value/type).
+     * Table expected: app_settings_data (key/value/type).
      *
      * @return array
      */
@@ -339,19 +354,18 @@ class SettingsManager
     {
         try
         {
-            // Verify table exists (prevents fatal errors on fresh installs)
-            $exists = Database::fetch("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'app_settings' LIMIT 1");
+            $exists = Database::fetch("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'app_settings_data' LIMIT 1");
             if (empty($exists))
             {
                 return [];
             }
 
-            $rows = Database::fetchAll("SELECT `key`, `value`, `type` FROM app_settings");
+            $rows = Database::fetchAll("SELECT `key`, `value`, `type` FROM app_settings_data");
 
             $out = [];
             foreach ($rows as $row)
             {
-                $rawKey = isset($row['key']) ? (string)$row['key'] : '';
+                $rawKey = isset($row['key']) ? (string) $row['key'] : '';
                 $key = self::normalizeKey($rawKey);
 
                 if ($key === '')
@@ -359,15 +373,8 @@ class SettingsManager
                     continue;
                 }
 
-                // Only allow overriding specific top-level groups for safety
-                if (!self::isOverrideAllowed($key))
-                {
-                    continue;
-                }
-
-                $type = isset($row['type']) ? strtolower(trim((string)$row['type'])) : 'string';
-                $value = isset($row['value']) ? $row['value'] : '';
-
+                $type = isset($row['type']) ? strtolower(trim((string) $row['type'])) : 'string';
+                $value = $row['value'] ?? '';
                 $out[$key] = self::parseValueByType($value, $type);
             }
 
@@ -375,7 +382,6 @@ class SettingsManager
         }
         catch (Throwable $e)
         {
-            // Fail-closed: if anything goes wrong, do not break the app
             return [];
         }
     }
@@ -430,12 +436,16 @@ class SettingsManager
     {
         foreach ($settings as $key => $value)
         {
-            $key = self::normalizeKey((string)$key);
+            $key = self::normalizeKey((string) $key);
             if ($key === '')
+            {
                 continue;
+            }
 
             if (!self::isOverrideAllowed($key))
+            {
                 continue;
+            }
 
             $base = self::setInArray($base, $key, $value);
         }

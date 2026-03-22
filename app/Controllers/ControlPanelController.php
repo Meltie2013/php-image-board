@@ -666,24 +666,146 @@ class ControlPanelController extends BaseController
     }
 
     /**
-     * Render application settings management page.
+     * Return known registry key definitions for the settings UI.
      *
-     * Reads app_settings and prepares safe/escaped data for display and editing.
+     * @return array
+     */
+    private static function getSettingsDefinitionCatalog(): array
+    {
+        if (!class_exists('SettingsRegistry'))
+        {
+            return [];
+        }
+
+        $catalog = [];
+        foreach (SettingsRegistry::getSettingDefinitions() as $key => $definition)
+        {
+            $catalog[$key] = [
+                'category' => TypeHelper::toString($definition['category'] ?? SettingsRegistry::inferCategoryFromKey($key)),
+                'label' => TypeHelper::toString($definition['title'] ?? self::humanizeSettingsToken($key)),
+                'description' => TypeHelper::toString($definition['description'] ?? ''),
+                'type' => self::normalizeSettingsType(TypeHelper::toString($definition['type'] ?? 'string')),
+                'input' => TypeHelper::toString($definition['input'] ?? SettingsRegistry::defaultInputForType((string) ($definition['type'] ?? 'string'))),
+                'help' => TypeHelper::toString($definition['help'] ?? ''),
+                'placeholder' => TypeHelper::toString($definition['placeholder'] ?? ''),
+                'min' => isset($definition['min']) ? (string) $definition['min'] : '',
+                'max' => isset($definition['max']) ? (string) $definition['max'] : '',
+                'options' => $definition['options'] ?? [],
+                'sort_order' => TypeHelper::toInt($definition['sort_order'] ?? 0) ?? 0,
+                'default' => $definition['default'] ?? '',
+                'is_system' => !empty($definition['is_system']) ? 1 : 0,
+            ];
+        }
+
+        return $catalog;
+    }
+
+
+    /**
+     * Return the category catalog used by the Control Panel settings UI.
+     *
+     * @return array
+     */
+    private static function getSettingsCategoryCatalog(): array
+    {
+        if (!class_exists('SettingsRegistry'))
+        {
+            return [];
+        }
+
+        $catalog = [];
+        foreach (SettingsRegistry::getCategoryDefinitions() as $slug => $meta)
+        {
+            $catalog[$slug] = [
+                'title' => TypeHelper::toString($meta['title'] ?? self::humanizeSettingsToken($slug)),
+                'description' => TypeHelper::toString($meta['description'] ?? ''),
+                'icon' => TypeHelper::toString($meta['icon'] ?? 'fa-sliders'),
+                'sort_order' => TypeHelper::toInt($meta['sort_order'] ?? 0) ?? 0,
+                'is_system' => !empty($meta['is_system']) ? 1 : 0,
+            ];
+        }
+
+        return $catalog;
+    }
+
+    /**
+     * Render application settings overview page.
      *
      * @return void
      */
     public static function settings(): void
     {
+        self::renderSettingsPage('');
+    }
+
+    /**
+     * Render the category settings manager page.
+     *
+     * @return void
+     */
+    public static function settingsCategories(): void
+    {
+        self::renderSettingsPage('', true);
+    }
+
+    /**
+     * Render a specific settings category page.
+     *
+     * @param string $category
+     * @return void
+     */
+    public static function settingsCategory(string $category): void
+    {
+        self::renderSettingsPage($category);
+    }
+
+    /**
+     * Render the Control Panel settings experience.
+     *
+     * @param string $selectedCategory
+     * @param bool $manageCategories
+     * @return void
+     */
+    private static function renderSettingsPage(string $selectedCategory = '', bool $manageCategories = false): void
+    {
         self::requirePanelAdmin();
 
         $template = self::initTemplate();
+        $selectedCategory = self::normalizeSettingsCategorySlug($selectedCategory);
 
         $notice = '';
         $noticeType = '';
         $settingsError = Security::sanitizeString($_GET['error'] ?? '');
-        if (isset($_GET['success']))
+        $settingsNotice = Security::sanitizeString($_GET['notice'] ?? '');
+
+        if ($settingsNotice === 'saved' || isset($_GET['success']))
         {
             $notice = 'Setting saved successfully.';
+            $noticeType = 'success';
+        }
+        else if ($settingsNotice === 'reset')
+        {
+            $notice = 'Setting reset to its default value successfully.';
+            $noticeType = 'success';
+        }
+        else if ($settingsNotice === 'deleted')
+        {
+            $notice = 'Registry entry removed successfully.';
+            $noticeType = 'success';
+        }
+        else if ($settingsNotice === 'category_saved')
+        {
+            $notice = 'Category details saved successfully.';
+            $noticeType = 'success';
+        }
+        else if ($settingsNotice === 'category_reset')
+        {
+            $notice = 'Category display details reset to their default values.';
+            $noticeType = 'success';
+        }
+        else if ($settingsNotice === 'category_deleted')
+        {
+            $notice = 'Custom category removed successfully.';
             $noticeType = 'success';
         }
         else if ($settingsError === 'csrf')
@@ -693,42 +815,426 @@ class ControlPanelController extends BaseController
         }
         else if ($settingsError === 'key')
         {
-            $notice = 'A setting key is required before saving.';
+            $notice = 'A valid registry key is required before saving.';
+            $noticeType = 'error';
+        }
+        else if ($settingsError === 'reserved')
+        {
+            $notice = 'That key belongs to protected runtime configuration and cannot be managed from this settings area.';
+            $noticeType = 'error';
+        }
+        else if ($settingsError === 'value')
+        {
+            $notice = 'The setting value is not valid for that field type.';
+            $noticeType = 'error';
+        }
+        else if ($settingsError === 'length')
+        {
+            $notice = 'That value is too large to store.';
+            $noticeType = 'error';
+        }
+        else if ($settingsError === 'category')
+        {
+            $notice = 'A valid category slug is required before saving category details.';
+            $noticeType = 'error';
+        }
+        else if ($settingsError === 'category_not_empty')
+        {
+            $notice = 'That category still contains settings entries. Remove or move those entries before deleting the category.';
             $noticeType = 'error';
         }
 
-        $rows = Database::fetchAll("SELECT `key`, `value`, `type`, updated_at FROM app_settings ORDER BY `key` ASC");
-        $settings = [];
-        foreach ($rows as $s)
+        $builtInDefinitionCatalog = self::getSettingsDefinitionCatalog();
+        $definitionCatalog = $builtInDefinitionCatalog;
+        $builtInDefinitionKeys = array_fill_keys(array_keys($builtInDefinitionCatalog), true);
+
+        $baseCategoryCatalog = self::getSettingsCategoryCatalog();
+        $categoryCatalog = [];
+        foreach ($baseCategoryCatalog as $slug => $meta)
         {
-            $key = TypeHelper::toString($s['key'] ?? '');
-            $value = TypeHelper::toString($s['value'] ?? '');
-            $type = TypeHelper::toString($s['type'] ?? '');
-            $updatedAt = TypeHelper::toString(DateHelper::date_only_format($s['updated_at']) ?? '');
-
-            // Escape values for safe rendering inside admin HTML (attribute + text contexts)
-            $keyEsc = htmlspecialchars($key, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-            $valueEsc = htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-            $typeEsc = htmlspecialchars($type, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-
-            $settings[] = [
-                $keyEsc,    // $s_key_disp
-                $updatedAt, // $s_updated_at
-                $keyEsc,    // $s_key_attr
-                $valueEsc,  // $s_value_attr
-                $typeEsc,   // $s_type
+            $categoryCatalog[$slug] = [
+                'title' => self::normalizeSettingsCategoryDisplayTitle(TypeHelper::toString($meta['title'] ?? self::humanizeSettingsToken($slug))),
+                'description' => TypeHelper::toString($meta['description'] ?? ''),
+                'icon' => TypeHelper::toString($meta['icon'] ?? 'fa-sliders'),
+                'sort_order' => TypeHelper::toInt($meta['sort_order'] ?? 0) ?? 0,
+                'is_system' => !empty($meta['is_system']) ? 1 : 0,
+                'is_custom' => 0,
+                'has_meta' => 0,
             ];
+        }
+
+        $categoryRows = Database::fetchAll(
+            "SELECT `id`, `slug`, `title`, `description`, `icon`, `sort_order`, `is_system`, `updated_at`
+             FROM app_settings_categories
+             ORDER BY `sort_order` ASC, `title` ASC"
+        );
+
+        $categoryIdMap = [];
+        foreach ($categoryRows as $row)
+        {
+            $slug = self::normalizeSettingsCategorySlug(TypeHelper::toString($row['slug'] ?? ''));
+            if ($slug === '')
+            {
+                continue;
+            }
+
+            $categoryIdMap[$slug] = TypeHelper::toInt($row['id'] ?? 0) ?? 0;
+            $categoryCatalog[$slug] = [
+                'title' => self::normalizeSettingsCategoryDisplayTitle(TypeHelper::toString($row['title'] ?? ($categoryCatalog[$slug]['title'] ?? self::humanizeSettingsToken($slug)))),
+                'description' => TypeHelper::toString($row['description'] ?? ($categoryCatalog[$slug]['description'] ?? '')),
+                'icon' => TypeHelper::toString($row['icon'] ?? ($categoryCatalog[$slug]['icon'] ?? 'fa-sliders')),
+                'sort_order' => TypeHelper::toInt($row['sort_order'] ?? ($categoryCatalog[$slug]['sort_order'] ?? 9999)) ?? 9999,
+                'is_system' => !empty($row['is_system']) ? 1 : 0,
+                'is_custom' => empty($row['is_system']) ? 1 : 0,
+                'has_meta' => 1,
+                'updated_at' => TypeHelper::toString($row['updated_at'] ?? ''),
+            ];
+        }
+
+        $settingsRows = Database::fetchAll(
+            "SELECT d.`id`, d.`category_id`, d.`key`, d.`title`, d.`description`, d.`value`, d.`type`, d.`input_type`, d.`sort_order`, d.`is_system`, d.`updated_at`,
+                    c.`slug` AS category_slug
+             FROM app_settings_data d
+             LEFT JOIN app_settings_categories c ON c.`id` = d.`category_id`
+             ORDER BY COALESCE(c.`sort_order`, 9999) ASC, d.`sort_order` ASC, d.`title` ASC"
+        );
+
+        $rowMap = [];
+        foreach ($settingsRows as $row)
+        {
+            $key = self::normalizeSettingsKey(TypeHelper::toString($row['key'] ?? ''));
+            if ($key === '')
+            {
+                continue;
+            }
+
+            $categorySlug = self::normalizeSettingsCategorySlug(TypeHelper::toString($row['category_slug'] ?? ''));
+            if ($categorySlug === '')
+            {
+                $categorySlug = class_exists('SettingsRegistry') ? SettingsRegistry::inferCategoryFromKey($key) : self::normalizeSettingsCategorySlug(explode('.', $key, 2)[0] ?? 'custom');
+            }
+
+            if ($categorySlug === '')
+            {
+                $categorySlug = 'custom';
+            }
+
+            if (!isset($categoryCatalog[$categorySlug]))
+            {
+                $categoryCatalog[$categorySlug] = [
+                    'title' => self::humanizeSettingsToken($categorySlug),
+                    'description' => 'Additional registry entries stored for this settings group.',
+                    'icon' => 'fa-sliders',
+                    'sort_order' => 9999,
+                    'is_system' => 0,
+                    'is_custom' => 1,
+                    'has_meta' => 0,
+                ];
+            }
+
+            $row['category_slug'] = $categorySlug;
+            $rowMap[$key] = $row;
+
+            if (!isset($builtInDefinitionKeys[$key]))
+            {
+                $generated = class_exists('SettingsRegistry')
+                    ? SettingsRegistry::buildGeneratedDefinition($key, TypeHelper::toString($row['type'] ?? 'string'), $row)
+                    : [
+                        'category' => $categorySlug,
+                        'title' => TypeHelper::toString($row['title'] ?? self::humanizeSettingsToken($key)),
+                        'description' => TypeHelper::toString($row['description'] ?? ''),
+                        'type' => self::normalizeSettingsType(TypeHelper::toString($row['type'] ?? 'string')),
+                        'input' => TypeHelper::toString($row['input_type'] ?? 'text'),
+                        'help' => 'This setting is not part of the built-in catalog, so generic editing rules are being used.',
+                        'default' => '',
+                        'sort_order' => TypeHelper::toInt($row['sort_order'] ?? 9999) ?? 9999,
+                        'is_system' => 0,
+                    ];
+
+                $definitionCatalog[$key] = [
+                    'category' => $categorySlug,
+                    'label' => TypeHelper::toString($generated['title'] ?? self::humanizeSettingsToken($key)),
+                    'description' => TypeHelper::toString($generated['description'] ?? ''),
+                    'type' => self::normalizeSettingsType(TypeHelper::toString($row['type'] ?? ($generated['type'] ?? 'string'))),
+                    'input' => TypeHelper::toString($row['input_type'] ?? ($generated['input'] ?? 'text')),
+                    'help' => TypeHelper::toString($generated['help'] ?? ''),
+                    'placeholder' => TypeHelper::toString($generated['placeholder'] ?? ''),
+                    'min' => isset($generated['min']) ? (string) $generated['min'] : '',
+                    'max' => isset($generated['max']) ? (string) $generated['max'] : '',
+                    'options' => $generated['options'] ?? [],
+                    'sort_order' => TypeHelper::toInt($row['sort_order'] ?? ($generated['sort_order'] ?? 9999)) ?? 9999,
+                    'default' => $generated['default'] ?? '',
+                    'is_system' => !empty($row['is_system']) ? 1 : 0,
+                ];
+            }
+        }
+
+        uasort($categoryCatalog, static function (array $left, array $right): int
+        {
+            $leftOrder = TypeHelper::toInt($left['sort_order'] ?? 9999) ?? 9999;
+            $rightOrder = TypeHelper::toInt($right['sort_order'] ?? 9999) ?? 9999;
+            if ($leftOrder === $rightOrder)
+            {
+                return strcasecmp((string) ($left['title'] ?? ''), (string) ($right['title'] ?? ''));
+            }
+
+            return $leftOrder <=> $rightOrder;
+        });
+
+        if ($selectedCategory !== '' && !isset($categoryCatalog[$selectedCategory]))
+        {
+            $selectedCategory = '';
+            if ($notice === '')
+            {
+                $notice = 'That settings category was not found.';
+                $noticeType = 'error';
+            }
+        }
+
+        $groupedSettingsRaw = [];
+        foreach ($definitionCatalog as $key => $definition)
+        {
+            $categorySlug = self::normalizeSettingsCategorySlug(TypeHelper::toString($definition['category'] ?? ''));
+            if ($categorySlug === '')
+            {
+                $categorySlug = class_exists('SettingsRegistry') ? SettingsRegistry::inferCategoryFromKey($key) : 'custom';
+            }
+
+            if (!isset($categoryCatalog[$categorySlug]))
+            {
+                $categoryCatalog[$categorySlug] = [
+                    'title' => self::humanizeSettingsToken($categorySlug),
+                    'description' => 'Additional registry entries stored for this settings group.',
+                    'icon' => 'fa-sliders',
+                    'sort_order' => 9999,
+                    'is_system' => 0,
+                    'is_custom' => 1,
+                    'has_meta' => 0,
+                ];
+            }
+
+            $row = $rowMap[$key] ?? null;
+            $type = self::normalizeSettingsType(TypeHelper::toString($row['type'] ?? ($definition['type'] ?? 'string')));
+            $input = TypeHelper::toString($row['input_type'] ?? ($definition['input'] ?? 'text'));
+
+            if ($row !== null)
+            {
+                $valueForDisplay = self::formatSettingsValueForDisplay($row['value'] ?? '', $type, true);
+                $statusLabel = TypeHelper::toString(DateHelper::date_only_format(TypeHelper::toString($row['updated_at'] ?? '')) ?? 'Stored in database');
+                $statusClass = 'stored';
+                $hasStoredRow = 1;
+            }
+            else
+            {
+                $defaultValue = $definition['default'] ?? '';
+                $valueForDisplay = self::formatSettingsValueForDisplay($defaultValue, $type, false);
+                $statusLabel = 'Using registry default';
+                $statusClass = 'fallback';
+                $hasStoredRow = 0;
+            }
+
+            $valueAttribute = self::formatSettingsValueForAttribute($valueForDisplay, $type);
+            $valueTextArea = $type === 'json' ? $valueForDisplay : TypeHelper::toString($valueForDisplay);
+            $options = [];
+
+            if ($input === 'bool')
+            {
+                $currentBool = self::normalizeBoolStorageValue($valueForDisplay);
+                $options = [
+                    ['1', 'Enable', $currentBool === '1' ? 1 : 0],
+                    ['0', 'Disable', $currentBool === '0' ? 1 : 0],
+                ];
+            }
+            else if ($input === 'select')
+            {
+                $currentValue = TypeHelper::toString($valueAttribute);
+                foreach (($definition['options'] ?? []) as $option)
+                {
+                    $optionValue = TypeHelper::toString($option[0] ?? '');
+                    $optionLabel = TypeHelper::toString($option[1] ?? $optionValue);
+                    $options[] = [$optionValue, $optionLabel, $optionValue === $currentValue ? 1 : 0];
+                }
+            }
+
+            $groupedSettingsRaw[$categorySlug][] = [
+                'label' => TypeHelper::toString($row['title'] ?? ($definition['label'] ?? self::humanizeSettingsToken($key))),
+                'description' => TypeHelper::toString($row['description'] ?? ($definition['description'] ?? '')),
+                'key' => $key,
+                'type' => $type,
+                'status' => $statusLabel,
+                'input' => $input,
+                'value_attr' => TypeHelper::toString($valueAttribute),
+                'value_text' => TypeHelper::toString($valueTextArea),
+                'placeholder' => TypeHelper::toString($definition['placeholder'] ?? ''),
+                'min' => TypeHelper::toString($definition['min'] ?? ''),
+                'max' => TypeHelper::toString($definition['max'] ?? ''),
+                'help' => TypeHelper::toString($definition['help'] ?? ''),
+                'options' => $options,
+                'category' => $categorySlug,
+                'status_class' => $statusClass,
+                'has_stored_row' => $hasStoredRow,
+                'is_custom_entry' => isset($builtInDefinitionKeys[$key]) ? 0 : 1,
+                'sort_order' => TypeHelper::toInt($row['sort_order'] ?? ($definition['sort_order'] ?? 9999)) ?? 9999,
+            ];
+        }
+
+        $groupedSettings = [];
+        foreach ($groupedSettingsRaw as $categorySlug => $settingsGroup)
+        {
+            usort($settingsGroup, static function (array $left, array $right): int
+            {
+                $leftOrder = TypeHelper::toInt($left['sort_order'] ?? 9999) ?? 9999;
+                $rightOrder = TypeHelper::toInt($right['sort_order'] ?? 9999) ?? 9999;
+                if ($leftOrder === $rightOrder)
+                {
+                    return strcasecmp((string) ($left['label'] ?? ''), (string) ($right['label'] ?? ''));
+                }
+
+                return $leftOrder <=> $rightOrder;
+            });
+
+            foreach ($settingsGroup as $setting)
+            {
+                $groupedSettings[$categorySlug][] = [
+                    $setting['label'],
+                    $setting['description'],
+                    $setting['key'],
+                    $setting['type'],
+                    $setting['status'],
+                    $setting['input'],
+                    $setting['value_attr'],
+                    $setting['value_text'],
+                    $setting['placeholder'],
+                    $setting['min'],
+                    $setting['max'],
+                    $setting['help'],
+                    $setting['options'],
+                    $setting['category'],
+                    $setting['status_class'],
+                    $setting['has_stored_row'],
+                    $setting['is_custom_entry'],
+                ];
+            }
+        }
+
+        $categoryCards = [];
+        $managedCategories = [];
+        foreach ($categoryCatalog as $categorySlug => $categoryMeta)
+        {
+            $count = count($groupedSettings[$categorySlug] ?? []);
+            $countLabel = $count === 1 ? '1 setting' : $count . ' settings';
+            $title = TypeHelper::toString($categoryMeta['title'] ?? self::humanizeSettingsToken($categorySlug));
+            $description = TypeHelper::toString($categoryMeta['description'] ?? '');
+            $icon = TypeHelper::toString($categoryMeta['icon'] ?? 'fa-sliders');
+            $isSystem = !empty($categoryMeta['is_system']) ? 1 : 0;
+            $hasMeta = !empty($categoryMeta['has_meta']) ? 1 : 0;
+            $deleteAllowed = $isSystem ? 1 : ($count === 0 ? 1 : 0);
+            $deleteLabel = $isSystem ? 'Reset Defaults' : 'Delete Category';
+            $helperText = $isSystem
+                ? 'Built-in category. Any changes here update the stored category record without touching the built-in registry defaults.'
+                : ($count > 0
+                    ? 'Custom category. Delete or move the settings inside this category before removing the category itself.'
+                    : 'Custom category. This category is empty and can be removed safely.');
+
+            $categoryCards[] = [
+                $categorySlug,
+                $title,
+                $description,
+                $countLabel,
+                self::buildSettingsCategoryUrl($categorySlug),
+                $selectedCategory === $categorySlug ? 1 : 0,
+                $icon,
+            ];
+
+            $managedCategories[] = [
+                $categorySlug,
+                $title,
+                $description,
+                $icon,
+                $countLabel,
+                $isSystem,
+                $hasMeta,
+                $deleteAllowed,
+                $deleteLabel,
+                $helperText,
+            ];
+        }
+
+        $totalSettingsCount = 0;
+        foreach ($groupedSettings as $settingsGroup)
+        {
+            $totalSettingsCount += count($settingsGroup);
+        }
+
+        $storedSettingsCount = count($rowMap);
+        $fallbackSettingsCount = max(0, $totalSettingsCount - $storedSettingsCount);
+        $builtInCategoryCount = 0;
+        $customCategoryCount = 0;
+        foreach ($categoryCatalog as $categoryMeta)
+        {
+            if (!empty($categoryMeta['is_system']))
+            {
+                $builtInCategoryCount++;
+            }
+            else
+            {
+                $customCategoryCount++;
+            }
+        }
+
+        $pageTitle = 'Application Settings';
+        $pageDescription = 'Choose a settings category to manage board behavior with cleaner labels, safer inputs, and clearer descriptions.';
+        $selectedCategoryTitle = 'Settings Overview';
+        $selectedCategoryDescription = 'Select a category below to manage those settings on a dedicated page.';
+        $selectedCategoryIcon = 'fa-sliders';
+        $selectedSettings = [];
+        $currentNav = 'settings';
+
+        if ($selectedCategory !== '')
+        {
+            $categoryMeta = $categoryCatalog[$selectedCategory];
+            $selectedCategoryTitle = TypeHelper::toString($categoryMeta['title'] ?? self::humanizeSettingsToken($selectedCategory));
+            $selectedCategoryDescription = TypeHelper::toString($categoryMeta['description'] ?? '');
+            $selectedCategoryIcon = TypeHelper::toString($categoryMeta['icon'] ?? 'fa-sliders');
+            $selectedSettings = $groupedSettings[$selectedCategory] ?? [];
+            $pageTitle = preg_match('/settings$/i', $selectedCategoryTitle) ? $selectedCategoryTitle : ($selectedCategoryTitle . ' Settings');
+            $pageDescription = $selectedCategoryDescription;
+        }
+        else if ($manageCategories)
+        {
+            $pageTitle = 'Category Settings';
+            $pageDescription = 'Manage settings category names, descriptions, icons, and custom category groups from one dedicated page.';
+            $selectedCategoryTitle = 'Category Settings';
+            $selectedCategoryDescription = 'Update category presentation details or create a new custom settings group for advanced registry keys.';
+            $currentNav = 'settings-categories';
         }
 
         self::assignPanelPage(
             $template,
-            'settings',
-            'Application Settings',
-            'Manage the site configuration keys that power gallery, chat, forum, and security behaviour.',
+            $currentNav,
+            $pageTitle,
+            $pageDescription,
             'configuration'
         );
 
-        $template->assign('settings', $settings);
+        $template->assign('settings_categories', $categoryCards);
+        $template->assign('settings_selected_category', $selectedCategory);
+        $template->assign('settings_selected_category_title', $selectedCategoryTitle);
+        $template->assign('settings_selected_category_description', $selectedCategoryDescription);
+        $template->assign('settings_selected_rows', $selectedSettings);
+        $template->assign('settings_manage_categories', $managedCategories);
+        $template->assign('settings_manage_mode', $manageCategories ? 1 : 0);
+        $template->assign('settings_category_icon_options', self::getSettingsCategoryIconOptions());
+        $template->assign('settings_overview_url', self::buildSettingsCategoryUrl(''));
+        $template->assign('settings_category_manager_url', self::buildSettingsCategoryManagerUrl());
+        $template->assign('settings_total_categories', $manageCategories ? count($managedCategories) : count($categoryCards));
+        $template->assign('settings_total_settings', $totalSettingsCount);
+        $template->assign('settings_total_stored', $storedSettingsCount);
+        $template->assign('settings_total_fallback', $fallbackSettingsCount);
+        $template->assign('settings_total_built_in_categories', $builtInCategoryCount);
+        $template->assign('settings_total_custom_categories', $customCategoryCount);
+        $template->assign('settings_selected_icon', $selectedCategoryIcon);
+        $template->assign('settings_selected_count', count($selectedSettings));
         $template->assign('csrf_token', Security::generateCsrfToken());
         $template->assign('control_panel_notice', $notice);
         $template->assign('control_panel_notice_type', $noticeType);
@@ -738,7 +1244,7 @@ class ControlPanelController extends BaseController
     /**
      * Save an application setting (admin action).
      *
-     * Validates CSRF and then inserts/updates app_settings via upsert.
+     * Validates CSRF and then inserts/updates app_settings_data via upsert.
      *
      * @return void
      */
@@ -748,46 +1254,906 @@ class ControlPanelController extends BaseController
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST')
         {
-            header('Location: /panel/settings');
+            header('Location: ' . self::buildSettingsCategoryUrl(''));
             exit();
         }
+
+        $category = self::normalizeSettingsCategorySlug(Security::sanitizeString($_POST['category'] ?? ''));
+        $redirectBase = self::buildSettingsCategoryUrl($category);
 
         $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
         if (!Security::verifyCsrfToken($csrf))
         {
-            header('Location: /panel/settings?error=csrf');
+            header('Location: ' . $redirectBase . '?error=csrf');
             exit();
         }
 
-        $key = Security::sanitizeString($_POST['key'] ?? '');
-        $value = Security::sanitizeString($_POST['value'] ?? '');
-        $type = Security::sanitizeString($_POST['type'] ?? 'string');
+        $key = self::normalizeSettingsKey(Security::sanitizeString($_POST['key'] ?? ''));
+        $type = self::normalizeSettingsType(Security::sanitizeString($_POST['type'] ?? 'string'));
+        $value = trim((string) ($_POST['value'] ?? ''));
 
         if ($key === '')
         {
-            header('Location: /panel/settings?error=key');
+            header('Location: ' . $redirectBase . '?error=key');
             exit();
         }
 
-        if (!in_array($type, ['string', 'int', 'bool', 'json'], true))
+        if (self::isSettingsReservedKey($key))
         {
-            $type = 'string';
+            header('Location: ' . $redirectBase . '?error=reserved');
+            exit();
+        }
+
+        $normalized = self::normalizeSettingsValueForStorage($key, $value, $type);
+        if (!$normalized['valid'])
+        {
+            $errorCode = $normalized['error'] === 'length' ? 'length' : 'value';
+            header('Location: ' . $redirectBase . '?error=' . $errorCode);
+            exit();
+        }
+
+        $definitionCatalog = self::getSettingsDefinitionCatalog();
+        $builtInDefinition = $definitionCatalog[$key] ?? null;
+        $existing = Database::fetch("SELECT * FROM app_settings_data WHERE `key` = :key LIMIT 1", ['key' => $key]);
+
+        if ($builtInDefinition !== null)
+        {
+            $category = self::normalizeSettingsCategorySlug(TypeHelper::toString($builtInDefinition['category'] ?? ''));
+            $title = TypeHelper::toString($builtInDefinition['label'] ?? self::humanizeSettingsToken($key));
+            $description = TypeHelper::toString($builtInDefinition['description'] ?? '');
+            $inputType = TypeHelper::toString($builtInDefinition['input'] ?? 'text');
+            $sortOrder = TypeHelper::toInt($builtInDefinition['sort_order'] ?? 0) ?? 0;
+            $isSystem = !empty($builtInDefinition['is_system']) ? 1 : 0;
+        }
+        else
+        {
+            $category = $category !== '' ? $category : (class_exists('SettingsRegistry') ? SettingsRegistry::inferCategoryFromKey($key) : self::normalizeSettingsCategorySlug(explode('.', $key, 2)[0] ?? 'custom'));
+            $generated = class_exists('SettingsRegistry') ? SettingsRegistry::buildGeneratedDefinition($key, $type, is_array($existing) ? $existing : null) : [];
+            $title = trim(TypeHelper::toString($existing['title'] ?? ($generated['title'] ?? self::humanizeSettingsToken($key))));
+            $description = trim(TypeHelper::toString($existing['description'] ?? ($generated['description'] ?? '')));
+            $inputType = TypeHelper::toString($existing['input_type'] ?? ($generated['input'] ?? (class_exists('SettingsRegistry') ? SettingsRegistry::defaultInputForType($type) : 'text')));
+            $sortOrder = TypeHelper::toInt($existing['sort_order'] ?? ($generated['sort_order'] ?? 9999)) ?? 9999;
+            $isSystem = !empty($existing['is_system']) ? 1 : 0;
+        }
+
+        if ($category === '')
+        {
+            $category = 'custom';
+        }
+
+        $categoryId = self::ensureSettingsCategoryExists($category, $builtInDefinition !== null ? 1 : 0);
+        if ($categoryId <= 0)
+        {
+            header('Location: ' . $redirectBase . '?error=category');
+            exit();
         }
 
         Database::query(
-            "INSERT INTO app_settings (`key`, `value`, `type`) VALUES (:k, :v, :t)
-             ON DUPLICATE KEY UPDATE `value` = :v2, `type` = :t2",
+            "INSERT INTO app_settings_data (`category_id`, `key`, `title`, `description`, `value`, `type`, `input_type`, `sort_order`, `is_system`)
+             VALUES (:category_id, :key_name, :title, :description, :value_data, :type_name, :input_type, :sort_order, :is_system)
+             ON DUPLICATE KEY UPDATE
+                `category_id` = VALUES(`category_id`),
+                `title` = VALUES(`title`),
+                `description` = VALUES(`description`),
+                `value` = VALUES(`value`),
+                `type` = VALUES(`type`),
+                `input_type` = VALUES(`input_type`),
+                `sort_order` = VALUES(`sort_order`),
+                `is_system` = VALUES(`is_system`)",
             [
-                'k' => $key,
-                'v' => $value,
-                't' => $type,
-                'v2' => $value,
-                't2' => $type,
+                'category_id' => $categoryId,
+                'key_name' => $key,
+                'title' => $title,
+                'description' => $description,
+                'value_data' => $normalized['value'],
+                'type_name' => $type,
+                'input_type' => $inputType,
+                'sort_order' => $sortOrder,
+                'is_system' => $isSystem,
             ]
         );
 
-        header('Location: /panel/settings?success=1');
+        header('Location: ' . self::buildSettingsCategoryUrl($category) . '?notice=saved');
         exit();
+    }
+
+
+    /**
+     * Save category display details for the settings UI.
+     *
+     * @return void
+     */
+    public static function settingsCategorySave(): void
+    {
+        self::requirePanelAdmin();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
+        {
+            header('Location: ' . self::buildSettingsCategoryUrl(''));
+            exit();
+        }
+
+        $redirectBase = self::buildSettingsCategoryManagerUrl();
+        $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
+        if (!Security::verifyCsrfToken($csrf))
+        {
+            header('Location: ' . $redirectBase . '?error=csrf');
+            exit();
+        }
+
+        $baseCategoryCatalog = self::getSettingsCategoryCatalog();
+        $category = self::normalizeSettingsCategorySlug(TypeHelper::toString($_POST['category_slug'] ?? ''));
+        if ($category === '')
+        {
+            $category = self::normalizeSettingsCategorySlug(TypeHelper::toString($_POST['new_category_slug'] ?? ''));
+        }
+
+        if ($category === '')
+        {
+            header('Location: ' . $redirectBase . '?error=category');
+            exit();
+        }
+
+        $title = self::normalizeSettingsCategoryDisplayTitle(trim(TypeHelper::toString($_POST['category_title'] ?? '')));
+        $description = trim(TypeHelper::toString($_POST['category_description'] ?? ''));
+        $icon = trim(TypeHelper::toString($_POST['category_icon'] ?? ''));
+
+        $baseMeta = $baseCategoryCatalog[$category] ?? [];
+        $isSystem = !empty($baseMeta['is_system']) ? 1 : 0;
+        if ($title === '')
+        {
+            $title = self::normalizeSettingsCategoryDisplayTitle(TypeHelper::toString($baseMeta['title'] ?? self::humanizeSettingsToken($category)));
+        }
+
+        if ($description === '')
+        {
+            $description = TypeHelper::toString($baseMeta['description'] ?? 'Additional registry entries stored for this settings group.');
+        }
+
+        if ($icon === '' || !preg_match('/^fa-[a-z0-9-]+$/', $icon))
+        {
+            $icon = TypeHelper::toString($baseMeta['icon'] ?? 'fa-sliders');
+        }
+
+        if (strlen($title) > 80 || strlen($description) > 255 || strlen($icon) > 32)
+        {
+            header('Location: ' . $redirectBase . '?error=length');
+            exit();
+        }
+
+        $existing = Database::fetch("SELECT `id`, `sort_order`, `is_system` FROM app_settings_categories WHERE `slug` = :slug LIMIT 1", ['slug' => $category]);
+        $sortOrder = TypeHelper::toInt($existing['sort_order'] ?? ($baseMeta['sort_order'] ?? 0)) ?? 0;
+        if ($sortOrder <= 0)
+        {
+            $maxSort = Database::fetch("SELECT COALESCE(MAX(`sort_order`), 0) AS sort_order FROM app_settings_categories");
+            $sortOrder = (TypeHelper::toInt($maxSort['sort_order'] ?? 0) ?? 0) + 10;
+        }
+
+        if (!empty($existing['is_system']))
+        {
+            $isSystem = 1;
+        }
+
+        Database::query(
+            "INSERT INTO app_settings_categories (`slug`, `title`, `description`, `icon`, `sort_order`, `is_system`)
+             VALUES (:slug, :title, :description, :icon, :sort_order, :is_system)
+             ON DUPLICATE KEY UPDATE
+                `title` = VALUES(`title`),
+                `description` = VALUES(`description`),
+                `icon` = VALUES(`icon`),
+                `sort_order` = VALUES(`sort_order`),
+                `is_system` = VALUES(`is_system`)",
+            [
+                'slug' => $category,
+                'title' => $title,
+                'description' => $description,
+                'icon' => $icon,
+                'sort_order' => $sortOrder,
+                'is_system' => $isSystem,
+            ]
+        );
+
+        header('Location: ' . $redirectBase . '?notice=category_saved');
+        exit();
+    }
+
+    /**
+     * Delete category metadata or remove a custom category when it is empty.
+     *
+     * @return void
+     */
+    public static function settingsCategoryDelete(): void
+    {
+        self::requirePanelAdmin();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
+        {
+            header('Location: ' . self::buildSettingsCategoryUrl(''));
+            exit();
+        }
+
+        $redirectBase = self::buildSettingsCategoryManagerUrl();
+        $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
+        if (!Security::verifyCsrfToken($csrf))
+        {
+            header('Location: ' . $redirectBase . '?error=csrf');
+            exit();
+        }
+
+        $category = self::normalizeSettingsCategorySlug(TypeHelper::toString($_POST['category_slug'] ?? ''));
+        if ($category === '')
+        {
+            header('Location: ' . $redirectBase . '?error=category');
+            exit();
+        }
+
+        $baseCategoryCatalog = self::getSettingsCategoryCatalog();
+        $isSystemCategory = isset($baseCategoryCatalog[$category]);
+        $storedCount = self::countStoredSettingsEntriesForCategory($category);
+
+        if (!$isSystemCategory && $storedCount > 0)
+        {
+            header('Location: ' . $redirectBase . '?error=category_not_empty');
+            exit();
+        }
+
+        if ($isSystemCategory)
+        {
+            $baseMeta = $baseCategoryCatalog[$category];
+            Database::query(
+                "INSERT INTO app_settings_categories (`slug`, `title`, `description`, `icon`, `sort_order`, `is_system`)
+                 VALUES (:slug, :title, :description, :icon, :sort_order, :is_system)
+                 ON DUPLICATE KEY UPDATE
+                    `title` = VALUES(`title`),
+                    `description` = VALUES(`description`),
+                    `icon` = VALUES(`icon`),
+                    `sort_order` = VALUES(`sort_order`),
+                    `is_system` = VALUES(`is_system`)",
+                [
+                    'slug' => $category,
+                    'title' => self::normalizeSettingsCategoryDisplayTitle(TypeHelper::toString($baseMeta['title'] ?? self::humanizeSettingsToken($category))),
+                    'description' => TypeHelper::toString($baseMeta['description'] ?? ''),
+                    'icon' => TypeHelper::toString($baseMeta['icon'] ?? 'fa-sliders'),
+                    'sort_order' => TypeHelper::toInt($baseMeta['sort_order'] ?? 0) ?? 0,
+                    'is_system' => 1,
+                ]
+            );
+
+            header('Location: ' . $redirectBase . '?notice=category_reset');
+            exit();
+        }
+
+        Database::query("DELETE FROM app_settings_categories WHERE `slug` = :slug", ['slug' => $category]);
+        header('Location: ' . $redirectBase . '?notice=category_deleted');
+        exit();
+    }
+
+    /**
+     * Delete a stored registry entry.
+     *
+     * Built-in settings fall back to config.php when removed, while custom
+     * registry entries are deleted outright.
+     *
+     * @return void
+     */
+    public static function settingsDelete(): void
+    {
+        self::requirePanelAdmin();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
+        {
+            header('Location: ' . self::buildSettingsCategoryUrl(''));
+            exit();
+        }
+
+        $category = self::normalizeSettingsCategorySlug(Security::sanitizeString($_POST['category'] ?? ''));
+        $redirectBase = self::buildSettingsCategoryUrl($category);
+
+        $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
+        if (!Security::verifyCsrfToken($csrf))
+        {
+            header('Location: ' . $redirectBase . '?error=csrf');
+            exit();
+        }
+
+        $key = self::normalizeSettingsKey(Security::sanitizeString($_POST['key'] ?? ''));
+        if ($key === '')
+        {
+            header('Location: ' . $redirectBase . '?error=key');
+            exit();
+        }
+
+        if (self::isSettingsReservedKey($key))
+        {
+            header('Location: ' . $redirectBase . '?error=reserved');
+            exit();
+        }
+
+        $definitionCatalog = self::getSettingsDefinitionCatalog();
+        $builtInDefinition = $definitionCatalog[$key] ?? null;
+
+        if ($builtInDefinition !== null)
+        {
+            $type = self::normalizeSettingsType(TypeHelper::toString($builtInDefinition['type'] ?? 'string'));
+            $defaultValue = $builtInDefinition['default'] ?? '';
+            $normalized = self::normalizeSettingsValueForStorage($key, is_string($defaultValue) ? $defaultValue : json_encode($defaultValue, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), $type);
+            $categorySlug = self::normalizeSettingsCategorySlug(TypeHelper::toString($builtInDefinition['category'] ?? ''));
+            $categoryId = self::ensureSettingsCategoryExists($categorySlug, 1);
+
+            Database::query(
+                "INSERT INTO app_settings_data (`category_id`, `key`, `title`, `description`, `value`, `type`, `input_type`, `sort_order`, `is_system`)
+                 VALUES (:category_id, :key_name, :title, :description, :value_data, :type_name, :input_type, :sort_order, :is_system)
+                 ON DUPLICATE KEY UPDATE
+                    `category_id` = VALUES(`category_id`),
+                    `title` = VALUES(`title`),
+                    `description` = VALUES(`description`),
+                    `value` = VALUES(`value`),
+                    `type` = VALUES(`type`),
+                    `input_type` = VALUES(`input_type`),
+                    `sort_order` = VALUES(`sort_order`),
+                    `is_system` = VALUES(`is_system`)",
+                [
+                    'category_id' => $categoryId,
+                    'key_name' => $key,
+                    'title' => TypeHelper::toString($builtInDefinition['label'] ?? self::humanizeSettingsToken($key)),
+                    'description' => TypeHelper::toString($builtInDefinition['description'] ?? ''),
+                    'value_data' => $normalized['value'],
+                    'type_name' => $type,
+                    'input_type' => TypeHelper::toString($builtInDefinition['input'] ?? 'text'),
+                    'sort_order' => TypeHelper::toInt($builtInDefinition['sort_order'] ?? 0) ?? 0,
+                    'is_system' => 1,
+                ]
+            );
+
+            header('Location: ' . self::buildSettingsCategoryUrl($categorySlug) . '?notice=reset');
+            exit();
+        }
+
+        Database::query("DELETE FROM app_settings_data WHERE `key` = :key", ['key' => $key]);
+        header('Location: ' . $redirectBase . '?notice=deleted');
+        exit();
+    }
+
+    /**
+     * Build a settings category URL.
+     *
+     * @param string $category
+     * @return string
+     */
+    private static function buildSettingsCategoryUrl(string $category = ''): string
+    {
+        $category = self::normalizeSettingsCategorySlug($category);
+        if ($category === '')
+        {
+            return '/panel/settings';
+        }
+
+        return '/panel/settings/categories/' . rawurlencode($category);
+    }
+
+    /**
+     * Build the settings category manager URL.
+     *
+     * @return string
+     */
+    private static function buildSettingsCategoryManagerUrl(): string
+    {
+        return '/panel/settings/categories';
+    }
+
+
+    /**
+     * Ensure a settings category row exists and return its identifier.
+     *
+     * @param string $category
+     * @param int $isSystem
+     * @return int
+     */
+    private static function ensureSettingsCategoryExists(string $category, int $isSystem = 0): int
+    {
+        $category = self::normalizeSettingsCategorySlug($category);
+        if ($category === '')
+        {
+            return 0;
+        }
+
+        $existing = Database::fetch("SELECT `id` FROM app_settings_categories WHERE `slug` = :slug LIMIT 1", ['slug' => $category]);
+        $existingId = TypeHelper::toInt($existing['id'] ?? 0) ?? 0;
+        if ($existingId > 0)
+        {
+            return $existingId;
+        }
+
+        $baseCatalog = self::getSettingsCategoryCatalog();
+        $baseMeta = $baseCatalog[$category] ?? [];
+        $title = self::normalizeSettingsCategoryDisplayTitle(TypeHelper::toString($baseMeta['title'] ?? self::humanizeSettingsToken($category)));
+        $description = TypeHelper::toString($baseMeta['description'] ?? 'Additional registry entries stored for this settings group.');
+        $icon = TypeHelper::toString($baseMeta['icon'] ?? 'fa-sliders');
+        $sortOrder = TypeHelper::toInt($baseMeta['sort_order'] ?? 0) ?? 0;
+        if ($sortOrder <= 0)
+        {
+            $maxSort = Database::fetch("SELECT COALESCE(MAX(`sort_order`), 0) AS sort_order FROM app_settings_categories");
+            $sortOrder = (TypeHelper::toInt($maxSort['sort_order'] ?? 0) ?? 0) + 10;
+        }
+
+        Database::query(
+            "INSERT INTO app_settings_categories (`slug`, `title`, `description`, `icon`, `sort_order`, `is_system`)
+             VALUES (:slug, :title, :description, :icon, :sort_order, :is_system)",
+            [
+                'slug' => $category,
+                'title' => $title,
+                'description' => $description,
+                'icon' => $icon,
+                'sort_order' => $sortOrder,
+                'is_system' => $isSystem || !empty($baseMeta['is_system']) ? 1 : 0,
+            ]
+        );
+
+        $created = Database::fetch("SELECT `id` FROM app_settings_categories WHERE `slug` = :slug LIMIT 1", ['slug' => $category]);
+        return TypeHelper::toInt($created['id'] ?? 0) ?? 0;
+    }
+
+    /**
+     * Normalize a category display title for ACP presentation.
+     *
+     * @param string $title
+     * @return string
+     */
+    private static function normalizeSettingsCategoryDisplayTitle(string $title): string
+    {
+        $title = trim($title);
+        if ($title === '')
+        {
+            return '';
+        }
+
+        return preg_replace('/\s+settings$/i', '', $title) ?: $title;
+    }
+
+    /**
+     * Determine whether a registry key is reserved for settings UI metadata.
+     *
+     * @param string $key
+     * @return bool
+     */
+    private static function isSettingsReservedKey(string $key): bool
+    {
+        $key = self::normalizeSettingsKey($key);
+        if ($key === '' || $key === 'timezone')
+        {
+            return $key === 'timezone';
+        }
+
+        $topLevel = explode('.', $key, 2)[0] ?? '';
+        $reserved = [
+            'db',
+            'session',
+            'security',
+            'control_server',
+            'request_guard',
+            'settings_manager',
+        ];
+
+        return in_array($topLevel, $reserved, true) || strpos($key, '_meta.') === 0;
+    }
+
+    /**
+     * Build a metadata key for a settings category.
+     *
+     * @param string $category
+     * @param string $field
+     * @return string
+     */
+    private static function buildSettingsCategoryMetaKey(string $category, string $field): string
+    {
+        $category = self::normalizeSettingsCategorySlug($category);
+        $field = strtolower(trim($field));
+
+        return '_meta.category.' . $category . '.' . $field;
+    }
+
+    /**
+     * Merge stored category metadata over the built-in fallback catalog.
+     *
+     * @param array $baseCatalog
+     * @param array $metaMap
+     * @return array
+     */
+    private static function mergeSettingsCategoryCatalog(array $baseCatalog, array $metaMap): array
+    {
+        $catalog = [];
+        foreach ($baseCatalog as $categorySlug => $categoryMeta)
+        {
+            $catalog[$categorySlug] = [
+                'title' => TypeHelper::toString($categoryMeta['title'] ?? self::humanizeSettingsToken($categorySlug)),
+                'description' => TypeHelper::toString($categoryMeta['description'] ?? ''),
+                'icon' => TypeHelper::toString($categoryMeta['icon'] ?? 'fa-sliders'),
+                'is_system' => 1,
+                'is_custom' => 0,
+                'has_meta' => 0,
+            ];
+        }
+
+        foreach ($metaMap as $categorySlug => $categoryMeta)
+        {
+            if (!isset($catalog[$categorySlug]))
+            {
+                $catalog[$categorySlug] = [
+                    'title' => self::humanizeSettingsToken($categorySlug),
+                    'description' => 'Additional registry entries stored for this settings group.',
+                    'icon' => 'fa-sliders',
+                    'is_system' => 0,
+                    'is_custom' => 1,
+                    'has_meta' => 1,
+                ];
+            }
+            else
+            {
+                $catalog[$categorySlug]['has_meta'] = 1;
+            }
+
+            if (!empty($categoryMeta['title']))
+            {
+                $catalog[$categorySlug]['title'] = TypeHelper::toString($categoryMeta['title']);
+            }
+
+            if (!empty($categoryMeta['description']))
+            {
+                $catalog[$categorySlug]['description'] = TypeHelper::toString($categoryMeta['description']);
+            }
+
+            if (!empty($categoryMeta['icon']))
+            {
+                $catalog[$categorySlug]['icon'] = TypeHelper::toString($categoryMeta['icon']);
+            }
+        }
+
+        return $catalog;
+    }
+
+    /**
+     * Return the supported icon choices for category cards.
+     *
+     * @return array
+     */
+    private static function getSettingsCategoryIconOptions(): array
+    {
+        return [
+            ['fa-sliders', 'Sliders'],
+            ['fa-bug', 'Bug'],
+            ['fa-images', 'Images'],
+            ['fa-id-card', 'Profile'],
+            ['fa-window-maximize', 'Window'],
+            ['fa-code', 'Code'],
+            ['fa-upload', 'Upload'],
+            ['fa-shield-halved', 'Shield'],
+            ['fa-user-gear', 'User Gear'],
+            ['fa-gears', 'Gears'],
+            ['fa-database', 'Database'],
+            ['fa-wand-magic-sparkles', 'Magic'],
+        ];
+    }
+
+    /**
+     * Upsert a registry value directly into app_settings_data.
+     *
+     * @param string $key
+     * @param string $value
+     * @param string $type
+     * @return void
+     */
+    private static function upsertSettingsRegistryValue(string $key, string $value, string $type = 'string'): void
+    {
+        $key = self::normalizeSettingsKey($key);
+        if ($key === '' || self::isSettingsReservedKey($key))
+        {
+            return;
+        }
+
+        $type = self::normalizeSettingsType($type);
+        $normalized = self::normalizeSettingsValueForStorage($key, $value, $type);
+        if (!$normalized['valid'])
+        {
+            return;
+        }
+
+        $category = class_exists('SettingsRegistry') ? SettingsRegistry::inferCategoryFromKey($key) : self::normalizeSettingsCategorySlug(explode('.', $key, 2)[0] ?? 'custom');
+        $categoryId = self::ensureSettingsCategoryExists($category, 0);
+
+        Database::query(
+            "INSERT INTO app_settings_data (`category_id`, `key`, `title`, `description`, `value`, `type`, `input_type`, `sort_order`, `is_system`)
+             VALUES (:category_id, :key_name, :title, :description, :value_data, :type_name, :input_type, :sort_order, :is_system)
+             ON DUPLICATE KEY UPDATE
+                `category_id` = VALUES(`category_id`),
+                `title` = VALUES(`title`),
+                `description` = VALUES(`description`),
+                `value` = VALUES(`value`),
+                `type` = VALUES(`type`),
+                `input_type` = VALUES(`input_type`),
+                `sort_order` = VALUES(`sort_order`),
+                `is_system` = VALUES(`is_system`)",
+            [
+                'category_id' => $categoryId,
+                'key_name' => $key,
+                'title' => self::humanizeSettingsToken($key),
+                'description' => 'Custom database-backed setting.',
+                'value_data' => $normalized['value'],
+                'type_name' => $type,
+                'input_type' => class_exists('SettingsRegistry') ? SettingsRegistry::defaultInputForType($type) : 'text',
+                'sort_order' => 9999,
+                'is_system' => 0,
+            ]
+        );
+    }
+
+    /**
+     * Delete all metadata rows for a settings category.
+     *
+     * @param string $category
+     * @return void
+     */
+    private static function deleteSettingsCategoryMetaRows(string $category): void
+    {
+        $category = self::normalizeSettingsCategorySlug($category);
+        if ($category === '')
+        {
+            return;
+        }
+
+        Database::query("DELETE FROM app_settings_categories WHERE `slug` = :slug AND `is_system` = 0", ['slug' => $category]);
+    }
+
+    /**
+     * Count stored settings entries for a category, excluding metadata rows.
+     *
+     * @param string $category
+     * @return int
+     */
+    private static function countStoredSettingsEntriesForCategory(string $category): int
+    {
+        $category = self::normalizeSettingsCategorySlug($category);
+        if ($category === '')
+        {
+            return 0;
+        }
+
+        $row = Database::fetch(
+            "SELECT COUNT(*) AS total
+             FROM app_settings_data d
+             LEFT JOIN app_settings_categories c ON c.`id` = d.`category_id`
+             WHERE c.`slug` = :slug OR d.`key` LIKE :prefix",
+            [
+                'slug' => $category,
+                'prefix' => $category . '.%',
+            ]
+        );
+
+        return TypeHelper::toInt($row['total'] ?? 0) ?? 0;
+    }
+
+    /**
+     * Normalize a registry key to a safe dot-notation format.
+     *
+     * @param string $key
+     * @return string
+     */
+    private static function normalizeSettingsKey(string $key): string
+    {
+        $key = trim($key);
+        if ($key === '')
+        {
+            return '';
+        }
+
+        $key = str_replace(['/', '\\', ':'], '.', $key);
+        $key = preg_replace('/[^a-zA-Z0-9_.-]/', '', $key);
+        $key = preg_replace('/\.+/', '.', $key);
+        $key = trim($key, '.');
+
+        if (strlen($key) > 128)
+        {
+            $key = substr($key, 0, 128);
+        }
+
+        return $key;
+    }
+
+    /**
+     * Normalize a settings type to a supported registry value.
+     *
+     * @param string $type
+     * @return string
+     */
+    private static function normalizeSettingsType(string $type): string
+    {
+        $type = strtolower(trim($type));
+        return in_array($type, ['string', 'int', 'bool', 'json'], true) ? $type : 'string';
+    }
+
+    /**
+     * Normalize a settings category slug.
+     *
+     * @param string $category
+     * @return string
+     */
+    private static function normalizeSettingsCategorySlug(string $category): string
+    {
+        $category = strtolower(trim($category));
+        $category = preg_replace('/[^a-z0-9_.-]/', '', $category);
+        $category = trim($category, '.-_');
+
+        if (strlen($category) > 64)
+        {
+            $category = substr($category, 0, 64);
+        }
+
+        return $category;
+    }
+
+    /**
+     * Convert an internal token into a human-friendly title.
+     *
+     * @param string $value
+     * @return string
+     */
+    private static function humanizeSettingsToken(string $value): string
+    {
+        $value = str_replace(['.', '_', '-'], ' ', trim($value));
+        $value = preg_replace('/\s+/', ' ', $value);
+        $value = strtolower($value);
+
+        return ucwords($value);
+    }
+
+    /**
+     * Fetch a nested config value using a dot-notation key.
+     *
+     * @param array $config
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    private static function getNestedConfigValue(array $config, string $key, $default = '')
+    {
+        $parts = explode('.', $key);
+        $current = $config;
+        foreach ($parts as $part)
+        {
+            if (!is_array($current) || !array_key_exists($part, $current))
+            {
+                return $default;
+            }
+
+            $current = $current[$part];
+        }
+
+        return $current;
+    }
+
+    /**
+     * Format a stored or fallback value for display in the settings UI.
+     *
+     * @param mixed $value
+     * @param string $type
+     * @param bool $preferRawJsonString
+     * @return string
+     */
+    private static function formatSettingsValueForDisplay($value, string $type, bool $preferRawJsonString = false): string
+    {
+        switch ($type)
+        {
+            case 'bool':
+                return self::normalizeBoolStorageValue($value);
+
+            case 'int':
+                if (is_int($value) || is_float($value) || (is_string($value) && preg_match('/^-?\d+$/', trim($value))))
+                {
+                    return (string)((int)$value);
+                }
+                return '0';
+
+            case 'json':
+                if ($preferRawJsonString && is_string($value))
+                {
+                    $decoded = json_decode($value, true);
+                    if (json_last_error() === JSON_ERROR_NONE)
+                    {
+                        $encoded = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                        return is_string($encoded) ? $encoded : $value;
+                    }
+
+                    return $value;
+                }
+
+                if (is_string($value))
+                {
+                    $decoded = json_decode($value, true);
+                    if (json_last_error() === JSON_ERROR_NONE)
+                    {
+                        $encoded = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                        return is_string($encoded) ? $encoded : $value;
+                    }
+                }
+                else if (is_array($value))
+                {
+                    $encoded = json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                    return is_string($encoded) ? $encoded : '[]';
+                }
+
+                return '[]';
+
+            case 'string':
+            default:
+                if (is_array($value))
+                {
+                    $encoded = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                    return is_string($encoded) ? $encoded : '';
+                }
+
+                return trim((string)$value);
+        }
+    }
+
+    /**
+     * Format a value for single-line form controls.
+     *
+     * @param string $value
+     * @param string $type
+     * @return string
+     */
+    private static function formatSettingsValueForAttribute(string $value, string $type): string
+    {
+        if ($type === 'json')
+        {
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE)
+            {
+                $encoded = json_encode($decoded, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                return is_string($encoded) ? $encoded : '';
+            }
+        }
+
+        return $value;
+    }
+
+    /**
+     * Normalize a boolean-like value into the registry storage format.
+     *
+     * @param mixed $value
+     * @return string
+     */
+    private static function normalizeBoolStorageValue($value): string
+    {
+        if (is_bool($value))
+        {
+            return $value ? '1' : '0';
+        }
+
+        if (is_int($value) || is_float($value))
+        {
+            return ((int)$value) === 1 ? '1' : '0';
+        }
+
+        $normalized = strtolower(trim((string)$value));
+        return in_array($normalized, ['1', 'true', 'yes', 'on', 'enable', 'enabled'], true) ? '1' : '0';
+    }
+
+    /**
+     * Validate and normalize a setting value before saving.
+     *
+     * @param string $key
+     * @param string $value
+     * @param string $type
+     * @return array
+     */
+    private static function normalizeSettingsValueForStorage(string $key, string $value, string $type): array
+    {
+        if (class_exists('SettingsRegistry'))
+        {
+            return SettingsRegistry::normalizeValueForStorage($key, $value, $type);
+        }
+
+        return ['valid' => true, 'value' => trim($value), 'error' => ''];
     }
 
     /**

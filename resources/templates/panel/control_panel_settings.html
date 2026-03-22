@@ -9,11 +9,22 @@
             </div>
 
             <div class="admin-content admin-dashboard">
-                <div class="admin-page-header">
+                <div class="admin-page-header settings-page-header">
                     <div>
                         <div class="admin-kicker">Control Panel</div>
                         <h2>{$control_panel_page_title}</h2>
                         <p>{$control_panel_page_description}</p>
+                    </div>
+
+                    <div class="admin-page-actions settings-header-actions" role="tablist" aria-label="Settings Views">
+                        <a href="{$settings_overview_url}" class="settings-header-tab {if empty($settings_selected_category) && empty($settings_manage_mode)}is-active{/if}">
+                            <i class="fa-solid fa-sliders"></i>
+                            <span>Overview</span>
+                        </a>
+                        <a href="{$settings_category_manager_url}" class="settings-header-tab {if !empty($settings_manage_mode)}is-active{/if}">
+                            <i class="fa-solid fa-folder-tree"></i>
+                            <span>Category Settings</span>
+                        </a>
                     </div>
                 </div>
 
@@ -24,80 +35,357 @@
                     </div>
                 {/if}
 
-                <section class="admin-panel">
-                    <div class="admin-panel-heading">
-                        <div>
-                            <h3>Configuration Registry</h3>
-                            <p>Inline editing for the settings that will eventually control the gallery, forum, live chat, and security modules.</p>
-                        </div>
-                    </div>
+                <section class="admin-panel settings-layout-panel">
+                    <div class="admin-panel-body settings-layout-body">
+                        <div class="settings-layout-grid">
+                            <aside class="settings-layout-sidebar">
+                                <div class="settings-nav-panel">
+                                    <div class="settings-nav-header">
+                                        <h3>Settings</h3>
+                                        <p>Open a settings category to review values, descriptions, and stored overrides.</p>
+                                    </div>
 
-                    <div class="admin-panel-body">
-                        {if empty($settings)}
-                            <div class="admin-empty-state">
-                                <p>No settings exist yet. Use the form below to add the first configuration entry.</p>
-                            </div>
-                        {else}
-                            <div class="pending-images-wrapper">
-                                <table class="pending-images-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Key</th>
-                                            <th>Type</th>
-                                            <th>Updated</th>
-                                            <th>Edit</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {foreach $settings as list($s_key_disp, $s_updated_at, $s_key_attr, $s_value_attr, $s_type)}
-                                        <tr>
-                                            <td class="is-wrap">{$s_key_disp}</td>
-                                            <td><span class="admin-status admin-status-{$s_type}">{$s_type}</span></td>
-                                            <td>{$s_updated_at}</td>
-                                            <td class="admin-cell-edit">
-                                                <form method="POST" action="/panel/settings/save" class="admin-settings-editor">
-                                                    <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                                                    <input type="hidden" name="key" value="{$s_key_attr}">
-                                                    <input type="text" name="value" value="{$s_value_attr}" class="admin-input" aria-label="Value">
-                                                    <select name="type" class="admin-select" aria-label="Type">
-                                                        <option value="string" {if $s_type == 'string'}selected{/if}>string</option>
-                                                        <option value="int" {if $s_type == 'int'}selected{/if}>int</option>
-                                                        <option value="bool" {if $s_type == 'bool'}selected{/if}>bool</option>
-                                                        <option value="json" {if $s_type == 'json'}selected{/if}>json</option>
+                                    <div class="settings-nav-section">
+                                        <div class="settings-nav-section-label">Settings Categories</div>
+
+                                        <nav class="settings-nav-list" aria-label="Settings Categories">
+                                            {foreach $settings_categories as list($cat_slug, $cat_title, $cat_description, $cat_count, $cat_url, $cat_active, $cat_icon)}
+                                                <a href="{$cat_url}" class="settings-nav-item {if $cat_active}is-active{/if}">
+                                                    <span class="settings-nav-item-icon"><i class="fa-solid {$cat_icon}"></i></span>
+                                                    <span class="settings-nav-item-copy">
+                                                        <span class="settings-nav-item-title">{$cat_title}</span>
+                                                    </span>
+                                                    <span class="settings-nav-item-count">{$cat_count}</span>
+                                                </a>
+                                            {/foreach}
+                                        </nav>
+                                    </div>
+                                </div>
+                            </aside>
+
+                            <div class="settings-layout-workspace">
+                                <section class="settings-summary-strip" aria-label="Settings Summary">
+                                    {if !empty($settings_manage_mode)}
+                                        <div class="settings-summary-item">
+                                            <span class="settings-summary-label">Total Categories</span>
+                                            <strong>{$settings_total_categories}</strong>
+                                        </div>
+                                        <div class="settings-summary-item">
+                                            <span class="settings-summary-label">Built-in</span>
+                                            <strong>{$settings_total_built_in_categories}</strong>
+                                        </div>
+                                        <div class="settings-summary-item">
+                                            <span class="settings-summary-label">Custom</span>
+                                            <strong>{$settings_total_custom_categories}</strong>
+                                        </div>
+                                        <div class="settings-summary-item">
+                                            <span class="settings-summary-label">Settings Linked</span>
+                                            <strong>{$settings_total_settings}</strong>
+                                        </div>
+                                    {else if !empty($settings_selected_category)}
+                                        <div class="settings-summary-item settings-summary-item-highlight">
+                                            <span class="settings-summary-label">Current Category</span>
+                                            <strong><i class="fa-solid {$settings_selected_icon}"></i> {$settings_selected_category_title}</strong>
+                                        </div>
+                                        <div class="settings-summary-item">
+                                            <span class="settings-summary-label">Settings On Page</span>
+                                            <strong>{$settings_selected_count}</strong>
+                                        </div>
+                                        <div class="settings-summary-item">
+                                            <span class="settings-summary-label">Stored Overrides</span>
+                                            <strong>{$settings_total_stored}</strong>
+                                        </div>
+                                        <div class="settings-summary-item">
+                                            <span class="settings-summary-label">Fallback Defaults</span>
+                                            <strong>{$settings_total_fallback}</strong>
+                                        </div>
+                                    {else}
+                                        <div class="settings-summary-item">
+                                            <span class="settings-summary-label">Categories</span>
+                                            <strong>{$settings_total_categories}</strong>
+                                        </div>
+                                        <div class="settings-summary-item">
+                                            <span class="settings-summary-label">Known Settings</span>
+                                            <strong>{$settings_total_settings}</strong>
+                                        </div>
+                                        <div class="settings-summary-item">
+                                            <span class="settings-summary-label">Stored Overrides</span>
+                                            <strong>{$settings_total_stored}</strong>
+                                        </div>
+                                        <div class="settings-summary-item">
+                                            <span class="settings-summary-label">Fallback Defaults</span>
+                                            <strong>{$settings_total_fallback}</strong>
+                                        </div>
+                                    {/if}
+                                </section>
+
+                                {if !empty($settings_selected_category)}
+                                    <section class="settings-workspace-panel settings-workspace-panel-table">
+                                        <div class="settings-workspace-header">
+                                            <div>
+                                                <h3>{$settings_selected_category_title}</h3>
+                                                <p>{$settings_selected_category_description}</p>
+                                            </div>
+                                        </div>
+
+                                        {if empty($settings_selected_rows)}
+                                            <div class="admin-empty-state settings-workspace-empty">
+                                                <p>No settings were found for this category yet.</p>
+                                            </div>
+                                        {else}
+                                            <div class="settings-table-wrap">
+                                                <div class="settings-table settings-table-settings">
+                                                    {foreach $settings_selected_rows as list($s_label, $s_description, $s_key, $s_type, $s_updated, $s_input, $s_value_attr, $s_value_text, $s_placeholder, $s_min, $s_max, $s_help, $s_options, $s_category, $s_status_class, $s_has_stored_row, $s_is_custom_entry)}
+                                                        <form method="POST" action="/panel/settings/save" class="settings-table-row settings-table-row-setting">
+                                                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                                            <input type="hidden" name="key" value="{$s_key}">
+                                                            <input type="hidden" name="type" value="{$s_type}">
+                                                            <input type="hidden" name="category" value="{$s_category}">
+
+                                                            <div class="settings-table-cell settings-table-cell-info">
+                                                                <div class="settings-table-title-row">
+                                                                    <h4>{$s_label}</h4>
+                                                                    <div class="settings-table-badges">
+                                                                        <span class="admin-status admin-status-{$s_type}">{$s_type}</span>
+                                                                        <span class="settings-form-updated settings-form-updated-{$s_status_class}">{$s_updated}</span>
+                                                                    </div>
+                                                                </div>
+                                                                <p class="settings-table-description">{$s_description}</p>
+                                                                <p class="settings-table-help">{$s_help}</p>
+                                                            </div>
+
+                                                            <div class="settings-table-cell settings-table-cell-control {if $s_input == 'json'}settings-table-cell-control-wide{/if}">
+                                                                {if $s_input == 'bool'}
+                                                                    <div class="settings-toggle-group" role="radiogroup" aria-label="{$s_label}">
+                                                                        {foreach $s_options as list($opt_value, $opt_label, $opt_selected)}
+                                                                            <label class="settings-toggle-option {if $opt_selected}is-selected{/if}">
+                                                                                <input type="radio" name="value" value="{$opt_value}" {if $opt_selected}checked{/if}>
+                                                                                <span>{$opt_label}</span>
+                                                                            </label>
+                                                                        {/foreach}
+                                                                    </div>
+                                                                {else if $s_input == 'number'}
+                                                                    <input type="number" name="value" value="{$s_value_attr}" class="admin-input" {if !empty($s_min)}min="{$s_min}"{/if} {if !empty($s_max)}max="{$s_max}"{/if}>
+                                                                {else if $s_input == 'select'}
+                                                                    <select name="value" class="admin-select">
+                                                                        {foreach $s_options as list($opt_value, $opt_label, $opt_selected)}
+                                                                            <option value="{$opt_value}" {if $opt_selected}selected{/if}>{$opt_label}</option>
+                                                                        {/foreach}
+                                                                    </select>
+                                                                {else if $s_input == 'json'}
+                                                                    <textarea name="value" class="admin-textarea settings-json-input" rows="7" spellcheck="false">{$s_value_text}</textarea>
+                                                                {else}
+                                                                    <input type="text" name="value" value="{$s_value_attr}" placeholder="{$s_placeholder}" class="admin-input">
+                                                                {/if}
+                                                            </div>
+
+                                                            <div class="settings-table-cell settings-table-cell-actions">
+                                                                <button type="submit" class="admin-btn admin-btn-primary">Save</button>
+                                                                {if $s_has_stored_row}
+                                                                    <button
+                                                                        type="submit"
+                                                                        formaction="/panel/settings/delete"
+                                                                        class="admin-btn admin-btn-secondary settings-table-delete-btn"
+                                                                        onclick="return confirm('{if $s_is_custom_entry}Delete this custom registry entry?{else}Reset this setting to its fallback default?{/if}');"
+                                                                    >
+                                                                        <i class="fa-solid {if $s_is_custom_entry}fa-trash-can{else}fa-rotate-left{/if}"></i>
+                                                                        {if $s_is_custom_entry}Delete{else}Reset{/if}
+                                                                    </button>
+                                                                {/if}
+                                                            </div>
+                                                        </form>
+                                                    {/foreach}
+                                                </div>
+                                            </div>
+                                        {/if}
+                                    </section>
+                                {else if !empty($settings_manage_mode)}
+                                    <section class="settings-workspace-panel settings-workspace-panel-table">
+                                        <div class="settings-workspace-header">
+                                            <div>
+                                                <h3>Category Settings</h3>
+                                                <p>Update category titles, icons, and descriptions from one place. Built-in categories can be restored to their fallback copy, and empty custom categories can be removed.</p>
+                                            </div>
+                                        </div>
+
+                                        <div class="settings-table-wrap">
+                                            <div class="settings-table settings-table-categories">
+                                                {foreach $settings_manage_categories as list($m_slug, $m_title, $m_description, $m_icon, $m_count, $m_is_system, $m_has_meta, $m_delete_allowed, $m_delete_label, $m_helper_text)}
+                                                    <form method="POST" action="/panel/settings/categories/save" class="settings-table-row settings-table-row-category">
+                                                        <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                                        <input type="hidden" name="category_slug" value="{$m_slug}">
+
+                                                        <div class="settings-table-cell settings-table-cell-info">
+                                                            <div class="settings-table-title-row">
+                                                                <h4>{$m_title}</h4>
+                                                                <div class="settings-table-badges">
+                                                                    <span class="admin-status admin-status-{if $m_is_system}string{else}json{/if}">{if $m_is_system}built-in{else}custom{/if}</span>
+                                                                    <span class="settings-form-updated settings-form-updated-{if $m_is_system}stored{else}fallback{/if}">{$m_count}</span>
+                                                                </div>
+                                                            </div>
+                                                            <p class="settings-table-description">{$m_helper_text}</p>
+                                                            <div class="settings-table-meta">
+                                                                <span class="settings-form-key">{$m_slug}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="settings-table-cell settings-table-cell-control settings-table-cell-control-stack">
+                                                            <div class="admin-form-grid-two settings-category-manager-grid">
+                                                                <div class="admin-field">
+                                                                    <label>Display Name</label>
+                                                                    <input type="text" name="category_title" value="{$m_title}" class="admin-input" maxlength="80" required>
+                                                                </div>
+                                                                <div class="admin-field">
+                                                                    <label>Category Icon</label>
+                                                                    <select name="category_icon" class="admin-select">
+                                                                        {foreach $settings_category_icon_options as list($icon_value, $icon_label)}
+                                                                            <option value="{$icon_value}" {if $icon_value == $m_icon}selected{/if}>{$icon_label}</option>
+                                                                        {/foreach}
+                                                                    </select>
+                                                                </div>
+                                                            </div>
+                                                            <div class="admin-field">
+                                                                <label>Description</label>
+                                                                <textarea name="category_description" class="admin-textarea settings-category-description-input" rows="3" maxlength="150">{$m_description}</textarea>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="settings-table-cell settings-table-cell-actions settings-table-cell-actions-stack">
+                                                            <button type="submit" class="admin-btn admin-btn-primary">Save Category</button>
+                                                            <button
+                                                                type="submit"
+                                                                formaction="/panel/settings/categories/delete"
+                                                                class="admin-btn admin-btn-secondary settings-table-delete-btn"
+                                                                {if !$m_delete_allowed}disabled{/if}
+                                                                onclick="return confirm('{if $m_is_system}Reset this category back to its fallback label and description?{else}Delete this custom category?{/if}');"
+                                                            >
+                                                                <i class="fa-solid {if $m_is_system}fa-rotate-left{else}fa-trash-can{/if}"></i>
+                                                                {$m_delete_label}
+                                                            </button>
+                                                        </div>
+                                                    </form>
+                                                {/foreach}
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section class="settings-workspace-panel">
+                                        <div class="settings-workspace-header">
+                                            <div>
+                                                <h3>Create Custom Category</h3>
+                                                <p>Add a new category so future settings keys under that prefix have a proper label, icon, and description from the start.</p>
+                                            </div>
+                                        </div>
+
+                                        <form method="POST" action="/panel/settings/categories/save" class="settings-create-panel settings-create-panel-compact">
+                                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
+
+                                            <div class="admin-form-grid-two settings-category-manager-grid">
+                                                <div class="admin-field">
+                                                    <label>Category Slug</label>
+                                                    <input type="text" name="new_category_slug" placeholder="integration" class="admin-input" maxlength="64" required>
+                                                </div>
+                                                <div class="admin-field">
+                                                    <label>Display Name</label>
+                                                    <input type="text" name="category_title" placeholder="Integration" class="admin-input" maxlength="80" required>
+                                                </div>
+                                            </div>
+
+                                            <div class="admin-form-grid-two settings-category-manager-grid">
+                                                <div class="admin-field">
+                                                    <label>Category Icon</label>
+                                                    <select name="category_icon" class="admin-select">
+                                                        {foreach $settings_category_icon_options as list($icon_value, $icon_label)}
+                                                            <option value="{$icon_value}">{$icon_label}</option>
+                                                        {/foreach}
                                                     </select>
-                                                    <button type="submit" class="admin-btn admin-btn-primary">Save</button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                        {/foreach}
-                                    </tbody>
-                                </table>
+                                                </div>
+                                                <div class="admin-field">
+                                                    <label>Description</label>
+                                                    <textarea name="category_description" class="admin-textarea settings-category-description-input" rows="3" maxlength="150" placeholder="Settings for integration hooks, API connections, or third-party services."></textarea>
+                                                </div>
+                                            </div>
+
+                                            <div class="settings-create-panel-footer">
+                                                <p>Use a short lowercase slug. Settings added with keys such as <b>integration.api_key</b> or <b>integration.webhook_enabled</b> will then resolve into this category automatically.</p>
+                                                <div class="settings-table-footer-actions">
+                                                    <button type="submit" class="admin-btn admin-btn-primary"><i class="fa-solid fa-folder-plus"></i> Create Category</button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </section>
+                                {else}
+                                    <section class="settings-workspace-panel">
+                                        <div class="settings-workspace-header">
+                                            <div>
+                                                <h3>Settings Overview</h3>
+                                                <p>Use the category list to open a focused settings page, or add a new registry entry when a feature needs a new saved value.</p>
+                                            </div>
+                                        </div>
+
+                                        <div class="settings-overview-grid settings-overview-grid-broad">
+                                            <div class="settings-overview-section">
+                                                <h4>How the settings pages work</h4>
+                                                <ul class="settings-overview-list">
+                                                    <li>Each category page is generated from the stored category metadata and the prefix used in the setting key.</li>
+                                                    <li>Built-in settings keep their cleaner labels, descriptions, and safer input controls automatically.</li>
+                                                    <li>Custom settings can still be added here when you need a new registry key before a dedicated UI exists for it.</li>
+                                                </ul>
+                                            </div>
+                                            <div class="settings-overview-section">
+                                                <h4>Recommended workflow</h4>
+                                                <ul class="settings-overview-list">
+                                                    <li>Review the category metadata first when the setting group needs a clearer name or description.</li>
+                                                    <li>Add new keys using the matching prefix, such as <b>gallery.example_setting</b> or <b>profile.badges_enabled</b>.</li>
+                                                    <li>Return to that category page and save the final value there once the new entry is visible in the directory.</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section class="settings-workspace-panel">
+                                        <div class="settings-workspace-header">
+                                            <div>
+                                                <h3>Advanced Registry Entry</h3>
+                                                <p>Add or update a raw registry key directly when you need to introduce a new Control Panel-managed setting.</p>
+                                            </div>
+                                        </div>
+
+                                        <form method="POST" action="/panel/settings/save" class="settings-create-panel settings-create-panel-compact">
+                                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                            <input type="hidden" name="category" value="">
+
+                                            <div class="admin-form-grid settings-advanced-grid">
+                                                <div class="admin-field">
+                                                    <label>Registry Key</label>
+                                                    <input type="text" name="key" placeholder="gallery.example_setting" class="admin-input" required>
+                                                </div>
+                                                <div class="admin-field">
+                                                    <label>Value</label>
+                                                    <input type="text" name="value" placeholder="value" class="admin-input" required>
+                                                </div>
+                                                <div class="admin-field">
+                                                    <label>Type</label>
+                                                    <select name="type" class="admin-select">
+                                                        <option value="string">string</option>
+                                                        <option value="int">int</option>
+                                                        <option value="bool">bool</option>
+                                                        <option value="json">json</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <div class="settings-create-panel-footer">
+                                                <p>For JSON values, enter valid JSON. Template function allow-lists are validated and normalized before saving. Use Category Settings when you want a custom category title, description, or icon instead of the generic auto-generated group.</p>
+                                                <div class="settings-table-footer-actions">
+                                                    <button type="submit" class="admin-btn admin-btn-primary"><i class="fa-solid fa-plus"></i> Save Entry</button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </section>
+                                {/if}
                             </div>
-                        {/if}
-                    </div>
-                </section>
-
-                <section class="admin-panel">
-                    <div class="admin-panel-heading">
-                        <div>
-                            <h3>Add Setting</h3>
-                            <p>Create new configuration keys as the administrative platform grows.</p>
                         </div>
-                    </div>
-
-                    <div class="admin-panel-body">
-                        <form method="POST" action="/panel/settings/save" class="admin-form-grid admin-form-grid-settings-add">
-                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                            <input type="text" name="key" placeholder="key" class="admin-input" required>
-                            <input type="text" name="value" placeholder="value" class="admin-input" required>
-                            <select name="type" class="admin-select">
-                                <option value="string">string</option>
-                                <option value="int">int</option>
-                                <option value="bool">bool</option>
-                                <option value="json">json</option>
-                            </select>
-                            <button type="submit" class="admin-btn admin-btn-primary"><i class="fa-solid fa-plus"></i> Add</button>
-                        </form>
                     </div>
                 </section>
             </div>

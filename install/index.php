@@ -72,6 +72,11 @@ define('INSTALLER_LOCK_FILE', __DIR__ . '/installer.lock');
 define('INSTALLER_RATE_LIMIT_FILE', rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'php_image_board_installer_rate_limit_' . hash('sha256', APP_ROOT) . '.json');
 define('INSTALLER_PACKAGE_DIR', APP_ROOT . '/storage/packages/updater');
 
+if (is_file(APP_ROOT . '/app/Core/SettingsRegistry.php'))
+{
+    require_once APP_ROOT . '/app/Core/SettingsRegistry.php';
+}
+
 // -------------------------------------------------
 // Minimal security helpers (standalone)
 // -------------------------------------------------
@@ -1452,24 +1457,17 @@ function installer_updater_config_sections(array $dist): array
 }
 
 /**
- * Top-level configuration sections primarily managed by the live board through
- * the Control Panel and app_settings.
+ * Top-level configuration sections that still exist only as placeholder values
+ * in config.php.dist.
  *
- * These values remain in config.php as fallback placeholders only. When the
- * board can read app_settings successfully, those live values take priority.
+ * The settings registry revamp removed board-facing sections such as site,
+ * gallery, profile, template, debugging, and upload from config.php.dist.
  *
  * @return string[]
  */
 function installer_placeholder_config_sections(): array
 {
-    return [
-        'site',
-        'template',
-        'gallery',
-        'profile',
-        'debugging',
-        'upload',
-    ];
+    return [];
 }
 
 /**
@@ -1776,24 +1774,9 @@ if ($action === 'save_config') {
     $submitted = $sanitizeTimezones($submitted);
     $final = installer_overlay_config($final, $submitted);
 
-    // -------------------------------------------------
-    // Export DB-managed settings (app_settings)
-    // -------------------------------------------------
-
-    $allowList = installer_placeholder_config_sections_for_dist($distConfig);
-
-    // Store installer-selected DB settings so the DB install step can insert them.
-    $_SESSION['installer_app_settings_rows'] = installer_build_app_settings_rows($final, $allowList);
-
-    // Keep config.php focused on boot + security.
-    // Reset DB-managed sections back to dist defaults before writing config.php.
-    foreach ($allowList as $section) {
-        $section = (string) $section;
-        if ($section === '') continue;
-        if (array_key_exists($section, $distConfig)) {
-            $final[$section] = $distConfig[$section];
-        }
-    }
+    // config.php.dist now only contains runtime / boot configuration.
+    // Board-facing settings are seeded into the database-backed settings registry
+    // during the database install step.
 
     $result = installer_write_config_from_dist($final);
 
@@ -1895,21 +1878,17 @@ if ($action === 'install_db') {
     installer_flash_add('success', 'Base database installed successfully.');
 
     // -------------------------------------------------
-    // Seed app_settings with installer-selected defaults
+    // Seed the database-backed settings registry
     // -------------------------------------------------
 
-    $distConfig = installer_load_config_dist();
-    $allowList = installer_placeholder_config_sections_for_dist($distConfig);
-
-    $rows = $_SESSION['installer_app_settings_rows'] ?? installer_build_app_settings_rows($distConfig, $allowList);
-    $seed = installer_insert_app_settings($pdo, $rows);
+    $seed = installer_seed_settings_registry($pdo);
 
     if (!$seed['ok']) {
-        installer_flash_add('danger', 'Base schema installed, but app_settings seed failed. The installer remains unlocked so the issue can be corrected: ' . $seed['error']);
+        installer_flash_add('danger', 'Base schema installed, but the settings registry seed failed. The installer remains unlocked so the issue can be corrected: ' . $seed['error']);
         installer_redirect('index.php?tab=install&page=database');
     }
 
-    installer_flash_add('success', 'app_settings seeded successfully.');
+    installer_flash_add('success', 'Settings registry seeded successfully.');
 
     if (installer_write_lock_file()) {
         installer_flash_add('success', 'Installer locked. Use the update tab for future maintenance.');
@@ -2078,106 +2057,119 @@ function installer_render_header(string $title = 'Installer'): void
 }
 
 /**
- * Build app_settings rows from a config array.
+ * Build database-backed settings category seed rows.
  *
- * Only placeholder fallback sections are exported for database-backed board settings.
- * Keys are stored using dot-notation (e.g. "gallery.images_displayed").
- *
- * Security note:
- * - This table must NOT store secrets (DB passwords, app keys, etc.)
+ * @return array
  */
-function installer_build_app_settings_rows(array $config, array $allowList): array
+function installer_build_settings_category_rows(): array
 {
-    $rows = [];
-
-    $detectType = function ($value): string {
-        if (is_bool($value))  return 'bool';
-        if (is_int($value))   return 'int';
-        if (is_float($value)) return 'float';
-        if (is_array($value)) return 'json';
-        return 'string';
-    };
-
-    $encodeValue = function ($value, string $type): string {
-        if ($type === 'bool') {
-            return ($value ? '1' : '0');
-        }
-
-        if ($type === 'json') {
-            // Keep JSON stable and predictable for caching + comparison.
-            return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        }
-
-        return (string) $value;
-    };
-
-    $flatten = function (array $arr, string $prefix = '') use (&$flatten, &$rows, $detectType, $encodeValue): void {
-        foreach ($arr as $k => $v) {
-            $key = ($prefix === '') ? (string) $k : ($prefix . '.' . (string) $k);
-
-            if (is_array($v)) {
-                // If this is a list (numeric keys), store the entire list as JSON.
-                $isList = array_keys($v) === range(0, count($v) - 1);
-                if ($isList) {
-                    $type = 'json';
-                    $rows[] = [
-                        'key'   => $key,
-                        'value' => $encodeValue($v, $type),
-                        'type'  => $type,
-                    ];
-                    continue;
-                }
-
-                $flatten($v, $key);
-                continue;
-            }
-
-            $type = $detectType($v);
-            $rows[] = [
-                'key'   => $key,
-                'value' => $encodeValue($v, $type),
-                'type'  => $type,
-            ];
-        }
-    };
-
-    foreach ($allowList as $section) {
-        $section = (string) $section;
-        if ($section === '') continue;
-        if (!isset($config[$section]) || !is_array($config[$section])) continue;
-        $flatten($config[$section], $section);
+    if (!class_exists('SettingsRegistry')) {
+        return [];
     }
 
-    return $rows;
+    return SettingsRegistry::buildCategorySeedRows();
 }
 
 /**
- * Insert or update app_settings rows.
+ * Build database-backed settings entry seed rows.
+ *
+ * @return array
  */
-function installer_insert_app_settings(PDO $pdo, array $rows): array
+function installer_build_settings_data_rows(): array
 {
-    if (empty($rows)) {
-        return ['ok' => true, 'error' => ''];
+    if (!class_exists('SettingsRegistry')) {
+        return [];
     }
 
-    $sql = "INSERT INTO app_settings (`key`, `value`, `type`) VALUES (:k, :v, :t)
-            ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `type` = VALUES(`type`)";
+    return SettingsRegistry::buildSettingSeedRows();
+}
+
+/**
+ * Seed app_settings_categories + app_settings_data from the built-in registry.
+ *
+ * @param PDO $pdo
+ * @return array
+ */
+function installer_seed_settings_registry(PDO $pdo): array
+{
+    $categoryRows = installer_build_settings_category_rows();
+    $settingRows = installer_build_settings_data_rows();
+
+    if (empty($categoryRows) || empty($settingRows)) {
+        return ['ok' => false, 'error' => 'Settings registry metadata could not be loaded.'];
+    }
+
+    $categorySql = "INSERT INTO app_settings_categories (`slug`, `title`, `description`, `icon`, `sort_order`, `is_system`)
+                    VALUES (:slug, :title, :description, :icon, :sort_order, :is_system)
+                    ON DUPLICATE KEY UPDATE
+                        `title` = VALUES(`title`),
+                        `description` = VALUES(`description`),
+                        `icon` = VALUES(`icon`),
+                        `sort_order` = VALUES(`sort_order`),
+                        `is_system` = VALUES(`is_system`)";
+
+    $categoryIdSql = "SELECT id FROM app_settings_categories WHERE slug = :slug LIMIT 1";
+
+    $settingSql = "INSERT INTO app_settings_data (`category_id`, `key`, `title`, `description`, `value`, `type`, `input_type`, `sort_order`, `is_system`)
+                   VALUES (:category_id, :key_name, :title, :description, :value_data, :type_name, :input_type, :sort_order, :is_system)
+                   ON DUPLICATE KEY UPDATE
+                        `category_id` = VALUES(`category_id`),
+                        `title` = VALUES(`title`),
+                        `description` = VALUES(`description`),
+                        `value` = VALUES(`value`),
+                        `type` = VALUES(`type`),
+                        `input_type` = VALUES(`input_type`),
+                        `sort_order` = VALUES(`sort_order`),
+                        `is_system` = VALUES(`is_system`)";
 
     try {
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare($sql);
 
-        foreach ($rows as $row) {
-            $k = (string) ($row['key'] ?? '');
-            $v = (string) ($row['value'] ?? '');
-            $t = (string) ($row['type'] ?? 'string');
+        $categoryStmt = $pdo->prepare($categorySql);
+        $categoryLookupStmt = $pdo->prepare($categoryIdSql);
+        $settingStmt = $pdo->prepare($settingSql);
 
-            if ($k === '') continue;
+        $categoryIdMap = [];
 
-            $stmt->execute([
-                ':k' => $k,
-                ':v' => $v,
-                ':t' => $t,
+        foreach ($categoryRows as $row) {
+            $slug = trim((string) ($row['slug'] ?? ''));
+            if ($slug === '') {
+                continue;
+            }
+
+            $categoryStmt->execute([
+                ':slug' => $slug,
+                ':title' => (string) ($row['title'] ?? $slug),
+                ':description' => (string) ($row['description'] ?? ''),
+                ':icon' => (string) ($row['icon'] ?? 'fa-sliders'),
+                ':sort_order' => (int) ($row['sort_order'] ?? 0),
+                ':is_system' => !empty($row['is_system']) ? 1 : 0,
+            ]);
+
+            $categoryLookupStmt->execute([':slug' => $slug]);
+            $categoryId = (int) ($categoryLookupStmt->fetchColumn() ?: 0);
+            if ($categoryId > 0) {
+                $categoryIdMap[$slug] = $categoryId;
+            }
+        }
+
+        foreach ($settingRows as $row) {
+            $key = trim((string) ($row['key'] ?? ''));
+            $categorySlug = trim((string) ($row['category_slug'] ?? ''));
+            if ($key === '' || $categorySlug === '' || empty($categoryIdMap[$categorySlug])) {
+                continue;
+            }
+
+            $settingStmt->execute([
+                ':category_id' => $categoryIdMap[$categorySlug],
+                ':key_name' => $key,
+                ':title' => (string) ($row['title'] ?? $key),
+                ':description' => (string) ($row['description'] ?? ''),
+                ':value_data' => (string) ($row['value'] ?? ''),
+                ':type_name' => (string) ($row['type'] ?? 'string'),
+                ':input_type' => (string) ($row['input_type'] ?? 'text'),
+                ':sort_order' => (int) ($row['sort_order'] ?? 0),
+                ':is_system' => !empty($row['is_system']) ? 1 : 0,
             ]);
         }
 
@@ -2187,6 +2179,7 @@ function installer_insert_app_settings(PDO $pdo, array $rows): array
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
+
         return ['ok' => false, 'error' => $e->getMessage()];
     }
 }
@@ -2767,7 +2760,7 @@ if ($tab === 'update') {
 
     if ($page === 'placeholders') {
         echo '<h2>Fallback Defaults</h2>';
-        echo '<p>These sections stay in <b>config/config.php</b> as placeholders only. They do <b>not</b> reflect the live board while the Control Panel and <b>app_settings</b> are available. Use this page only to maintain emergency or fallback defaults.</p>';
+        echo '<p>These sections stay in <b>config/config.php</b> as placeholders only. They do <b>not</b> reflect the live board while the Control Panel settings registry is available. Use this page only to maintain emergency or fallback defaults.</p>';
         echo '<div class="alert alert-warning">Changes saved here do not update the live board settings managed from the Control Panel. They only change the config.php fallback values used when database-backed settings are unavailable.</div>';
 
         if (empty($existingConfig)) {

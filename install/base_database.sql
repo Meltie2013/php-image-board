@@ -4,8 +4,8 @@
 -- Reformatted for cleaner project use.
 -- Notes:
 -- - Preserves the original schema structure and install order.
--- - Includes seed data for roles and app settings.
--- - Fixes the malformed app_settings seed row for gallery.upload_max_storage.
+-- - Includes seed data for roles and the database-backed settings registry.
+-- - Seeds app_settings_categories and app_settings_data with the built-in ACP settings metadata.
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -265,35 +265,73 @@ CREATE TABLE `app_sessions` (
 -- --------------------------------------------------------
 
 --
--- Table structure for table `app_settings`
+-- Table structure for table `app_settings_categories`
 --
 
-CREATE TABLE `app_settings` (
-    `key` varchar(128) NOT NULL,
-    `value` varchar(150) NOT NULL,
-    `type` varchar(16) NOT NULL DEFAULT 'string',
+CREATE TABLE `app_settings_categories` (
+    `id` bigint(20) UNSIGNED NOT NULL,
+    `slug` varchar(64) NOT NULL,
+    `title` varchar(80) NOT NULL,
+    `description` varchar(255) NOT NULL DEFAULT '',
+    `icon` varchar(32) NOT NULL DEFAULT 'fa-sliders',
+    `sort_order` int(10) UNSIGNED NOT NULL DEFAULT 0,
+    `is_system` tinyint(1) NOT NULL DEFAULT 0,
+    `created_at` datetime NOT NULL DEFAULT current_timestamp(),
     `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
--- Dumping data for table `app_settings`
+-- Dumping data for table `app_settings_categories`
 --
 
-INSERT INTO `app_settings` (`key`, `value`, `type`) VALUES
-    ('debugging.allow_approve_uploads', '0', 'bool'),
-    ('debugging.allow_error_outputs', '0', 'bool'),
-    ('gallery.comments_per_page', '5', 'int'),
-    ('gallery.images_displayed', '24', 'int'),
-    ('gallery.pagination_range', '3', 'int'),
-    ('gallery.upload_max_image_size', '3', 'int'),
-    ('gallery.upload_max_storage', '10gb', 'string'),
-    ('profile.avatar_size', '250', 'int'),
-    ('profile.years', '13', 'int'),
-    ('site.name', 'PHP Image Board', 'string'),
-    ('site.version', '0.2.3', 'string'),
-    ('template.allowed_functions', '[\"strtoupper\",\"strtolower\",\"ucfirst\",\"lcfirst\"]', 'json'),
-    ('template.disable_cache', '1', 'bool'),
-    ('upload.hash_type', 'mixed_lower', 'string');
+INSERT INTO `app_settings_categories` (`id`, `slug`, `title`, `description`, `icon`, `sort_order`, `is_system`) VALUES
+    (1, 'debugging', 'Debugging', 'Developer-only switches used while troubleshooting uploads, rendering, and runtime issues.', 'fa-bug', 10, 1),
+    (2, 'gallery', 'Gallery', 'Controls gallery page sizing, pagination, comments, and upload storage limits.', 'fa-images', 20, 1),
+    (3, 'profile', 'User Profile', 'Profile presentation defaults, avatar sizing, and age-gate requirements.', 'fa-id-card', 30, 1),
+    (4, 'site', 'Site', 'Board identity, naming, and build metadata exposed across the public interface.', 'fa-window-maximize', 40, 1),
+    (5, 'template', 'Template', 'Template engine behavior, cache handling, and approved helper functions.', 'fa-code', 50, 1),
+    (6, 'upload', 'Upload', 'Controls how new upload hashes are generated and how upload behavior is presented.', 'fa-upload', 60, 1);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `app_settings_data`
+--
+
+CREATE TABLE `app_settings_data` (
+    `id` bigint(20) UNSIGNED NOT NULL,
+    `category_id` bigint(20) UNSIGNED DEFAULT NULL,
+    `key` varchar(128) NOT NULL,
+    `title` varchar(120) NOT NULL,
+    `description` text DEFAULT NULL,
+    `value` text NOT NULL,
+    `type` varchar(16) NOT NULL DEFAULT 'string',
+    `input_type` varchar(16) NOT NULL DEFAULT 'text',
+    `sort_order` int(10) UNSIGNED NOT NULL DEFAULT 0,
+    `is_system` tinyint(1) NOT NULL DEFAULT 0,
+    `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+    `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `app_settings_data`
+--
+
+INSERT INTO `app_settings_data` (`id`, `category_id`, `key`, `title`, `description`, `value`, `type`, `input_type`, `sort_order`, `is_system`) VALUES
+    (1, 1, 'debugging.allow_approve_uploads', 'Allow Upload Auto Approval', 'Lets uploads skip the normal review flow. Keep this disabled unless you are intentionally testing approval behavior on a trusted environment.', '0', 'bool', 'bool', 10, 1),
+    (2, 1, 'debugging.allow_error_outputs', 'Display PHP Errors', 'Shows PHP errors directly in the browser while debugging application issues.', '0', 'bool', 'bool', 20, 1),
+    (3, 2, 'gallery.comments_per_page', 'Comments Per Page', 'Controls how many comments appear at once on the gallery image view page before pagination is used.', '5', 'int', 'number', 10, 1),
+    (4, 2, 'gallery.images_displayed', 'Images Per Gallery Page', 'Sets how many images are shown on each gallery page before the next page is created.', '24', 'int', 'number', 20, 1),
+    (5, 2, 'gallery.pagination_range', 'Pagination Range', 'Determines how many page links appear on each side of the current page in gallery pagination.', '3', 'int', 'number', 30, 1),
+    (6, 2, 'gallery.upload_max_image_size', 'Maximum Upload Size (MB)', 'Sets the largest image file size allowed for a single upload, measured in megabytes.', '3', 'int', 'number', 40, 1),
+    (7, 2, 'gallery.upload_max_storage', 'Maximum Gallery Storage', 'Defines the total storage available for uploaded images using shorthand values such as 500mb, 10gb, or 1tb.', '10gb', 'string', 'text', 50, 1),
+    (8, 3, 'profile.avatar_size', 'Default Avatar Size', 'Sets the default avatar display size in pixels for user profile areas.', '250', 'int', 'number', 10, 1),
+    (9, 3, 'profile.years', 'Sensitive Content Age Requirement', 'Defines the minimum age required for users to view content protected by the board age gate.', '13', 'int', 'number', 20, 1),
+    (10, 4, 'site.name', 'Site Name', 'Primary board name shown in the header, footer, page titles, and shared templates.', 'PHP Image Board', 'string', 'text', 10, 1),
+    (11, 4, 'site.version', 'Build Version', 'Version or build string shown in the interface for release tracking and support reference.', '0.2.3', 'string', 'text', 20, 1),
+    (12, 5, 'template.allowed_functions', 'Allowed Template Functions', 'JSON array of trusted PHP function names that templates may call. This list should stay minimal and only contain simple, safe helpers.', '["strtoupper","strtolower","ucfirst","lcfirst"]', 'json', 'json', 10, 1),
+    (13, 5, 'template.disable_cache', 'Disable Template Cache', 'Turns off compiled template caching so visual and template updates appear immediately during development.', '1', 'bool', 'bool', 20, 1),
+    (14, 6, 'upload.hash_type', 'Generated Image Hash Format', 'Chooses the character format used when generating new image hashes for uploads.', 'mixed_lower', 'string', 'select', 10, 1);
 
 -- --------------------------------------------------------
 
@@ -499,10 +537,20 @@ ALTER TABLE `app_sessions`
     ADD KEY `idx_sessions_browser_fingerprint` (`browser_fingerprint`);
 
 --
--- Indexes for table `app_settings`
+-- Indexes for table `app_settings_categories`
 --
-ALTER TABLE `app_settings`
-    ADD PRIMARY KEY (`key`);
+ALTER TABLE `app_settings_categories`
+    ADD PRIMARY KEY (`id`),
+    ADD UNIQUE KEY `uniq_settings_categories_slug` (`slug`);
+
+--
+-- Indexes for table `app_settings_data`
+--
+ALTER TABLE `app_settings_data`
+    ADD PRIMARY KEY (`id`),
+    ADD UNIQUE KEY `uniq_settings_data_key` (`key`),
+    ADD KEY `idx_settings_data_category_id` (`category_id`),
+    ADD KEY `idx_settings_data_category_sort` (`category_id`,`sort_order`);
 
 --
 -- Indexes for table `app_updates`
@@ -623,6 +671,18 @@ ALTER TABLE `app_device_overrides`
   MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT for table `app_settings_categories`
+--
+ALTER TABLE `app_settings_categories`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+
+--
+-- AUTO_INCREMENT for table `app_settings_data`
+--
+ALTER TABLE `app_settings_data`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+
+--
 -- AUTO_INCREMENT for table `app_updates`
 --
 ALTER TABLE `app_updates`
@@ -643,6 +703,12 @@ ALTER TABLE `app_user_devices`
 --
 -- Constraints for dumped tables
 --
+
+--
+-- Constraints for table `app_settings_data`
+--
+ALTER TABLE `app_settings_data`
+    ADD CONSTRAINT `fk_settings_data_category` FOREIGN KEY (`category_id`) REFERENCES `app_settings_categories` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 --
 -- Constraints for table `app_images`
