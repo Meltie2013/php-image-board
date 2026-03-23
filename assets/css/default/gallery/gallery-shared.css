@@ -99,6 +99,24 @@
     color: #fff4f4;
 }
 
+
+.gallery-hero-btn-button[disabled] {
+    cursor: default;
+    opacity: 0.65;
+    box-shadow: none;
+    transform: none;
+    filter: saturate(0.7);
+}
+
+.gallery-hero-btn-button[disabled]:hover,
+.gallery-hero-btn-button[disabled]:focus-visible {
+    transform: none;
+    border-color: rgba(255, 255, 255, 0.10);
+    background: rgba(34, 36, 38, 0.92);
+    color: #f4f5ff;
+    filter: saturate(0.7);
+}
+
 .gallery-action-badge {
     display: inline-flex;
     align-items: center;

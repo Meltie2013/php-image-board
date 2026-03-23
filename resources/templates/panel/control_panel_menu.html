@@ -17,12 +17,12 @@
         </div>
     </div>
 
-    {if $cp_can_manage_users}
+    {if $cp_can_manage_users || $cp_is_admin}
     <details class="admin-menu-dropdown" {if $current_control_panel_section == 'accounts'}open{/if}>
         <summary class="admin-menu-dropdown-toggle">
             <span class="admin-menu-dropdown-copy">
                 <span class="admin-menu-group-title admin-menu-dropdown-title">Accounts</span>
-                <span class="admin-menu-dropdown-desc">Account review, role assignment, and user provisioning tools.</span>
+                <span class="admin-menu-dropdown-desc">Account review, group assignment, and user provisioning tools.</span>
             </span>
             <span class="admin-menu-dropdown-icon" aria-hidden="true"><i class="fa-solid fa-chevron-down"></i></span>
         </summary>
@@ -32,7 +32,7 @@
                     <span class="admin-menu-link-icon"><i class="fa-solid fa-user-plus"></i></span>
                     <span class="admin-menu-link-text">
                         <span class="admin-menu-link-title">Create User</span>
-                        <span class="admin-menu-link-desc">Provision a new account with the proper permissions.</span>
+                        <span class="admin-menu-link-desc">Provision a new account with the proper group and account state.</span>
                     </span>
                 </a>
 
@@ -40,9 +40,20 @@
                     <span class="admin-menu-link-icon"><i class="fa-solid fa-users"></i></span>
                     <span class="admin-menu-link-text">
                         <span class="admin-menu-link-title">Users</span>
-                        <span class="admin-menu-link-desc">Review accounts, roles, statuses, and creation dates.</span>
+                        <span class="admin-menu-link-desc">Review accounts, groups, statuses, and creation dates.</span>
                     </span>
                 </a>
+            
+
+                {if $cp_is_admin}
+                <a href="/panel/groups" class="admin-menu-link {if $current_control_panel_nav == 'groups'}is-active{/if}">
+                    <span class="admin-menu-link-icon"><i class="fa-solid fa-user-shield"></i></span>
+                    <span class="admin-menu-link-text">
+                        <span class="admin-menu-link-title">Groups & Permissions</span>
+                        <span class="admin-menu-link-desc">Manage built-in/custom groups and fine-tune RBAC permission tokens.</span>
+                    </span>
+                </a>
+                {/if}
             </div>
         </div>
     </details>

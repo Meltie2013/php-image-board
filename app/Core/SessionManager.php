@@ -22,6 +22,18 @@ class SessionManager
     // Tracks the active session_id stored in the database for this request lifecycle
     private static ?string $dbSessionId = null;
 
+    // Request-local signature of the last persisted session payload to avoid duplicate writes.
+    private static ?string $lastPersistSignature = null;
+
+    // Request-local guard so passive fingerprint monitoring only runs once per request.
+    private static bool $fingerprintMonitorChecked = false;
+
+    // Throttle window for authenticated device persistence in seconds.
+    private const USER_DEVICE_PERSIST_INTERVAL = 900;
+
+    // Throttle window for passive fingerprint diversity checks in seconds.
+    private const FINGERPRINT_MONITOR_INTERVAL = 300;
+
     /**
      * Initialize the PHP session with secure defaults and persistence.
      *
@@ -576,10 +588,32 @@ class SessionManager
      * Detection only – this method does not block requests.
      * It flags cases where the same User-Agent string is associated with many
      * distinct device/request fingerprints in a short time window (a common bot/attack signal).
+     *
+     * @return void
      */
     private static function monitorFingerprintPatterns(): void
     {
+        if (self::$fingerprintMonitorChecked)
+        {
+            return;
+        }
+
+        self::$fingerprintMonitorChecked = true;
+
+        $lastCheckedAt = TypeHelper::toInt($_SESSION['fingerprint_monitor_checked_at'] ?? 0) ?? 0;
+        $nowTs = time();
+        if ($lastCheckedAt > 0 && ($nowTs - $lastCheckedAt) < self::FINGERPRINT_MONITOR_INTERVAL)
+        {
+            return;
+        }
+
         $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        if (!is_string($ua) || trim($ua) === '')
+        {
+            $_SESSION['fingerprint_monitor_checked_at'] = $nowTs;
+            return;
+        }
+
         $fingerprint = $_SESSION['fingerprint'] ?? self::generateFingerprint();
         $deviceFingerprint = self::getDeviceFingerprint();
         $now = gmdate('Y-m-d H:i:s');
@@ -591,6 +625,8 @@ class SessionManager
                 'now' => $now
             ]
         );
+
+        $_SESSION['fingerprint_monitor_checked_at'] = $nowTs;
 
         $count = (int) ($row['total'] ?? 0);
 
@@ -654,6 +690,8 @@ class SessionManager
         $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
         $fingerprint = $_SESSION['fingerprint'] ?? self::generateFingerprint();
         $deviceFingerprint = self::getDeviceFingerprint();
+        $browserFingerprint = self::getBrowserFingerprint();
+        $bindingHash = hash('sha256', self::getSessionBindingSecret());
         $firstIp = $_SESSION['first_ip'] ?? $ip;
         $lastActivity = gmdate('Y-m-d H:i:s');
         $expiresAt = isset(self::$config['timeout_minutes'])
@@ -664,11 +702,32 @@ class SessionManager
 
         // Serialize session data
         $data = serialize($_SESSION);
+        $persistSignature = hash('sha256', serialize([
+            'sid' => $sessionId,
+            'uid' => $userId,
+            'ip' => $ip,
+            'first_ip' => $firstIp,
+            'ua' => $ua,
+            'fp' => $fingerprint,
+            'dfp' => $deviceFingerprint,
+            'bfp' => $browserFingerprint,
+            'sbh' => $bindingHash,
+            'expires' => $expiresAt,
+            'data' => $data,
+        ]));
 
-        // Check if session already exists
-        $exists = Database::fetch("SELECT session_id FROM app_sessions WHERE session_id = :sid LIMIT 1",
-            ['sid' => $sessionId]
-        );
+        if (self::$lastPersistSignature === $persistSignature)
+        {
+            return;
+        }
+
+        // Check if session already exists. When we already know the current
+        // database-backed session id for this request, avoid an extra lookup.
+        $exists = self::$dbSessionId === $sessionId
+            ? ['session_id' => $sessionId]
+            : Database::fetch("SELECT session_id FROM app_sessions WHERE session_id = :sid LIMIT 1",
+                ['sid' => $sessionId]
+            );
 
         try
         {
@@ -753,6 +812,7 @@ class SessionManager
         }
 
         self::$dbSessionId = $sessionId;
+        self::$lastPersistSignature = $persistSignature;
 
         // Persist lightweight client signals for linkage review when the optional
         // table exists. This is throttled so normal browsing does not spam rows.
@@ -772,6 +832,13 @@ class SessionManager
     {
         $userId = TypeHelper::toInt($_SESSION['user_id'] ?? null);
         if ($userId <= 0)
+        {
+            return;
+        }
+
+        $lastWrite = TypeHelper::toInt($_SESSION['last_user_device_persist_at'] ?? 0) ?? 0;
+        $nowTs = time();
+        if ($lastWrite > 0 && ($nowTs - $lastWrite) < self::USER_DEVICE_PERSIST_INTERVAL)
         {
             return;
         }
@@ -815,6 +882,8 @@ class SessionManager
                     Database::query("UPDATE app_user_devices SET last_seen_at = NOW(), last_ip = :last_ip, user_agent_hash = :ua_hash WHERE id = :id",
                         ['last_ip' => $ipBin, 'ua_hash' => $uaHash, 'id' => TypeHelper::toInt($existing['id'] ?? 0)]);
                 }
+
+                $_SESSION['last_user_device_persist_at'] = $nowTs;
                 return;
             }
 
@@ -824,6 +893,8 @@ class SessionManager
                         VALUES (:uid, :dfp, :bfp, NOW(), NOW(), :first_ip, :last_ip, :ua_hash )",
                         ['uid' => $userId, 'dfp' => $dfp !== '' ? $dfp : hash('sha256', 'fallback-device|' . $userId . '|' . $bfp), 'bfp' => $bfp !== '' ? $bfp : null, 'first_ip' => $ipBin, 'last_ip' => $ipBin, 'ua_hash' => $uaHash]
                 );
+
+                $_SESSION['last_user_device_persist_at'] = $nowTs;
             }
             catch (Throwable $e)
             {
@@ -831,6 +902,8 @@ class SessionManager
                         VALUES (:uid, :dfp, NOW(), NOW(), :first_ip, :last_ip, :ua_hash )",
                         ['uid' => $userId, 'dfp' => $dfp !== '' ? $dfp : hash('sha256', 'fallback-device|' . $userId . '|' . $bfp), 'first_ip' => $ipBin, 'last_ip' => $ipBin, 'ua_hash' => $uaHash]
                 );
+
+                $_SESSION['last_user_device_persist_at'] = $nowTs;
             }
         }
         catch (Throwable $e)
@@ -998,6 +1071,7 @@ class SessionManager
         $oldSession = session_id();
         session_regenerate_id(true);
         self::$dbSessionId = session_id();
+        self::$lastPersistSignature = null;
 
         // Update DB to new session ID
         Database::query("UPDATE app_sessions SET session_id = :new WHERE session_id = :old",
@@ -1032,6 +1106,7 @@ class SessionManager
             );
 
             self::$dbSessionId = null;
+            self::$lastPersistSignature = null;
         }
 
         if (ini_get("session.use_cookies"))
@@ -1054,8 +1129,53 @@ class SessionManager
      */
     public static function set(string $key, mixed $value): void
     {
+        if (array_key_exists($key, $_SESSION) && $_SESSION[$key] === $value)
+        {
+            return;
+        }
+
         $_SESSION[$key] = $value;
         self::persistSession();
+    }
+
+    /**
+     * Set multiple session values and persist once.
+     *
+     * This is useful for bulk state refreshes that would otherwise trigger
+     * several redundant database-backed session writes in the same request.
+     *
+     * @param array<string, mixed> $values Session key/value pairs to store
+     * @return void
+     */
+    public static function setMany(array $values): void
+    {
+        if (empty($values))
+        {
+            return;
+        }
+
+        $changed = false;
+
+        foreach ($values as $key => $value)
+        {
+            if (!is_string($key) || $key === '')
+            {
+                continue;
+            }
+
+            if (array_key_exists($key, $_SESSION) && $_SESSION[$key] === $value)
+            {
+                continue;
+            }
+
+            $_SESSION[$key] = $value;
+            $changed = true;
+        }
+
+        if ($changed)
+        {
+            self::persistSession();
+        }
     }
 
     /**
@@ -1088,7 +1208,38 @@ class SessionManager
      */
     public static function remove(string $key): void
     {
+        if (!array_key_exists($key, $_SESSION))
+        {
+            return;
+        }
+
         unset($_SESSION[$key]);
+        self::persistSession();
+    }
+
+    /**
+     * Remove multiple session values and persist once.
+     *
+     * @param array<int, string> $keys Session keys to remove
+     * @return void
+     */
+    public static function removeMany(array $keys): void
+    {
+        if (empty($keys))
+        {
+            return;
+        }
+
+        foreach ($keys as $key)
+        {
+            if (!is_string($key) || $key === '')
+            {
+                continue;
+            }
+
+            unset($_SESSION[$key]);
+        }
+
         self::persistSession();
     }
 

@@ -40,7 +40,7 @@
                     <div class="admin-panel-heading">
                         <div>
                             <h3>User Profile Controls</h3>
-                            <p>Update identity data, access level, and account lifecycle controls.</p>
+                            <p>Update identity data, group assignment, and account lifecycle controls.</p>
                         </div>
                     </div>
 
@@ -74,12 +74,15 @@
 
                             <div class="admin-form-grid-two">
                                 <div class="admin-field">
-                                    <label>Role</label>
-                                    <select name="role_id">
+                                    <label>Group</label>
+                                    <select name="group_id">
                                         {foreach $roles as list($r_id, $r_name)}
                                             <option value="{$r_id}" {if $r_id == $user_role_id}selected{/if}>{$r_name}</option>
                                         {/foreach}
                                     </select>
+                                    {if !$user_current_group_is_assignable}
+                                        <p>This account is currently in the reserved <strong>{$user_current_group_name}</strong> group. Choose an assignable group above to move the account out of that reserved state.</p>
+                                    {/if}
                                 </div>
 
                                 <div class="admin-field">

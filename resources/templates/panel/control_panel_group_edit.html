@@ -1,0 +1,129 @@
+{include file="global/header.html"}
+
+    <main class="admin-container">
+        <div class="admin-shell admin-layout">
+            <div class="admin-sidebar">
+                <div class="admin-sidebar-inner admin-menu">
+                    {include file="panel/control_panel_menu.html"}
+                </div>
+            </div>
+
+            <div class="admin-content admin-dashboard">
+                <div class="admin-page-header">
+                    <div>
+                        <div class="admin-kicker">Control Panel</div>
+                        <h2>{$control_panel_page_title}: {$group_name} (#{$group_id})</h2>
+                        <p>{$control_panel_page_description}</p>
+                    </div>
+
+                    <div class="admin-page-actions">
+                        <a href="/panel/groups" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back to Groups</a>
+                    </div>
+                </div>
+
+                {if !empty($success)}
+                    <div class="admin-notice admin-notice-success">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <p>{$success}</p>
+                    </div>
+                {/if}
+
+                {if !empty($error)}
+                    <div class="error-box">
+                        {foreach $error as $e}
+                            <p>{$e}</p>
+                        {/foreach}
+                    </div>
+                {/if}
+
+                <section class="admin-panel">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <h3>Group Details</h3>
+                            <p>Update the group description, assignable state, display order, and RBAC permission values.</p>
+                        </div>
+                    </div>
+
+                    <div class="admin-panel-body">
+                        <form method="POST" action="/panel/groups/edit/{$group_id}" class="admin-form">
+                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
+
+                            <div class="admin-form-grid-two">
+                                <div class="admin-field">
+                                    <label>Group Name</label>
+                                    <input type="text" name="name" value="{$group_name}" {if $group_is_built_in}readonly{/if} required>
+                                </div>
+
+                                <div class="admin-field">
+                                    <label>Group Slug</label>
+                                    <input type="text" value="{$group_slug}" readonly>
+                                </div>
+                            </div>
+
+                            <div class="admin-form-grid-two">
+                                <div class="admin-field">
+                                    <label>Description</label>
+                                    <textarea name="description" rows="3">{$group_description}</textarea>
+                                </div>
+
+                                <div class="admin-field">
+                                    <label>Sort Order</label>
+                                    <input type="number" name="sort_order" value="{$group_sort_order}" min="0">
+                                </div>
+                            </div>
+
+                            <div class="admin-field">
+                                <label style="display:flex; gap:10px; align-items:center;">
+                                    <input type="checkbox" name="is_assignable" value="1" {if $group_is_assignable}checked{/if} {if $group_slug == 'banned'}disabled{/if}>
+                                    Allow this group to be assigned to accounts and selected as the registration default
+                                </label>
+                            </div>
+
+                            <div class="admin-panel-heading" style="margin-top: 28px;">
+                                <div>
+                                    <h3>RBAC Permission Tokens</h3>
+                                    <p>Each permission token controls whether the group can access a specific gallery, ACP, or moderation action.</p>
+                                </div>
+                            </div>
+
+                            <div class="pending-images-wrapper">
+                                <table class="pending-images-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Permission</th>
+                                            <th>Description</th>
+                                            <th>Access</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {foreach $group_permission_rows as list($perm_token, $perm_label, $perm_description, $perm_input_type, $perm_value)}
+                                        <tr>
+                                            <td>
+                                                <strong>{$perm_label}</strong><br>
+                                                <small>{$perm_token}</small>
+                                            </td>
+                                            <td class="is-wrap">{$perm_description}</td>
+                                            <td>
+                                                <select name="permissions[{$perm_token}]">
+                                                    <option value="0" {if !$perm_value}selected{/if}>Deny</option>
+                                                    <option value="1" {if $perm_value}selected{/if}>Allow</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        {/foreach}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="admin-form-footer">
+                                <button type="submit" class="admin-btn admin-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Group</button>
+                                <a href="/panel/groups" class="admin-btn admin-btn-secondary">Back</a>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+{include file="global/footer.html"}

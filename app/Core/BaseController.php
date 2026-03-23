@@ -91,7 +91,37 @@ abstract class BaseController
         $template = $template ?: static::initTemplate();
         $template->assign('title', $title);
         $template->assign('message', $message);
+        $template->assign('status_code', $statusCode);
+        $template->assign('status_label', self::resolveStatusLabel($statusCode));
+        if (!isset($_POST['back_to']) && !isset($_GET['back_to']) && RedirectHelper::getSafeRefererPath())
+        {
+            $template->assign('link', RedirectHelper::getSafeRefererPath());
+        }
         $template->render('errors/error_page.html');
+    }
+
+
+    /**
+     * Resolve a short human-readable label for one HTTP status.
+     *
+     * @param int $statusCode
+     * @return string
+     */
+    protected static function resolveStatusLabel(int $statusCode): string
+    {
+        return match ($statusCode)
+        {
+            400 => 'Bad Request',
+            401 => 'Unauthorized',
+            403 => 'Forbidden',
+            404 => 'Not Found',
+            405 => 'Method Not Allowed',
+            409 => 'Conflict',
+            429 => 'Too Many Requests',
+            500 => 'Server Error',
+            503 => 'Service Unavailable',
+            default => 'Request Error',
+        };
     }
 
     /**

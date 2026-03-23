@@ -3,94 +3,158 @@
 /**
  * RoleHelper
  *
- * Centralized helper for role lookup and access control checks.
+ * Legacy compatibility helper kept in place while the application moves to the
+ * new database-backed group system.
  *
  * Responsibilities:
- * - Resolve role names/descriptions from the app_roles table
- * - Provide simple guard methods for protected routes/actions
- *   (authentication required, or specific roles required)
- *
- * Intended usage:
- * - Controllers call requireLogin() at the top of any action that must be
- *   restricted to authenticated users.
- * - Controllers call requireRole() for staff/admin-only pages or actions.
- *
- * Security notes:
- * - Access control is enforced server-side via session values (user_id/user_role).
- * - All DB lookups are performed through prepared statements (Database::fetch).
+ * - Resolve group names/descriptions from the app_groups table
+ * - Provide simple authentication + group guard methods used throughout the app
+ * - Refresh session group / permission state on protected requests
  */
 class RoleHelper
 {
     /**
-     * Get the role name by ID.
+     * Per-request login validation cache for the current authenticated user.
      *
-     * Useful when you only have the role_id stored with a user record
-     * and want to retrieve the human-readable role name.
+     * @var int|null
+     */
+    private static ?int $validatedUserId = null;
+
+    /**
+     * Cached group lookups by id.
      *
-     * @param int $id Role ID from app_roles
-     * @return string|null Returns the role name, or null if not found
+     * @var array<int, array<string, mixed>|null>
+     */
+    private static array $groupByIdCache = [];
+
+    /**
+     * Cached group lookups by name.
+     *
+     * @var array<string, array<string, mixed>|null>
+     */
+    private static array $groupByNameCache = [];
+
+    /**
+     * Get the group name by ID.
+     *
+     * @param int $id Group ID from app_groups
+     * @return string|null
      */
     public static function getRoleNameById(int $id): ?string
     {
-        $role = Database::fetch("SELECT name FROM app_roles WHERE id = :id LIMIT 1", ['id' => $id]);
-        return $role['name'] ?? null;
+        if ($id < 1)
+        {
+            return null;
+        }
+
+        $group = self::getGroupById($id);
+        return $group['name'] ?? null;
     }
 
     /**
-     * Get the role description by ID.
+     * Get the group description by ID.
      *
-     * Can be used for displaying more detailed information about a role,
-     * for example on an admin settings or user profile page.
-     *
-     * @param int $id Role ID from app_roles
-     * @return string|null Returns the role description, or null if not found
+     * @param int $id Group ID from app_groups
+     * @return string|null
      */
     public static function getRoleDescriptionById(int $id): ?string
     {
-        $role = Database::fetch("SELECT description FROM app_roles WHERE id = :id LIMIT 1", ['id' => $id]);
-        return $role['description'] ?? null;
+        if ($id < 1)
+        {
+            return null;
+        }
+
+        $group = self::getGroupById($id);
+        return $group['description'] ?? null;
     }
 
     /**
-     * Get the role name by its name (validation check).
+     * Get the group name by its display name.
      *
-     * Useful for verifying that a role actually exists in the database
-     * before assigning it to a user.
-     *
-     * @param string $name Exact role name from app_roles
-     * @return string|null Returns the role name, or null if not found
+     * @param string $name
+     * @return string|null
      */
     public static function getRoleNameByName(string $name): ?string
     {
-        $role = Database::fetch("SELECT name FROM app_roles WHERE name = :name LIMIT 1", ['name' => $name]);
-        return $role['name'] ?? null;
+        $name = trim($name);
+        if ($name === '')
+        {
+            return null;
+        }
+
+        $group = self::getGroupByName($name);
+        return $group['name'] ?? null;
     }
 
     /**
-     * Get the role description by role name.
+     * Get the group description by display name.
      *
-     * Allows retrieving human-readable descriptions of roles for display
-     * in UIs, logs, or audit records.
-     *
-     * @param string $name Exact role name from app_roles
-     * @return string|null Returns the role description, or null if not found
+     * @param string $name
+     * @return string|null
      */
     public static function getRoleDescriptionByName(string $name): ?string
     {
-        $role = Database::fetch("SELECT description FROM app_roles WHERE name = :name LIMIT 1", ['name' => $name]);
-        return $role['description'] ?? null;
+        $name = trim($name);
+        if ($name === '')
+        {
+            return null;
+        }
+
+        $group = self::getGroupByName($name);
+        return $group['description'] ?? null;
     }
 
     /**
-     * Require that the current user is logged in.
+     * Fetch one group row by id with per-request caching.
      *
-     * If the user is not authenticated, they will be redirected to the
-     * login page. Use this at the beginning of any protected controller
-     * action where authentication is mandatory.
+     * @param int $id Group ID from app_groups
+     * @return array<string, mixed>|null
+     */
+    private static function getGroupById(int $id): ?array
+    {
+        if ($id < 1)
+        {
+            return null;
+        }
+
+        if (!array_key_exists($id, self::$groupByIdCache))
+        {
+            self::$groupByIdCache[$id] = Database::fetch(
+                "SELECT id, name, description FROM app_groups WHERE id = :id LIMIT 1",
+                ['id' => $id]
+            );
+        }
+
+        return self::$groupByIdCache[$id];
+    }
+
+    /**
+     * Fetch one group row by display name with per-request caching.
      *
-     * Notes:
-     * - Relies on SessionManager to determine authentication state.
-     * - Exits immediately after redirect to prevent further output.
+     * @param string $name
+     * @return array<string, mixed>|null
+     */
+    private static function getGroupByName(string $name): ?array
+    {
+        $name = trim($name);
+        if ($name === '')
+        {
+            return null;
+        }
+
+        if (!array_key_exists($name, self::$groupByNameCache))
+        {
+            self::$groupByNameCache[$name] = Database::fetch(
+                "SELECT id, name, description FROM app_groups WHERE name = :name LIMIT 1",
+                ['name' => $name]
+            );
+        }
+
+        return self::$groupByNameCache[$name];
+    }
+
+    /**
+     * Require that the current user is logged in and active.
      *
      * @return void
      */
@@ -104,17 +168,24 @@ class RoleHelper
             exit();
         }
 
+        if (self::$validatedUserId === $userId)
+        {
+            return;
+        }
+
         $user = Database::fetch(
-            "SELECT u.status, r.name AS role_name
+            "SELECT u.status, g.name AS group_name, g.slug AS group_slug
              FROM app_users u
-             INNER JOIN app_roles r ON u.role_id = r.id
+             LEFT JOIN app_groups g ON u.group_id = g.id
              WHERE u.id = :id
              LIMIT 1",
             ['id' => $userId]
         );
 
         $status = strtolower(TypeHelper::toString($user['status'] ?? '', allowEmpty: true) ?? '');
-        if ($status !== 'active')
+        $groupSlug = strtolower(TypeHelper::toString($user['group_slug'] ?? '', allowEmpty: true) ?? '');
+
+        if ($status !== 'active' || $groupSlug === 'banned')
         {
             RedirectHelper::rememberLoginDestination();
             SessionManager::destroy();
@@ -122,71 +193,46 @@ class RoleHelper
             exit();
         }
 
-        $roleName = TypeHelper::toString($user['role_name'] ?? '', allowEmpty: true) ?? '';
-        if ($roleName !== '')
-        {
-            SessionManager::set('user_role', $roleName);
-        }
+        GroupPermissionHelper::syncSessionForUser($userId);
+        self::$validatedUserId = $userId;
     }
 
     /**
-     * Require that the current user has one of the given roles.
+     * Require that the current user has one of the given group names or slugs.
      *
-     * This helper ensures that only users with specific roles can access
-     * certain areas of the application. If the user does not match an
-     * allowed role, they will be shown an access denied page.
-     *
-     * Notes:
-     * - Role comparisons are normalized to lowercase to avoid case mismatches.
-     * - If a TemplateEngine is provided, a friendly error page is rendered.
-     * - Always terminates the request with exit() after denying access.
-     *
-     * @param array $allowedRoles Array of allowed role names (e.g. ['administrator','moderator'])
-     * @param TemplateEngine|null $template Optional template engine for rendering a nicer error page
+     * @param array $allowedRoles
+     * @param TemplateEngine|null $template
      * @return void
      */
     public static function requireRole(array $allowedRoles, ?TemplateEngine $template = null): void
     {
-        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        if ($userId < 1)
+        self::requireLogin();
+
+        $userGroup = strtolower(TypeHelper::toString(SessionManager::get('user_group'), allowEmpty: true) ?? '');
+        $userGroupSlug = strtolower(TypeHelper::toString(SessionManager::get('user_group_slug'), allowEmpty: true) ?? '');
+        $normalizedAllowed = [];
+
+        foreach ($allowedRoles as $role)
+        {
+            $value = strtolower(TypeHelper::toString($role, allowEmpty: true) ?? '');
+            if ($value !== '')
+            {
+                $normalizedAllowed[] = $value;
+            }
+        }
+
+        if (!in_array($userGroup, $normalizedAllowed, true) && !in_array($userGroupSlug, $normalizedAllowed, true))
         {
             http_response_code(403);
 
-            if ($template)
-            {
-                $template->assign('title', 'Access Denied');
-                $template->assign('message', 'You are not authorized to view this page.');
-                $template->render('errors/error_page.html');
-            }
+            $template = $template ?: new TemplateEngine(TEMPLATE_PATH, CACHE_TEMPLATE_PATH, AppConfig::get());
+            $template->assign('title', 'Access Denied');
+            $template->assign('message', 'Your account does not have access to this area.');
+            $template->assign('status_code', 403);
+            $template->assign('status_label', 'Forbidden');
+            $template->assign('link', RedirectHelper::getSafeRefererPath());
+            $template->render('errors/error_page.html');
             exit();
         }
-
-        $user = Database::fetch(
-            "SELECT u.status, r.name AS role_name
-             FROM app_users u
-             INNER JOIN app_roles r ON u.role_id = r.id
-             WHERE u.id = :id
-             LIMIT 1",
-            ['id' => $userId]
-        );
-
-        $status = strtolower(TypeHelper::toString($user['status'] ?? '', allowEmpty: true) ?? '');
-        $rawUserRole = TypeHelper::toString($user['role_name'] ?? '', allowEmpty: true) ?? '';
-        $userRole = strtolower($rawUserRole);
-
-        if ($status !== 'active' || !in_array($userRole, array_map('strtolower', $allowedRoles), true))
-        {
-            http_response_code(403);
-
-            if ($template)
-            {
-                $template->assign('title', 'Access Denied');
-                $template->assign('message', 'You are not authorized to view this page.');
-                $template->render('errors/error_page.html');
-            }
-            exit();
-        }
-
-        SessionManager::set('user_role', $rawUserRole);
     }
 }

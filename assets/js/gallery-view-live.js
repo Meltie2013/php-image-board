@@ -263,12 +263,28 @@
             })
                 .then(function (response)
                 {
-                    return response.json();
+                    return response.json().then(function (payload)
+                    {
+                        return {
+                            ok: response.ok,
+                            status: response.status,
+                            payload: payload
+                        };
+                    });
                 })
-                .then(function (payload)
+                .then(function (result)
                 {
+                    const payload = result && result.payload ? result.payload : null;
                     if (!payload || !payload.ok)
                     {
+                        if (payload && payload.message)
+                        {
+                            window.alert(payload.message);
+                        }
+                        else if (result && result.status === 403)
+                        {
+                            window.location.href = form.action.replace(/\/(favorite|upvote)$/i, '');
+                        }
                         return;
                     }
 

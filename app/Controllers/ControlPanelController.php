@@ -12,7 +12,7 @@
  *
  * Security considerations:
  * - Staff access required for the control panel shell
- * - Administrator role required for administrative modules
+ * - Administrative permissions required for administrative modules
  * - CSRF validation for all state-changing actions
  */
 class ControlPanelController extends BaseController
@@ -49,37 +49,49 @@ class ControlPanelController extends BaseController
      */
     private static function assignPanelPage(TemplateEngine $template, string $nav, string $title, string $description, string $section = ''): void
     {
-        $role = self::getCurrentRole();
-        $isAdmin = $role === 'administrator';
-        $isModerator = $role === 'moderator';
-        $isStaff = $isAdmin || $isModerator;
+        $groupLabel = self::getCurrentRole();
+        $groupSlug = strtolower(TypeHelper::toString(SessionManager::get('user_group_slug'), allowEmpty: true) ?? '');
+        $canManageUsers = GroupPermissionHelper::hasPermission('manage_users');
+        $canManageGroups = GroupPermissionHelper::hasPermission('manage_groups');
+        $canManageGroupPermissions = GroupPermissionHelper::hasPermission('manage_group_permissions');
+        $canManageSettings = GroupPermissionHelper::hasPermission('manage_settings');
+        $canViewSecurity = GroupPermissionHelper::hasPermission('view_security');
+        $canManageBlocks = GroupPermissionHelper::hasPermission('manage_block_list');
+        $canModerateImages = GroupPermissionHelper::hasAnyPermission(['moderate_site', 'moderate_gallery', 'moderate_image_queue', 'manage_image_reports']);
+        $canCompareImages = GroupPermissionHelper::hasPermission('compare_images');
+        $canRehashImages = GroupPermissionHelper::hasPermission('rehash_images');
+        $isStaff = GroupPermissionHelper::hasPermission('access_control_panel');
+        $isSiteAdministrator = $groupSlug === 'site-administrator';
 
         $template->assign('current_control_panel_nav', $nav);
         $template->assign('current_control_panel_section', $section);
         $template->assign('control_panel_page_title', $title);
         $template->assign('control_panel_page_description', $description);
-        $template->assign('control_panel_role', $role);
-        $template->assign('cp_is_admin', $isAdmin ? 1 : 0);
-        $template->assign('cp_is_moderator', $isModerator ? 1 : 0);
+        $template->assign('control_panel_role', $groupLabel);
+        $template->assign('cp_is_admin', $isSiteAdministrator ? 1 : 0);
+        $template->assign('cp_is_moderator', $canModerateImages ? 1 : 0);
         $template->assign('cp_is_staff', $isStaff ? 1 : 0);
-        $template->assign('cp_can_manage_users', $isAdmin ? 1 : 0);
-        $template->assign('cp_can_manage_settings', $isAdmin ? 1 : 0);
-        $template->assign('cp_can_view_security', $isAdmin ? 1 : 0);
-        $template->assign('cp_can_manage_blocks', $isAdmin ? 1 : 0);
-        $template->assign('cp_can_moderate_images', $isStaff ? 1 : 0);
-        $template->assign('cp_can_compare_images', $isStaff ? 1 : 0);
-        $template->assign('cp_can_rehash_images', $isAdmin ? 1 : 0);
-
+        $template->assign('cp_can_manage_users', $canManageUsers ? 1 : 0);
+        $template->assign('cp_can_manage_groups', $canManageGroups ? 1 : 0);
+        $template->assign('cp_can_manage_group_permissions', $canManageGroupPermissions ? 1 : 0);
+        $template->assign('cp_can_manage_settings', $canManageSettings ? 1 : 0);
+        $template->assign('cp_can_view_security', $canViewSecurity ? 1 : 0);
+        $template->assign('cp_can_manage_blocks', $canManageBlocks ? 1 : 0);
+        $template->assign('cp_can_moderate_images', $canModerateImages ? 1 : 0);
+        $template->assign('cp_can_compare_images', $canCompareImages ? 1 : 0);
+        $template->assign('cp_can_rehash_images', $canRehashImages ? 1 : 0);
     }
 
     /**
-     * Get the normalized current control panel role from session data.
+     * Get the normalized current control panel group label from session data.
      *
      * @return string
      */
     private static function getCurrentRole(): string
     {
-        return strtolower(TypeHelper::toString(SessionManager::get('user_role'), allowEmpty: true) ?? '');
+        return TypeHelper::toString(SessionManager::get('user_group'), allowEmpty: true)
+            ?? TypeHelper::toString(SessionManager::get('user_role'), allowEmpty: true)
+            ?? '';
     }
 
     /**
@@ -91,12 +103,11 @@ class ControlPanelController extends BaseController
     private static function requirePanelAccess(?TemplateEngine $template = null): void
     {
         $template = $template ?: self::initTemplate();
-        RoleHelper::requireLogin();
-        RoleHelper::requireRole(['administrator', 'moderator'], $template);
+        GroupPermissionHelper::requirePermission('access_control_panel', $template);
     }
 
     /**
-     * Enforce administrator authorization for administrative modules.
+     * Enforce administrative authorization for administrative modules.
      *
      * @param TemplateEngine|null $template Optional prepared template instance.
      * @return void
@@ -104,8 +115,57 @@ class ControlPanelController extends BaseController
     private static function requirePanelAdmin(?TemplateEngine $template = null): void
     {
         $template = $template ?: self::initTemplate();
-        RoleHelper::requireLogin();
-        RoleHelper::requireRole(['administrator'], $template);
+        self::requirePanelAccess($template);
+        GroupPermissionHelper::requireAnyPermission(['manage_users', 'manage_settings', 'view_security', 'manage_block_list', 'rehash_images'], $template);
+    }
+
+    /**
+     * Enforce one ACP permission while also requiring shared panel access.
+     *
+     * @param string $token
+     * @param TemplateEngine|null $template Optional prepared template instance.
+     * @return void
+     */
+    private static function requirePanelPermission(string $token, ?TemplateEngine $template = null): void
+    {
+        $template = $template ?: self::initTemplate();
+        self::requirePanelAccess($template);
+        GroupPermissionHelper::requirePermission($token, $template);
+    }
+
+    /**
+     * Enforce one of several ACP permissions while also requiring shared panel access.
+     *
+     * @param array $tokens
+     * @param TemplateEngine|null $template Optional prepared template instance.
+     * @return void
+     */
+    private static function requirePanelAnyPermission(array $tokens, ?TemplateEngine $template = null): void
+    {
+        $template = $template ?: self::initTemplate();
+        self::requirePanelAccess($template);
+        GroupPermissionHelper::requireAnyPermission($tokens, $template);
+    }
+
+    /**
+     * Restrict owner-only group and RBAC management pages to the built-in Site Administrator group.
+     *
+     * @param TemplateEngine|null $template Optional prepared template instance.
+     * @return void
+     */
+    private static function requireSiteAdministrator(?TemplateEngine $template = null): void
+    {
+        $template = $template ?: self::initTemplate();
+        self::requirePanelAccess($template);
+
+        if (!GroupPermissionHelper::hasGroupSlug(['site-administrator']))
+        {
+            http_response_code(403);
+            $template->assign('title', 'Forbidden');
+            $template->assign('message', 'Only the Site Administrator can manage groups and RBAC permissions.');
+            $template->render('errors/error_page.html');
+            exit;
+        }
     }
 
     /**
@@ -273,7 +333,7 @@ class ControlPanelController extends BaseController
         self::requirePanelAccess($template);
 
         $role = self::getCurrentRole();
-        $isAdmin = $role === 'administrator';
+        $isAdmin = GroupPermissionHelper::hasAnyPermission(['manage_users', 'manage_settings', 'view_security', 'manage_block_list']);
 
         $totalUsers = 0;
         $activeBlocks = 0;
@@ -365,14 +425,14 @@ class ControlPanelController extends BaseController
     /**
      * Render the user management page.
      *
-     * Lists users and roles for administrator management, and provides CSRF
+     * Lists users and groups for administrator management, and provides CSRF
      * token for create/edit actions.
      *
      * @return void
      */
     public static function users(): void
     {
-        self::requirePanelAdmin();
+        self::requirePanelPermission('manage_users');
 
         $template = self::initTemplate();
 
@@ -385,15 +445,15 @@ class ControlPanelController extends BaseController
                 TypeHelper::toInt($u['id'] ?? ''),
                 TypeHelper::toString(ucfirst($u['username']) ?? ''),
                 TypeHelper::toString($u['email'] ?? ''),
-                TypeHelper::toString($u['role_name'] ?? ''),
+                TypeHelper::toString($u['group_name'] ?? ''),
                 TypeHelper::toString($u['status'] ?? ''),
                 TypeHelper::toString(DateHelper::format($u['created_at']) ?? ''),
             ];
         }
 
-        $roleRows = UserModel::listRoles();
+        $groupRows = GroupModel::listAssignableGroups();
         $roles = [];
-        foreach ($roleRows as $r)
+        foreach ($groupRows as $r)
         {
             $roles[] = [
                 TypeHelper::toInt($r['id'] ?? ''),
@@ -405,7 +465,7 @@ class ControlPanelController extends BaseController
             $template,
             'users',
             'User Management',
-            'Review member accounts, roles, and account states from a single control surface.',
+            'Review member accounts, group assignments, and account states from a single control surface.',
             'accounts'
         );
 
@@ -425,7 +485,7 @@ class ControlPanelController extends BaseController
      */
     public static function userCreate(): void
     {
-        self::requirePanelAdmin();
+        self::requirePanelPermission('manage_users');
 
         $errors = [];
         $success = '';
@@ -442,12 +502,18 @@ class ControlPanelController extends BaseController
             $display = Security::sanitizeString($_POST['display_name'] ?? '');
             $email = Security::sanitizeEmail($_POST['email'] ?? '');
             $password = Security::sanitizeString($_POST['password'] ?? '');
-            $roleId = TypeHelper::toInt($_POST['role_id'] ?? 3) ?? 3;
+            $groupId = TypeHelper::toInt($_POST['group_id'] ?? 6) ?? 6;
             $status = Security::sanitizeString($_POST['status'] ?? 'active');
 
             if ($username === '' || !$email || $password === '')
             {
                 $errors[] = 'Username, email and password are required.';
+            }
+
+            $selectedGroup = GroupModel::findGroupById($groupId);
+            if (!$selectedGroup || empty($selectedGroup['is_assignable']))
+            {
+                $errors[] = 'Choose an assignable group for this account.';
             }
 
             if (!in_array($status, ['active', 'pending', 'suspended'], true))
@@ -461,7 +527,7 @@ class ControlPanelController extends BaseController
 
                 try
                 {
-                    UserModel::createPanelUser($roleId, $username, $display !== '' ? $display : null, $email, $hash, $status);
+                    UserModel::createPanelUser($groupId, $username, $display !== '' ? $display : null, $email, $hash, $status);
 
                     $success = 'User created.';
                 }
@@ -473,9 +539,9 @@ class ControlPanelController extends BaseController
         }
 
         $template = self::initTemplate();
-        $roleRows = UserModel::listRoles();
+        $groupRows = GroupModel::listAssignableGroups();
         $roles = [];
-        foreach ($roleRows as $r)
+        foreach ($groupRows as $r)
         {
             $roles[] = [
                 TypeHelper::toInt($r['id'] ?? ''),
@@ -487,7 +553,7 @@ class ControlPanelController extends BaseController
             $template,
             'users_create',
             'Create User',
-            'Create a new account with the correct role, status, and profile defaults.',
+            'Create a new account with the correct group, status, and profile defaults.',
             'accounts'
         );
 
@@ -509,7 +575,7 @@ class ControlPanelController extends BaseController
      */
     public static function userEdit(int $id): void
     {
-        self::requirePanelAdmin();
+        self::requirePanelPermission('manage_users');
 
         $errors = [];
         $success = '';
@@ -537,13 +603,19 @@ class ControlPanelController extends BaseController
             $username = Security::sanitizeString($_POST['username'] ?? '');
             $display = Security::sanitizeString($_POST['display_name'] ?? '');
             $email = Security::sanitizeEmail($_POST['email'] ?? '');
-            $roleId = TypeHelper::toInt($_POST['role_id'] ?? $user['role_id']) ?? TypeHelper::toInt($user['role_id']);
+            $groupId = TypeHelper::toInt($_POST['group_id'] ?? $user['group_id']) ?? TypeHelper::toInt($user['group_id']);
             $status = Security::sanitizeString($_POST['status'] ?? $user['status']);
             $password = Security::sanitizeString($_POST['password'] ?? '');
 
             if ($username === '' || !$email)
             {
                 $errors[] = 'Username and email are required.';
+            }
+
+            $selectedGroup = GroupModel::findGroupById($groupId);
+            if (!$selectedGroup || empty($selectedGroup['is_assignable']))
+            {
+                $errors[] = 'Choose an assignable group for this account.';
             }
 
             if (!in_array($status, ['active', 'pending', 'suspended', 'deleted'], true))
@@ -555,7 +627,7 @@ class ControlPanelController extends BaseController
             {
                 try
                 {
-                    UserModel::updatePanelUser($id, $roleId, $username, $display !== '' ? $display : null, $email, $status);
+                    UserModel::updatePanelUser($id, $groupId, $username, $display !== '' ? $display : null, $email, $status);
 
                     if ($password !== '')
                     {
@@ -574,9 +646,9 @@ class ControlPanelController extends BaseController
         }
 
         $template = self::initTemplate();
-        $roleRows = UserModel::listRoles();
+        $groupRows = GroupModel::listAssignableGroups();
         $roles = [];
-        foreach ($roleRows as $r)
+        foreach ($groupRows as $r)
         {
             $roles[] = [
                 TypeHelper::toInt($r['id'] ?? ''),
@@ -588,22 +660,272 @@ class ControlPanelController extends BaseController
             $template,
             'users',
             'Edit User',
-            'Update account identity, status, role assignments, and password data.',
+            'Update account identity, status, group assignments, and password data.',
             'accounts'
         );
 
         $template->assign('user_id', TypeHelper::toInt($user['id'] ?? ''));
-        $template->assign('user_role_id', TypeHelper::toInt($user['role_id'] ?? ''));
+        $template->assign('user_role_id', TypeHelper::toInt($user['group_id'] ?? ''));
         $template->assign('user_username', TypeHelper::toString($user['username'] ?? ''));
         $template->assign('user_display_name', TypeHelper::toString($user['display_name'] ?? ''));
         $template->assign('user_email', TypeHelper::toString($user['email'] ?? ''));
-        $template->assign('user_status', TypeHelper::toString($user['status'] ?? ''));
+        $currentGroup = GroupModel::findGroupById(TypeHelper::toInt($user['group_id'] ?? 0) ?? 0);
+        $template->assign('user_current_group_name', TypeHelper::toString($currentGroup['name'] ?? ''));
+        $template->assign('user_current_group_is_assignable', !empty($currentGroup['is_assignable']) ? 1 : 0);
 
         $template->assign('roles', $roles);
         $template->assign('csrf_token', Security::generateCsrfToken());
         $template->assign('error', $errors);
         $template->assign('success', $success);
         $template->render('panel/control_panel_user_edit.html');
+    }
+
+
+    /**
+     * Render the group management overview for Site Administrator users.
+     *
+     * @return void
+     */
+    public static function groups(): void
+    {
+        self::requireSiteAdministrator();
+        self::requirePanelAnyPermission(['manage_groups', 'manage_group_permissions']);
+
+        $errors = [];
+        $success = '';
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST')
+        {
+            $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
+            if (!Security::verifyCsrfToken($csrf))
+            {
+                $errors[] = 'Invalid request.';
+            }
+
+            $action = Security::sanitizeString($_POST['action'] ?? '');
+
+            if ($action === 'save_default_registration_group')
+            {
+                $defaultGroupId = TypeHelper::toInt($_POST['default_registration_group_id'] ?? 0) ?? 0;
+                $group = GroupModel::findGroupById($defaultGroupId);
+
+                if (!$group || empty($group['is_assignable']))
+                {
+                    $errors[] = 'Choose an assignable group for new registrations.';
+                }
+                else if (empty($errors))
+                {
+                    GroupModel::setDefaultRegistrationGroupId($defaultGroupId);
+                    $success = 'Default registration group updated.';
+                }
+            }
+            else if ($action === 'create_group')
+            {
+                $name = trim(Security::sanitizeString($_POST['name'] ?? ''));
+                $description = trim(Security::sanitizeString($_POST['description'] ?? ''));
+                $isAssignable = !empty($_POST['is_assignable']) ? 1 : 0;
+                $sortOrder = TypeHelper::toInt($_POST['sort_order'] ?? GroupModel::getNextSortOrder()) ?? GroupModel::getNextSortOrder();
+                $slug = self::normalizeGroupSlug($name);
+
+                if ($name === '')
+                {
+                    $errors[] = 'Group name is required.';
+                }
+                else if ($slug === '')
+                {
+                    $errors[] = 'Group name could not be converted into a safe group slug.';
+                }
+                else if (GroupModel::findGroupBySlug($slug))
+                {
+                    $errors[] = 'A group with that name already exists.';
+                }
+                else if (empty($errors))
+                {
+                    $groupId = GroupModel::saveGroup([
+                        'name' => $name,
+                        'slug' => $slug,
+                        'description' => $description,
+                        'is_assignable' => $isAssignable,
+                        'sort_order' => $sortOrder,
+                    ]);
+
+                    GroupModel::replacePermissions($groupId, []);
+                    $success = 'Group created.';
+                }
+            }
+        }
+
+        $template = self::initTemplate();
+        $groups = [];
+        foreach (GroupModel::listGroups() as $group)
+        {
+            $groups[] = [
+                TypeHelper::toInt($group['id'] ?? 0) ?? 0,
+                TypeHelper::toString($group['name'] ?? ''),
+                TypeHelper::toString($group['slug'] ?? ''),
+                TypeHelper::toString($group['description'] ?? ''),
+                !empty($group['is_built_in']) ? 1 : 0,
+                !empty($group['is_assignable']) ? 1 : 0,
+            ];
+        }
+
+        $assignableGroups = [];
+        foreach (GroupModel::listAssignableGroups() as $group)
+        {
+            $assignableGroups[] = [
+                TypeHelper::toInt($group['id'] ?? 0) ?? 0,
+                TypeHelper::toString($group['name'] ?? ''),
+            ];
+        }
+
+        $defaultRegistrationGroup = GroupModel::getDefaultRegistrationGroup();
+
+        self::assignPanelPage(
+            $template,
+            'groups',
+            'Group Management',
+            'Manage built-in and custom groups, choose the registration default, and open the RBAC editor for each group.',
+            'accounts'
+        );
+
+        $template->assign('groups', $groups);
+        $template->assign('assignable_groups', $assignableGroups);
+        $template->assign('default_registration_group_id', TypeHelper::toInt($defaultRegistrationGroup['id'] ?? 0) ?? 0);
+        $template->assign('default_registration_group_name', TypeHelper::toString($defaultRegistrationGroup['name'] ?? 'Member'));
+        $template->assign('next_group_sort_order', GroupModel::getNextSortOrder());
+        $template->assign('error', $errors);
+        $template->assign('success', $success);
+        $template->assign('csrf_token', Security::generateCsrfToken());
+        $template->render('panel/control_panel_groups.html');
+    }
+
+    /**
+     * Edit one group and its RBAC permission values.
+     *
+     * @param int $id
+     * @return void
+     */
+    public static function groupEdit(int $id): void
+    {
+        self::requireSiteAdministrator();
+        self::requirePanelAnyPermission(['manage_groups', 'manage_group_permissions']);
+
+        $group = GroupModel::findGroupById($id);
+        if (!$group)
+        {
+            http_response_code(404);
+            $template = self::initTemplate();
+            $template->assign('title', 'Not Found');
+            $template->assign('message', 'Group not found.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $errors = [];
+        $success = '';
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST')
+        {
+            $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
+            if (!Security::verifyCsrfToken($csrf))
+            {
+                $errors[] = 'Invalid request.';
+            }
+
+            $name = trim(Security::sanitizeString($_POST['name'] ?? TypeHelper::toString($group['name'] ?? '')));
+            $description = trim(Security::sanitizeString($_POST['description'] ?? TypeHelper::toString($group['description'] ?? '')));
+            $isAssignable = !empty($_POST['is_assignable']) ? 1 : 0;
+            $sortOrder = TypeHelper::toInt($_POST['sort_order'] ?? $group['sort_order']) ?? (TypeHelper::toInt($group['sort_order'] ?? 0) ?? 0);
+
+            if ($name === '')
+            {
+                $errors[] = 'Group name is required.';
+            }
+
+            if (!empty($group['is_built_in']))
+            {
+                $name = TypeHelper::toString($group['name'] ?? $name);
+            }
+
+            if (strtolower(TypeHelper::toString($group['slug'] ?? '', allowEmpty: true) ?? '') === 'banned')
+            {
+                $isAssignable = 0;
+            }
+
+            $permissionPayload = [];
+            foreach (GroupPermissionHelper::getPermissionCatalog() as $token => $meta)
+            {
+                $permissionPayload[$token] = !empty($_POST['permissions'][$token]) ? 1 : 0;
+            }
+
+            if (empty($errors))
+            {
+                GroupModel::saveGroup([
+                    'id' => TypeHelper::toInt($group['id'] ?? 0) ?? 0,
+                    'name' => $name,
+                    'description' => $description,
+                    'is_assignable' => $isAssignable,
+                    'sort_order' => $sortOrder,
+                ]);
+                GroupModel::replacePermissions(TypeHelper::toInt($group['id'] ?? 0) ?? 0, $permissionPayload);
+
+                $success = 'Group updated.';
+                $group = GroupModel::findGroupById($id) ?: $group;
+                if ((TypeHelper::toInt(SessionManager::get('user_group_id')) ?? 0) === (TypeHelper::toInt($group['id'] ?? 0) ?? 0))
+                {
+                    GroupPermissionHelper::syncSessionForUser(TypeHelper::toInt(SessionManager::get('user_id')) ?? 0, true);
+                }
+            }
+        }
+
+        $template = self::initTemplate();
+        $permissions = GroupModel::getPermissionMapByGroupId(TypeHelper::toInt($group['id'] ?? 0) ?? 0);
+        $permissionRows = [];
+        foreach (GroupPermissionHelper::getPermissionCatalog() as $token => $meta)
+        {
+            $permissionRows[] = [
+                $token,
+                TypeHelper::toString($meta['label'] ?? $token),
+                TypeHelper::toString($meta['description'] ?? ''),
+                TypeHelper::toString($meta['input_type'] ?? 'select'),
+                !empty($permissions[$token]) ? 1 : 0,
+            ];
+        }
+
+        self::assignPanelPage(
+            $template,
+            'groups',
+            'Edit Group',
+            'Update group metadata and fine-tune RBAC permission tokens for this group.',
+            'accounts'
+        );
+
+        $template->assign('group_id', TypeHelper::toInt($group['id'] ?? 0) ?? 0);
+        $template->assign('group_name', TypeHelper::toString($group['name'] ?? ''));
+        $template->assign('group_slug', TypeHelper::toString($group['slug'] ?? ''));
+        $template->assign('group_description', TypeHelper::toString($group['description'] ?? ''));
+        $template->assign('group_is_built_in', !empty($group['is_built_in']) ? 1 : 0);
+        $template->assign('group_is_assignable', !empty($group['is_assignable']) ? 1 : 0);
+        $template->assign('group_sort_order', TypeHelper::toInt($group['sort_order'] ?? 0) ?? 0);
+        $template->assign('group_permission_rows', $permissionRows);
+        $template->assign('error', $errors);
+        $template->assign('success', $success);
+        $template->assign('csrf_token', Security::generateCsrfToken());
+        $template->render('panel/control_panel_group_edit.html');
+    }
+
+    /**
+     * Normalize a free-form group name into a safe internal slug.
+     *
+     * @param string $value
+     * @return string
+     */
+    private static function normalizeGroupSlug(string $value): string
+    {
+        $value = strtolower(trim($value));
+        $value = preg_replace('/[^a-z0-9]+/', '-', $value) ?? '';
+        $value = trim($value, '-');
+        return $value;
     }
 
     /**
@@ -709,7 +1031,7 @@ class ControlPanelController extends BaseController
      */
     private static function renderSettingsPage(string $selectedCategory = '', bool $manageCategories = false): void
     {
-        self::requirePanelAdmin();
+        self::requirePanelPermission('manage_settings');
 
         $template = self::initTemplate();
         $selectedCategory = self::normalizeSettingsCategorySlug($selectedCategory);
@@ -1181,7 +1503,7 @@ class ControlPanelController extends BaseController
      */
     public static function settingsSave(): void
     {
-        self::requirePanelAdmin();
+        self::requirePanelPermission('manage_settings');
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST')
         {
@@ -1283,7 +1605,7 @@ class ControlPanelController extends BaseController
      */
     public static function settingsCategorySave(): void
     {
-        self::requirePanelAdmin();
+        self::requirePanelPermission('manage_settings');
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST')
         {
@@ -1371,7 +1693,7 @@ class ControlPanelController extends BaseController
      */
     public static function settingsCategoryDelete(): void
     {
-        self::requirePanelAdmin();
+        self::requirePanelPermission('manage_settings');
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST')
         {
@@ -1435,7 +1757,7 @@ class ControlPanelController extends BaseController
      */
     public static function settingsDelete(): void
     {
-        self::requirePanelAdmin();
+        self::requirePanelPermission('manage_settings');
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST')
         {
@@ -2020,7 +2342,7 @@ class ControlPanelController extends BaseController
      */
     public static function securityLogs(): void
     {
-        self::requirePanelAdmin();
+        self::requirePanelPermission('view_security');
 
         $template = self::initTemplate();
 
@@ -2332,7 +2654,7 @@ class ControlPanelController extends BaseController
      */
     public static function securityLogView(): void
     {
-        self::requirePanelAdmin();
+        self::requirePanelPermission('view_security');
 
         $id = TypeHelper::toInt($_GET['id'] ?? 0) ?? 0;
         if ($id < 1)
@@ -2400,7 +2722,7 @@ class ControlPanelController extends BaseController
      */
     public static function blockList(): void
     {
-        self::requirePanelAdmin();
+        self::requirePanelPermission('manage_block_list');
 
         $template = self::initTemplate();
 
@@ -2588,7 +2910,7 @@ class ControlPanelController extends BaseController
      */
     public static function blockCreate(): void
     {
-        self::requirePanelAdmin();
+        self::requirePanelPermission('manage_block_list');
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST')
         {
@@ -2757,7 +3079,7 @@ class ControlPanelController extends BaseController
      */
     public static function blockEdit(int $id): void
     {
-        self::requirePanelAdmin();
+        self::requirePanelPermission('manage_block_list');
 
         $errors = [];
         $success = '';
@@ -2848,7 +3170,7 @@ class ControlPanelController extends BaseController
      */
     public static function blockRemoveMatch(): void
     {
-        self::requirePanelAdmin();
+        self::requirePanelPermission('manage_block_list');
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST')
         {
@@ -2978,7 +3300,7 @@ class ControlPanelController extends BaseController
      */
     public static function blockRemove(int $id): void
     {
-        self::requirePanelAdmin();
+        self::requirePanelPermission('manage_block_list');
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST')
         {
@@ -3004,8 +3326,8 @@ class ControlPanelController extends BaseController
     {
         $template = self::initTemplate();
 
-        // Require login and role check
-        self::requirePanelAccess($template);
+        // Require login and permission check
+        self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'moderate_image_queue'], $template);
 
         $page = TypeHelper::toInt($page ?? null) ?? 1;
         if ($page < 1)
@@ -3080,8 +3402,8 @@ class ControlPanelController extends BaseController
     {
         $template = self::initTemplate();
 
-        // Require login and role check
-        self::requirePanelAccess($template);
+        // Require login and permission check
+        self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'moderate_image_queue'], $template);
 
         // Approve requests must be POST-only (prevents accidental approvals from URL visits)
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
@@ -3156,8 +3478,8 @@ class ControlPanelController extends BaseController
     {
         $template = self::initTemplate();
 
-        // Require login and role check
-        self::requirePanelAccess($template);
+        // Require login and permission check
+        self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'moderate_image_queue'], $template);
 
         // Approve requests must be POST-only (prevents accidental approvals from URL visits)
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
@@ -3232,8 +3554,8 @@ class ControlPanelController extends BaseController
     {
         $template = self::initTemplate();
 
-        // Require login and role check
-        self::requirePanelAccess($template);
+        // Require login and permission check
+        self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'moderate_image_queue'], $template);
 
         // Reject requests must be POST-only (prevents accidental rejections from URL visits)
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
@@ -3304,7 +3626,7 @@ class ControlPanelController extends BaseController
     public static function imageReports($page = null): void
     {
         $template = self::initTemplate();
-        self::requirePanelAccess($template);
+        self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'manage_image_reports'], $template);
 
         $page = TypeHelper::toInt($page ?? null) ?? 1;
         if ($page < 1)
@@ -3399,7 +3721,7 @@ class ControlPanelController extends BaseController
     public static function imageReportView(): void
     {
         $template = self::initTemplate();
-        self::requirePanelAccess($template);
+        self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'manage_image_reports'], $template);
 
         $id = TypeHelper::toInt($_GET['id'] ?? 0) ?? 0;
         if ($id < 1)
@@ -3537,7 +3859,7 @@ class ControlPanelController extends BaseController
     public static function updateImageReport(int $id): void
     {
         $template = self::initTemplate();
-        self::requirePanelAccess($template);
+        self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'manage_image_reports'], $template);
 
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
         {
@@ -3644,7 +3966,7 @@ class ControlPanelController extends BaseController
     private static function syncImageReportAssignment(int $id, ?int $assignedUserId, string $noticeState): void
     {
         $template = self::initTemplate();
-        self::requirePanelAccess($template);
+        self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'manage_image_reports'], $template);
 
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
         {
@@ -3692,7 +4014,7 @@ class ControlPanelController extends BaseController
     private static function updateImageReportStatus(int $id, string $status): void
     {
         $template = self::initTemplate();
-        self::requirePanelAccess($template);
+        self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'manage_image_reports'], $template);
 
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
         {
@@ -3776,8 +4098,8 @@ class ControlPanelController extends BaseController
     {
         $template = self::initTemplate();
 
-        // Require login and role check
-        self::requirePanelAccess($template);
+        // Require login and permission check
+        self::requirePanelPermission('compare_images', $template);
 
         $comparisonResult  = null;      // Stores calculated hash distances
         $selectedImage1    = null;      // First selected image
@@ -3881,8 +4203,8 @@ class ControlPanelController extends BaseController
     {
         $template = self::initTemplate();
 
-        // Require login and role check
-        self::requirePanelAdmin($template);
+        // Require login and permission check
+        self::requirePanelPermission('rehash_images', $template);
 
         $message = '';
         $processedImages = [];
@@ -4000,8 +4322,8 @@ class ControlPanelController extends BaseController
     {
         $template = self::initTemplate();
 
-        // Require login and role check
-        self::requirePanelAccess($template);
+        // Require login and permission check
+        self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'moderate_image_queue'], $template);
 
         $sql = "
             SELECT

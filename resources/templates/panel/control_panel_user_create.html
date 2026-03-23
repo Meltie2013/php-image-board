@@ -40,7 +40,7 @@
                     <div class="admin-panel-heading">
                         <div>
                             <h3>Account Details</h3>
-                            <p>Provision a user with the correct identity, role, and initial account state.</p>
+                            <p>Provision a user with the correct identity, group, and initial account state.</p>
                         </div>
                     </div>
 
@@ -74,8 +74,8 @@
 
                             <div class="admin-form-grid-two">
                                 <div class="admin-field">
-                                    <label>Role</label>
-                                    <select name="role_id">
+                                    <label>Group</label>
+                                    <select name="group_id">
                                         {foreach $roles as list($r_id, $r_name)}
                                             <option value="{$r_id}">{$r_name}</option>
                                         {/foreach}

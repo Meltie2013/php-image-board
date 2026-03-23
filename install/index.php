@@ -835,7 +835,7 @@ function installer_database_ready(): bool
     }
 
     try {
-        $stmt = $pdo->query("SHOW TABLES LIKE 'app_roles'");
+        $stmt = $pdo->query("SHOW TABLES LIKE 'app_groups'");
         $row = $stmt ? $stmt->fetch() : false;
         return !empty($row);
     } catch (Throwable $e) {

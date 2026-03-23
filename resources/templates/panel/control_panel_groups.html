@@ -1,0 +1,166 @@
+{include file="global/header.html"}
+
+    <main class="admin-container">
+        <div class="admin-shell admin-layout">
+            <div class="admin-sidebar">
+                <div class="admin-sidebar-inner admin-menu">
+                    {include file="panel/control_panel_menu.html"}
+                </div>
+            </div>
+
+            <div class="admin-content admin-dashboard">
+                <div class="admin-page-header">
+                    <div>
+                        <div class="admin-kicker">Control Panel</div>
+                        <h2>{$control_panel_page_title}</h2>
+                        <p>{$control_panel_page_description}</p>
+                    </div>
+                </div>
+
+                {if !empty($success)}
+                    <div class="admin-notice admin-notice-success">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <p>{$success}</p>
+                    </div>
+                {/if}
+
+                {if !empty($error)}
+                    <div class="error-box">
+                        {foreach $error as $e}
+                            <p>{$e}</p>
+                        {/foreach}
+                    </div>
+                {/if}
+
+                <section class="admin-panel">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <h3>Registration Defaults</h3>
+                            <p>Choose which assignable group newly registered accounts should enter before approval.</p>
+                        </div>
+                    </div>
+
+                    <div class="admin-panel-body">
+                        <form method="POST" action="/panel/groups" class="admin-form">
+                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                            <input type="hidden" name="action" value="save_default_registration_group">
+
+                            <div class="admin-form-grid-two">
+                                <div class="admin-field">
+                                    <label>Default Registration Group</label>
+                                    <select name="default_registration_group_id">
+                                        {foreach $assignable_groups as list($group_id, $group_name)}
+                                            <option value="{$group_id}" {if $group_id == $default_registration_group_id}selected{/if}>{$group_name}</option>
+                                        {/foreach}
+                                    </select>
+                                </div>
+
+                                <div class="admin-field">
+                                    <label>Current Default</label>
+                                    <input type="text" value="{$default_registration_group_name}" readonly>
+                                </div>
+                            </div>
+
+                            <div class="admin-form-footer">
+                                <button type="submit" class="admin-btn admin-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Default</button>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+
+                <section class="admin-panel">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <h3>Create Custom Group</h3>
+                            <p>Create an additional group that can later be edited with permission tokens in the RBAC editor.</p>
+                        </div>
+                    </div>
+
+                    <div class="admin-panel-body">
+                        <form method="POST" action="/panel/groups" class="admin-form">
+                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                            <input type="hidden" name="action" value="create_group">
+
+                            <div class="admin-form-grid-two">
+                                <div class="admin-field">
+                                    <label>Group Name</label>
+                                    <input type="text" name="name" required>
+                                </div>
+
+                                <div class="admin-field">
+                                    <label>Sort Order</label>
+                                    <input type="number" name="sort_order" value="{$next_group_sort_order}" min="0">
+                                </div>
+                            </div>
+
+                            <div class="admin-field">
+                                <label>Description</label>
+                                <textarea name="description" rows="3"></textarea>
+                            </div>
+
+                            <div class="admin-field">
+                                <label style="display:flex; gap:10px; align-items:center;">
+                                    <input type="checkbox" name="is_assignable" value="1" checked>
+                                    Assignable to new and existing accounts
+                                </label>
+                            </div>
+
+                            <div class="admin-form-footer">
+                                <button type="submit" class="admin-btn admin-btn-primary"><i class="fa-solid fa-user-plus"></i> Create Group</button>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+
+                <section class="admin-panel">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <h3>Group Directory</h3>
+                            <p>Review built-in and custom groups, then open the editor to adjust descriptions and permissions.</p>
+                        </div>
+                    </div>
+
+                    <div class="admin-panel-body">
+                        {if empty($groups)}
+                            <div class="admin-empty-state">
+                                <p>No groups are available to display.</p>
+                            </div>
+                        {else}
+                            <div class="pending-images-wrapper">
+                                <table class="pending-images-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Name</th>
+                                            <th>Slug</th>
+                                            <th>Description</th>
+                                            <th>Built In</th>
+                                            <th>Assignable</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {foreach $groups as list($group_id, $group_name, $group_slug, $group_description, $group_is_built_in, $group_is_assignable)}
+                                        <tr>
+                                            <td>{$group_id}</td>
+                                            <td><span class="admin-pill">{$group_name}</span></td>
+                                            <td>{$group_slug}</td>
+                                            <td class="is-wrap">{$group_description}</td>
+                                            <td>{if $group_is_built_in}Yes{else}No{/if}</td>
+                                            <td>{if $group_is_assignable}Yes{else}No{/if}</td>
+                                            <td>
+                                                <a href="/panel/groups/edit/{$group_id}" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-sliders"></i> Edit Group</a>
+                                            </td>
+                                        </tr>
+                                        {/foreach}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {/if}
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+{include file="global/footer.html"}

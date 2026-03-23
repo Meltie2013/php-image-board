@@ -203,23 +203,161 @@ CREATE TABLE `app_rate_counters` (
 -- --------------------------------------------------------
 
 --
--- Table structure for table `app_roles`
+-- Table structure for table `app_groups`
 --
 
-CREATE TABLE `app_roles` (
+CREATE TABLE `app_groups` (
     `id` tinyint(3) UNSIGNED NOT NULL,
-    `name` varchar(50) NOT NULL,
-    `description` varchar(255) DEFAULT NULL
+    `name` varchar(80) NOT NULL,
+    `slug` varchar(80) NOT NULL,
+    `description` varchar(255) DEFAULT NULL,
+    `is_built_in` tinyint(1) NOT NULL DEFAULT 0,
+    `is_assignable` tinyint(1) NOT NULL DEFAULT 1,
+    `sort_order` int(10) UNSIGNED NOT NULL DEFAULT 0,
+    `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+    `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `app_roles`
+-- Dumping data for table `app_groups`
 --
 
-INSERT INTO `app_roles` (`id`, `name`, `description`) VALUES
-    (1, 'Administrator', ''),
-    (2, 'Moderator', ''),
-    (3, 'Member', '');
+INSERT INTO `app_groups` (`id`, `name`, `slug`, `description`, `is_built_in`, `is_assignable`, `sort_order`) VALUES
+    (1, 'Site Administrator', 'site-administrator', 'Full owner-level access to all ACP modules, groups, and permissions.', 1, 1, 10),
+    (2, 'Administrator', 'administrator', 'Administrative access for normal site administrators without owner-only group controls.', 1, 1, 20),
+    (3, 'Site Moderator', 'site-moderator', 'Site-wide moderation group covering all moderation areas.', 1, 1, 30),
+    (4, 'Forum Moderator', 'forum-moderator', 'Forum-specific moderation group reserved for forum moderation tools.', 1, 1, 40),
+    (5, 'Image Moderator', 'image-moderator', 'Gallery-specific moderation group for uploads, reports, and image actions.', 1, 1, 50),
+    (6, 'Member', 'member', 'Standard member access for normal user accounts.', 1, 1, 60),
+    (7, 'Banned', 'banned', 'Reserved non-assignable group used for banned accounts.', 1, 0, 70);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `app_group_permissions`
+--
+
+CREATE TABLE `app_group_permissions` (
+    `id` bigint(20) UNSIGNED NOT NULL,
+    `group_id` tinyint(3) UNSIGNED NOT NULL,
+    `permission_token` varchar(80) NOT NULL,
+    `permission_value` tinyint(1) NOT NULL DEFAULT 0,
+    `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+    `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `app_group_permissions`
+--
+
+INSERT INTO `app_group_permissions` (`group_id`, `permission_token`, `permission_value`) VALUES
+    (1, 'view_gallery', 1),
+    (1, 'upload_images', 1),
+    (1, 'comment_images', 1),
+    (1, 'report_images', 1),
+    (1, 'vote_images', 1),
+    (1, 'favorite_images', 1),
+    (1, 'edit_own_image', 1),
+    (1, 'edit_any_image', 1),
+    (1, 'access_control_panel', 1),
+    (1, 'manage_users', 1),
+    (1, 'manage_groups', 1),
+    (1, 'manage_group_permissions', 1),
+    (1, 'manage_settings', 1),
+    (1, 'view_security', 1),
+    (1, 'manage_block_list', 1),
+    (1, 'moderate_site', 1),
+    (1, 'moderate_forums', 1),
+    (1, 'moderate_gallery', 1),
+    (1, 'moderate_image_queue', 1),
+    (1, 'manage_image_reports', 1),
+    (1, 'compare_images', 1),
+    (1, 'rehash_images', 1),
+    (2, 'view_gallery', 1),
+    (2, 'upload_images', 1),
+    (2, 'comment_images', 1),
+    (2, 'report_images', 1),
+    (2, 'vote_images', 1),
+    (2, 'favorite_images', 1),
+    (2, 'edit_own_image', 1),
+    (2, 'edit_any_image', 1),
+    (2, 'access_control_panel', 1),
+    (2, 'manage_users', 1),
+    (2, 'manage_settings', 1),
+    (2, 'view_security', 1),
+    (2, 'manage_block_list', 1),
+    (2, 'moderate_site', 1),
+    (2, 'moderate_forums', 1),
+    (2, 'moderate_gallery', 1),
+    (2, 'moderate_image_queue', 1),
+    (2, 'manage_image_reports', 1),
+    (2, 'compare_images', 1),
+    (2, 'rehash_images', 1),
+    (3, 'view_gallery', 1),
+    (3, 'upload_images', 1),
+    (3, 'comment_images', 1),
+    (3, 'report_images', 1),
+    (3, 'vote_images', 1),
+    (3, 'favorite_images', 1),
+    (3, 'edit_own_image', 1),
+    (3, 'edit_any_image', 1),
+    (3, 'access_control_panel', 1),
+    (3, 'moderate_site', 1),
+    (3, 'moderate_forums', 1),
+    (3, 'moderate_gallery', 1),
+    (3, 'moderate_image_queue', 1),
+    (3, 'manage_image_reports', 1),
+    (3, 'compare_images', 1),
+    (4, 'view_gallery', 1),
+    (4, 'comment_images', 1),
+    (4, 'report_images', 1),
+    (4, 'vote_images', 1),
+    (4, 'favorite_images', 1),
+    (4, 'edit_own_image', 1),
+    (4, 'access_control_panel', 1),
+    (4, 'moderate_forums', 1),
+    (5, 'view_gallery', 1),
+    (5, 'upload_images', 1),
+    (5, 'comment_images', 1),
+    (5, 'report_images', 1),
+    (5, 'vote_images', 1),
+    (5, 'favorite_images', 1),
+    (5, 'edit_own_image', 1),
+    (5, 'edit_any_image', 1),
+    (5, 'access_control_panel', 1),
+    (5, 'moderate_gallery', 1),
+    (5, 'moderate_image_queue', 1),
+    (5, 'manage_image_reports', 1),
+    (5, 'compare_images', 1),
+    (6, 'view_gallery', 1),
+    (6, 'upload_images', 1),
+    (6, 'comment_images', 1),
+    (6, 'report_images', 1),
+    (6, 'vote_images', 1),
+    (6, 'favorite_images', 1),
+    (6, 'edit_own_image', 1),
+    (7, 'view_gallery', 0),
+    (7, 'upload_images', 0),
+    (7, 'comment_images', 0),
+    (7, 'report_images', 0),
+    (7, 'vote_images', 0),
+    (7, 'favorite_images', 0),
+    (7, 'edit_own_image', 0),
+    (7, 'edit_any_image', 0),
+    (7, 'access_control_panel', 0),
+    (7, 'manage_users', 0),
+    (7, 'manage_groups', 0),
+    (7, 'manage_group_permissions', 0),
+    (7, 'manage_settings', 0),
+    (7, 'view_security', 0),
+    (7, 'manage_block_list', 0),
+    (7, 'moderate_site', 0),
+    (7, 'moderate_forums', 0),
+    (7, 'moderate_gallery', 0),
+    (7, 'moderate_image_queue', 0),
+    (7, 'manage_image_reports', 0),
+    (7, 'compare_images', 0),
+    (7, 'rehash_images', 0);
 
 -- --------------------------------------------------------
 
@@ -390,7 +528,7 @@ CREATE TABLE `app_updates` (
 
 CREATE TABLE `app_users` (
     `id` bigint(20) UNSIGNED NOT NULL,
-    `role_id` tinyint(3) UNSIGNED NOT NULL DEFAULT 3,
+    `group_id` tinyint(3) UNSIGNED NOT NULL DEFAULT 6,
     `username` varchar(50) NOT NULL,
     `display_name` varchar(100) DEFAULT NULL,
     `email` varchar(191) NOT NULL,
@@ -510,11 +648,20 @@ ALTER TABLE `app_rate_counters`
     ADD KEY `idx_expires_at` (`expires_at`);
 
 --
--- Indexes for table `app_roles`
+-- Indexes for table `app_groups`
 --
-ALTER TABLE `app_roles`
+ALTER TABLE `app_groups`
     ADD PRIMARY KEY (`id`),
-    ADD UNIQUE KEY `name` (`name`);
+    ADD UNIQUE KEY `uniq_app_groups_name` (`name`),
+    ADD UNIQUE KEY `uniq_app_groups_slug` (`slug`);
+
+--
+-- Indexes for table `app_group_permissions`
+--
+ALTER TABLE `app_group_permissions`
+    ADD PRIMARY KEY (`id`),
+    ADD UNIQUE KEY `uniq_group_permission` (`group_id`,`permission_token`),
+    ADD KEY `idx_permission_token` (`permission_token`);
 
 --
 -- Indexes for table `app_security_logs`
@@ -566,7 +713,7 @@ ALTER TABLE `app_users`
     ADD PRIMARY KEY (`id`),
     ADD UNIQUE KEY `username` (`username`),
     ADD UNIQUE KEY `email` (`email`),
-    ADD KEY `fk_users_role` (`role_id`);
+    ADD KEY `fk_users_group` (`group_id`);
 
 --
 -- Indexes for table `app_user_devices`
@@ -647,10 +794,16 @@ ALTER TABLE `app_image_votes`
   MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
--- AUTO_INCREMENT for table `app_roles`
+-- AUTO_INCREMENT for table `app_groups`
 --
-ALTER TABLE `app_roles`
-  MODIFY `id` tinyint(3) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+ALTER TABLE `app_groups`
+  MODIFY `id` tinyint(3) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+
+--
+-- AUTO_INCREMENT for table `app_group_permissions`
+--
+ALTER TABLE `app_group_permissions`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `app_security_logs`
@@ -767,7 +920,13 @@ ALTER TABLE `app_sessions`
 -- Constraints for table `app_users`
 --
 ALTER TABLE `app_users`
-    ADD CONSTRAINT `fk_users_role` FOREIGN KEY (`role_id`) REFERENCES `app_roles` (`id`) ON UPDATE CASCADE;
+    ADD CONSTRAINT `fk_users_group` FOREIGN KEY (`group_id`) REFERENCES `app_groups` (`id`) ON UPDATE CASCADE;
+
+--
+-- Constraints for table `app_group_permissions`
+--
+ALTER TABLE `app_group_permissions`
+    ADD CONSTRAINT `fk_group_permissions_group` FOREIGN KEY (`group_id`) REFERENCES `app_groups` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `app_user_devices`

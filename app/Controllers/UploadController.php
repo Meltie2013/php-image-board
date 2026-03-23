@@ -250,6 +250,7 @@ class UploadController extends BaseController
 
         // Require login
         RoleHelper::requireLogin();
+        GroupPermissionHelper::requirePermission('upload_images');
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && RequestGuard::isInteractiveActionRateLimited('upload'))
         {

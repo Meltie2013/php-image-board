@@ -24,11 +24,7 @@
             </a>
 
             {if $is_logged_in}
-            {if $site_user_role == 'Administrator'}
-            <a class="nav-icon" href="/panel/dashboard" aria-label="Control Panel" data-tooltip="Control Panel">
-                <i class="fa-solid fa-screwdriver-wrench"></i>
-            </a>
-            {else if $site_user_role == 'Moderator'}
+            {if $site_user_can_access_panel}
             <a class="nav-icon" href="/panel/dashboard" aria-label="Control Panel" data-tooltip="Control Panel">
                 <i class="fa-solid fa-screwdriver-wrench"></i>
             </a>

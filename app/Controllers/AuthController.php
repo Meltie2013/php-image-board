@@ -95,9 +95,14 @@ class AuthController extends BaseController
             {
                 // Block any account that is not active.
                 $accountStatus = strtolower(TypeHelper::toString($user['status'] ?? '', allowEmpty: true) ?? '');
-                if ($accountStatus !== 'active')
+                $groupName = strtolower(TypeHelper::toString($user['group_name'] ?? '', allowEmpty: true) ?? '');
+                if ($accountStatus !== 'active' || $groupName === 'banned')
                 {
-                    if ($accountStatus === 'suspended')
+                    if ($groupName === 'banned')
+                    {
+                        $errors[] = "Account banned.";
+                    }
+                    else if ($accountStatus === 'suspended')
                     {
                         $errors[] = "Account suspended.";
                     }
@@ -152,10 +157,12 @@ class AuthController extends BaseController
                             SessionManager::regenerate();
 
                             // Store important user details in session
-                            SessionManager::set('user_id', $userIdToCheck);
-                            SessionManager::set('user_role', $user['role_name']);
-                            SessionManager::set('username', $user['username']);
-                            SessionManager::set('user_avatar', $user['avatar_path']);
+                            SessionManager::setMany([
+                                'user_id' => $userIdToCheck,
+                                'username' => $user['username'],
+                                'user_avatar' => $user['avatar_path'],
+                            ]);
+                            GroupPermissionHelper::syncSessionForUser($userIdToCheck, true);
 
                             // Record device fingerprint for this account
                             DevicePolicy::recordForUser($userIdToCheck);
@@ -347,7 +354,14 @@ class AuthController extends BaseController
             {
                 $hashedPassword = Security::hashPassword($password);
 
-                $newId = UserModel::createPendingUser($username, $email, $hashedPassword, 3, 'pending');
+                $defaultGroup = GroupModel::getDefaultRegistrationGroup();
+                $defaultGroupId = TypeHelper::toInt($defaultGroup['id'] ?? 0) ?? 0;
+                if ($defaultGroupId < 1)
+                {
+                    $defaultGroupId = 6;
+                }
+
+                $newId = UserModel::createPendingUser($username, $email, $hashedPassword, $defaultGroupId, 'pending');
 
                 if ($newId > 0)
                 {
@@ -361,6 +375,8 @@ class AuthController extends BaseController
 
         // Render template
         $template = self::initTemplate();
+        $defaultGroup = GroupModel::getDefaultRegistrationGroup();
+        $template->assign('registration_default_group_name', TypeHelper::toString($defaultGroup['name'] ?? 'Member'));
         $template->assign('csrf_token', Security::generateCsrfToken());
         $template->assign('error', $errors);
         $template->assign('success', $success);

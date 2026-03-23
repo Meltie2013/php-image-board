@@ -74,6 +74,9 @@ Database::init($config['db']);
 SettingsManager::init($config);
 $config = SettingsManager::getConfig();
 
+// Ensure built-in groups + RBAC defaults exist
+GroupModel::ensureBuiltInData();
+
 // Session
 SessionManager::init($config['session']);
 
@@ -212,6 +215,8 @@ $router->add([
     ['/panel/users', [ControlPanelController::class, 'users'], ['GET']],
     ['/panel/users/create', [ControlPanelController::class, 'userCreate'], ['GET', 'POST']],
     ['/panel/users/edit/(\d+)', function ($id) { ControlPanelController::userEdit((int)$id); }, ['GET', 'POST']],
+    ['/panel/groups', [ControlPanelController::class, 'groups'], ['GET', 'POST']],
+    ['/panel/groups/edit/(\d+)', function ($id) { ControlPanelController::groupEdit((int)$id); }, ['GET', 'POST']],
     ['/panel/settings', [ControlPanelController::class, 'settings'], ['GET']],
     ['/panel/settings/categories', [ControlPanelController::class, 'settingsCategories'], ['GET']],
     ['/panel/settings/save', [ControlPanelController::class, 'settingsSave'], ['POST']],

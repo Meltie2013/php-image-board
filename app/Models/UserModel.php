@@ -55,9 +55,9 @@ class UserModel extends BaseModel
         }
 
         return self::fetch(
-            "SELECT u.id, u.username, u.email, u.password_hash, u.avatar_path, u.failed_logins, u.last_failed_login, u.status, r.name AS role_name
+            "SELECT u.id, u.username, u.email, u.password_hash, u.avatar_path, u.failed_logins, u.last_failed_login, u.status, r.name AS group_name
              FROM app_users u
-             INNER JOIN app_roles r ON u.role_id = r.id
+             INNER JOIN app_groups r ON u.group_id = r.id
              WHERE u.email = :email
              LIMIT 1",
             ['email' => $email]
@@ -152,20 +152,20 @@ class UserModel extends BaseModel
      * @param string $username
      * @param string $email
      * @param string $passwordHash
-     * @param int $roleId
+     * @param int $groupId
      * @param string $status
      * @return int
      */
-    public static function createPendingUser(string $username, string $email, string $passwordHash, int $roleId = 3, string $status = 'pending'): int
+    public static function createPendingUser(string $username, string $email, string $passwordHash, int $groupId = 6, string $status = 'pending'): int
     {
         return (int) self::insert(
-            "INSERT INTO app_users (username, email, password_hash, role_id, status, created_at)
-             VALUES (:username, :email, :password_hash, :role_id, :status, NOW())",
+            "INSERT INTO app_users (username, email, password_hash, group_id, status, created_at)
+             VALUES (:username, :email, :password_hash, :group_id, :status, NOW())",
             [
                 'username' => $username,
                 'email' => $email,
                 'password_hash' => $passwordHash,
-                'role_id' => $roleId,
+                'group_id' => $groupId,
                 'status' => $status,
             ]
         );
@@ -187,7 +187,7 @@ class UserModel extends BaseModel
         return self::fetch(
             "SELECT
                 u.id,
-                u.role_id,
+                u.group_id,
                 u.username,
                 u.display_name,
                 u.email,
@@ -255,7 +255,7 @@ class UserModel extends BaseModel
         return self::fetch(
             "SELECT
                 id,
-                role_id,
+                group_id,
                 username,
                 display_name,
                 email,
@@ -333,10 +333,22 @@ class UserModel extends BaseModel
      * @param int $userId
      * @return int
      */
+    public static function getGroupIdByUserId(int $userId): int
+    {
+        $row = self::fetch("SELECT group_id FROM app_users WHERE id = :id LIMIT 1", [':id' => $userId]);
+        return TypeHelper::toInt($row['group_id'] ?? 0) ?? 0;
+    }
+
+    
+    /**
+     * Backwards-compatible wrapper for legacy role-based callers.
+     *
+     * @param int $userId
+     * @return int
+     */
     public static function getRoleIdByUserId(int $userId): int
     {
-        $row = self::fetch("SELECT role_id FROM app_users WHERE id = :id LIMIT 1", [':id' => $userId]);
-        return TypeHelper::toInt($row['role_id'] ?? 0) ?? 0;
+        return self::getGroupIdByUserId($userId);
     }
 
     /**
@@ -358,9 +370,9 @@ class UserModel extends BaseModel
     public static function listPanelUsers(): array
     {
         return self::fetchAll(
-            "SELECT u.id, u.username, u.display_name, u.email, u.status, u.created_at, r.name AS role_name
+            "SELECT u.id, u.username, u.display_name, u.email, u.status, u.created_at, r.name AS group_name
              FROM app_users u
-             INNER JOIN app_roles r ON u.role_id = r.id
+             INNER JOIN app_groups r ON u.group_id = r.id
              WHERE u.status != 'deleted'
              ORDER BY u.id ASC"
         );
@@ -371,15 +383,26 @@ class UserModel extends BaseModel
      *
      * @return array
      */
+    public static function listGroups(): array
+    {
+        return self::fetchAll("SELECT id, name FROM app_groups ORDER BY id ASC");
+    }
+
+    
+    /**
+     * Backwards-compatible wrapper for legacy role list callers.
+     *
+     * @return array
+     */
     public static function listRoles(): array
     {
-        return self::fetchAll("SELECT id, name FROM app_roles ORDER BY id ASC");
+        return self::listGroups();
     }
 
     /**
      * Insert one ACP-managed user row.
      *
-     * @param int $roleId
+     * @param int $groupId
      * @param string $username
      * @param string|null $displayName
      * @param string $email
@@ -387,13 +410,13 @@ class UserModel extends BaseModel
      * @param string $status
      * @return void
      */
-    public static function createPanelUser(int $roleId, string $username, ?string $displayName, string $email, string $passwordHash, string $status): void
+    public static function createPanelUser(int $groupId, string $username, ?string $displayName, string $email, string $passwordHash, string $status): void
     {
         self::query(
-            "INSERT INTO app_users (role_id, username, display_name, email, password_hash, status, created_at, updated_at)
-             VALUES (:role, :username, :display, :email, :hash, :status, NOW(), NOW())",
+            "INSERT INTO app_users (group_id, username, display_name, email, password_hash, status, created_at, updated_at)
+             VALUES (:group_id, :username, :display, :email, :hash, :status, NOW(), NOW())",
             [
-                'role' => $roleId,
+                'group_id' => $groupId,
                 'username' => $username,
                 'display' => $displayName,
                 'email' => $email,
@@ -417,9 +440,9 @@ class UserModel extends BaseModel
         }
 
         return self::fetch(
-            "SELECT u.id, u.role_id, u.username, u.display_name, u.email, u.status, r.name AS role_name
+            "SELECT u.id, u.group_id, u.username, u.display_name, u.email, u.status, r.name AS group_name
              FROM app_users u
-             INNER JOIN app_roles r ON u.role_id = r.id
+             INNER JOIN app_groups r ON u.group_id = r.id
              WHERE u.id = :id
              LIMIT 1",
             ['id' => $id]
@@ -430,18 +453,18 @@ class UserModel extends BaseModel
      * Update one ACP-managed user row.
      *
      * @param int $id
-     * @param int $roleId
+     * @param int $groupId
      * @param string $username
      * @param string|null $displayName
      * @param string $email
      * @param string $status
      * @return void
      */
-    public static function updatePanelUser(int $id, int $roleId, string $username, ?string $displayName, string $email, string $status): void
+    public static function updatePanelUser(int $id, int $groupId, string $username, ?string $displayName, string $email, string $status): void
     {
         self::query(
             "UPDATE app_users
-             SET role_id = :role,
+             SET group_id = :group_id,
                  username = :username,
                  display_name = :display,
                  email = :email,
@@ -449,7 +472,7 @@ class UserModel extends BaseModel
                  updated_at = NOW()
              WHERE id = :id",
             [
-                'role' => $roleId,
+                'group_id' => $groupId,
                 'username' => $username,
                 'display' => $displayName,
                 'email' => $email,

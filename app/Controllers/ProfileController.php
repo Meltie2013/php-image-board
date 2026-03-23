@@ -67,12 +67,12 @@ class ProfileController extends BaseController
 
         $status = ucfirst(TypeHelper::toString($user['status'] ?? 'active') ?? 'Active');
 
-        $roleId = TypeHelper::toInt($user['role_id'] ?? null);
+        $groupId = TypeHelper::toInt($user['group_id'] ?? null);
         $roleName = null;
-        
-        if ($roleId !== null && $roleId > 0)
+
+        if ($groupId !== null && $groupId > 0)
         {
-            $roleName = RoleHelper::getRoleNameById($roleId);
+            $roleName = RoleHelper::getRoleNameById($groupId);
         }
         
         $ageVerified = !empty($user['age_verified_at']) || !empty($user['date_of_birth']);
@@ -201,7 +201,7 @@ class ProfileController extends BaseController
         $template->assign('avatar_path', $user['avatar_path']);
         $template->assign('username', ucfirst($user['username']));
         $template->assign('display_name', $displayName);
-        $template->assign('account_role', RoleHelper::getRoleNameById($user['role_id']));
+        $template->assign('account_role', RoleHelper::getRoleNameById(TypeHelper::toInt($user['group_id'] ?? 0) ?? 0));
         $template->assign('account_status', $accountStatus);
         $template->assign('account_standing', strtolower($accountStatus) === 'active' ? 'In good standing' : $accountStatus);
         $template->assign('age_verification_status', !empty($user['age_verified_at']) ? 'Verified' : 'Pending');

@@ -118,15 +118,25 @@
                             Comments <span data-live-comments-count="1">{$img_comment_count}</span>
                         </a>
 
-                        {if $can_edit_image}
+                        {if $is_logged_in && $can_edit_image}
                         <button type="button" class="gallery-hero-btn gallery-hero-btn-button js-open-edit-image" aria-label="Edit Image">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                            Edit
+                        </button>
+                        {else}
+                        <button type="button" class="gallery-hero-btn gallery-hero-btn-button" aria-label="Edit Disabled" title="{$edit_permission_message}" disabled>
                             <i class="fa-solid fa-pen-to-square"></i>
                             Edit
                         </button>
                         {/if}
 
-                        {if $is_logged_in}
+                        {if $is_logged_in && $can_report_image}
                         <button type="button" class="gallery-hero-btn gallery-hero-btn-button gallery-hero-btn-danger js-open-report-image" aria-label="Report Image">
+                            <i class="fa-solid fa-flag"></i>
+                            Report
+                        </button>
+                        {else}
+                        <button type="button" class="gallery-hero-btn gallery-hero-btn-button gallery-hero-btn-danger" aria-label="Report Disabled" title="{$report_permission_message}" disabled>
                             <i class="fa-solid fa-flag"></i>
                             Report
                         </button>
@@ -141,7 +151,13 @@
                             <b data-live-views-count="1">{$img_views}</b>
                         </div>
 
-                        {if $img_has_favorited}
+                        {if !$can_favorite_image}
+                        <button type="button" class="gallery-feedback-btn" data-live-favorite-button="1" aria-label="Favorite Disabled" title="{$favorite_permission_message}" disabled>
+                            <i class="fa-regular fa-star"></i>
+                            <span>Favorite</span>
+                            <b data-live-favorites-count="1">{$img_favorites}</b>
+                        </button>
+                        {else if $img_has_favorited}
                         <button type="button" class="gallery-feedback-btn" data-live-favorite-button="1" data-live-active="1" aria-label="Already Favorited">
                             <i class="fa-solid fa-star"></i>
                             <span>Favorite</span>
@@ -159,7 +175,13 @@
                         </form>
                         {/if}
 
-                        {if $img_has_voted}
+                        {if !$can_vote_image}
+                        <button type="button" class="gallery-feedback-btn" data-live-vote-button="1" aria-label="Like Disabled" title="{$vote_permission_message}" disabled>
+                            <i class="fa-regular fa-thumbs-up"></i>
+                            <span>Like</span>
+                            <b data-live-votes-count="1">{$img_votes}</b>
+                        </button>
+                        {else if $img_has_voted}
                         <button type="button" class="gallery-feedback-btn" data-live-vote-button="1" data-live-active="1" aria-label="Already Upvoted">
                             <i class="fa-solid fa-thumbs-up"></i>
                             <span>Like</span>
@@ -185,13 +207,13 @@
                             <b data-live-views-count="1">{$img_views}</b>
                         </div>
 
-                        <button type="button" class="gallery-feedback-btn" data-live-favorite-button="1" aria-label="Login to Favorite">
+                        <button type="button" class="gallery-feedback-btn" data-live-favorite-button="1" aria-label="Login to Favorite" title="Please login to favorite images." disabled>
                             <i class="fa-regular fa-star"></i>
                             <span>Favorite</span>
                             <b data-live-favorites-count="1">{$img_favorites}</b>
                         </button>
 
-                        <button type="button" class="gallery-feedback-btn" data-live-vote-button="1" aria-label="Login to Upvote">
+                        <button type="button" class="gallery-feedback-btn" data-live-vote-button="1" aria-label="Login to Upvote" title="Please login to like images." disabled>
                             <i class="fa-regular fa-thumbs-up"></i>
                             <span>Like</span>
                             <b data-live-votes-count="1">{$img_votes}</b>
@@ -258,7 +280,7 @@
             </form>
             {else}
             <div class="edit-image-modal-denied">
-                <small>You do not have permission to edit this image.</small>
+                <small>{$edit_permission_message}</small>
             </div>
             {/if}
         </div>
@@ -275,6 +297,7 @@
                 </button>
             </div>
 
+            {if !$is_logged_in || $can_report_image}
             <form method="POST" action="/gallery/{$img_hash}/report" class="edit-image-modal-form">
                 <input type="hidden" name="csrf_token" value="{$csrf_token}">
                 <input type="hidden" name="back_to" value="{$gallery_back_url}">
@@ -310,6 +333,11 @@
                     <button type="submit">Submit Report</button>
                 </div>
             </form>
+            {else}
+            <div class="edit-image-modal-denied">
+                <small>{$report_permission_message}</small>
+            </div>
+            {/if}
         </div>
     </div>
 
@@ -325,12 +353,22 @@
 
             <div class="comments-modal-body">
                 {if $is_logged_in}
+                    {if $can_comment_image}
                 <form method="POST" action="/gallery/{$img_hash}/comment" class="comments-modal-form">
                     <input type="hidden" name="csrf_token" value="{$csrf_token}">
                     <input type="hidden" name="back_to" value="{$gallery_back_url}">
                     <textarea name="comment_body" rows="5" maxlength="500" placeholder="Write your comment..."></textarea>
                     <button type="submit">Post Comment</button>
                 </form>
+                    {else}
+                <div class="alert alert-warning">
+                    {$comment_permission_message}
+                </div>
+                <form method="POST" action="#" class="comments-modal-form">
+                    <textarea name="comment_body" rows="5" maxlength="500" placeholder="Write your comment..." disabled></textarea>
+                    <button type="button" disabled>Post Comment</button>
+                </form>
+                    {/if}
 
                 {if $comment_rows}
                 <div class="gallery-comments-list">

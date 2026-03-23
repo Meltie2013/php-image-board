@@ -267,6 +267,17 @@ class GalleryController extends BaseController
         // Fetch logged-in user's DOB and verification status if available
         if ($userId > 0)
         {
+            RoleHelper::requireLogin();
+            if (!GroupPermissionHelper::hasPermission('view_gallery'))
+            {
+                $template = self::initTemplate();
+                http_response_code(403);
+                $template->assign('title', 'Access Denied');
+                $template->assign('message', 'Your account group cannot view the gallery.');
+                $template->render('errors/error_page.html');
+                return;
+            }
+
             $currentUser = UserModel::findAgeVerificationById($userId);
         }
 
@@ -449,6 +460,16 @@ class GalleryController extends BaseController
 
         if ($userId > 0)
         {
+            RoleHelper::requireLogin();
+            if (!GroupPermissionHelper::hasPermission('view_gallery'))
+            {
+                http_response_code(403);
+                $template->assign('title', 'Access Denied');
+                $template->assign('message', 'Your account group cannot view this gallery content.');
+                $template->render('errors/error_page.html');
+                return;
+            }
+
             $currentUser = UserModel::findAgeVerificationById($userId);
         }
 
@@ -569,20 +590,83 @@ class GalleryController extends BaseController
             ];
         }
 
-        // Determine edit permissions for the UI (owner or staff)
+        // Determine interactive action permissions for the UI.
         $canEditImage = false;
+        $canCommentImage = false;
+        $canFavoriteImage = false;
+        $canVoteImage = false;
+        $canReportImage = true;
+
+        $editPermissionMessage = 'You do not have permission to edit this image.';
+        $commentPermissionMessage = 'You do not have permission to comment on images.';
+        $favoritePermissionMessage = 'You do not have permission to favorite images.';
+        $votePermissionMessage = 'You do not have permission to like images.';
+        $reportPermissionMessage = 'You do not have permission to report images.';
 
         $appUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
         if ($appUserId > 0)
         {
             $imgUserId = TypeHelper::toInt($img['user_id']) ?? 0;
             $isOwner = ($imgUserId === $appUserId);
+            $canEditOwn = GroupPermissionHelper::hasPermission('edit_own_image');
+            $canEditAny = GroupPermissionHelper::hasPermission('edit_any_image');
 
-            $roleId = UserModel::getRoleIdByUserId($appUserId);
-            $roleName = RoleHelper::getRoleNameById($roleId);
-            $isStaff = in_array($roleName, ['administrator', 'moderator'], true);
+            $canEditImage = (($isOwner && $canEditOwn) || $canEditAny);
+            $canCommentImage = GroupPermissionHelper::hasPermission('comment_images');
+            $canFavoriteImage = GroupPermissionHelper::hasPermission('favorite_images');
+            $canVoteImage = GroupPermissionHelper::hasPermission('vote_images');
+            $canReportImage = GroupPermissionHelper::hasPermission('report_images');
 
-            $canEditImage = ($isOwner || $isStaff);
+            $editPermissionMessage = $canEditImage
+                ? ''
+                : ($isOwner ? 'Your account group cannot edit your own images.' : 'Your account group cannot edit this image.');
+            $commentPermissionMessage = $canCommentImage ? '' : 'Your account group cannot comment on images.';
+            $favoritePermissionMessage = $canFavoriteImage ? '' : 'Your account group cannot favorite images.';
+            $votePermissionMessage = $canVoteImage ? '' : 'Your account group cannot like or vote on images.';
+            $reportPermissionMessage = $canReportImage ? '' : 'Your account group cannot report images.';
+        }
+        else
+        {
+            $commentPermissionMessage = 'Please login to comment on images.';
+            $favoritePermissionMessage = 'Please login to favorite images.';
+            $votePermissionMessage = 'Please login to like images.';
+            $reportPermissionMessage = '';
+        }
+
+        $permissionNoticeMessage = '';
+        if ($appUserId > 0)
+        {
+            $disabledActions = [];
+
+            if (!$canEditImage)
+            {
+                $disabledActions[] = 'edit';
+            }
+
+            if (!$canCommentImage)
+            {
+                $disabledActions[] = 'comment';
+            }
+
+            if (!$canReportImage)
+            {
+                $disabledActions[] = 'report';
+            }
+
+            if (!$canFavoriteImage)
+            {
+                $disabledActions[] = 'favorite';
+            }
+
+            if (!$canVoteImage)
+            {
+                $disabledActions[] = 'like';
+            }
+
+            if (!empty($disabledActions))
+            {
+                $permissionNoticeMessage = 'Some actions are disabled for your current account group: ' . implode(', ', $disabledActions) . '.';
+            }
         }
 
         // Image has tags (todo: not implemented)
@@ -618,6 +702,15 @@ class GalleryController extends BaseController
         $template->assign('img_views', NumericalHelper::formatCount($img['views']));
         $template->assign('img_has_favorited', $hasFavorited);
         $template->assign('can_edit_image', $canEditImage);
+        $template->assign('can_comment_image', $canCommentImage ? 1 : 0);
+        $template->assign('can_favorite_image', $canFavoriteImage ? 1 : 0);
+        $template->assign('can_vote_image', $canVoteImage ? 1 : 0);
+        $template->assign('can_report_image', $canReportImage ? 1 : 0);
+        $template->assign('edit_permission_message', $editPermissionMessage);
+        $template->assign('comment_permission_message', $commentPermissionMessage);
+        $template->assign('favorite_permission_message', $favoritePermissionMessage);
+        $template->assign('vote_permission_message', $votePermissionMessage);
+        $template->assign('report_permission_message', $reportPermissionMessage);
         $template->assign('img_has_tag', $image_tags);
         $template->assign('gallery_back_url', $galleryBackUrl);
         $template->assign('gallery_back_url_encoded', rawurlencode($galleryBackUrl));
@@ -628,6 +721,7 @@ class GalleryController extends BaseController
         $template->assign('img_open_report_count', $openReportCount);
         $template->assign('report_notice_class', $reportNotice['alert_class']);
         $template->assign('report_notice_message', $reportNotice['alert_message']);
+        $template->assign('permission_notice_message', $permissionNoticeMessage);
         $template->assign('report_modal_auto_open', (int)$reportNotice['auto_open']);
 
         // todo: clean this code up, so it looks cleaner
@@ -910,6 +1004,18 @@ class GalleryController extends BaseController
             return;
         }
 
+        $currentUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        $ownerUserId = TypeHelper::toInt($img['user_id'] ?? 0) ?? 0;
+        $isOwner = $currentUserId > 0 && $ownerUserId === $currentUserId;
+        $canEditOwn = GroupPermissionHelper::hasPermission('edit_own_image');
+        $canEditAny = GroupPermissionHelper::hasPermission('edit_any_image');
+
+        if (!(($isOwner && $canEditOwn) || $canEditAny))
+        {
+            self::renderErrorPage(403, 'Access Denied', 'Your account group cannot edit this image.', $template);
+            return;
+        }
+
         // Description should be tolerant (user input)
         $image = TypeHelper::requireString($img['image_hash'] ?? null, allowEmpty: false);
         $description = TypeHelper::toString($_POST['description'] ?? null, allowEmpty: true) ?? '';
@@ -942,6 +1048,7 @@ class GalleryController extends BaseController
 
         // Require login
         RoleHelper::requireLogin();
+        GroupPermissionHelper::requirePermission('favorite_images');
 
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
         {
@@ -1040,6 +1147,7 @@ class GalleryController extends BaseController
 
         // Require login
         RoleHelper::requireLogin();
+        GroupPermissionHelper::requirePermission('vote_images');
 
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
         {
@@ -1162,6 +1270,13 @@ class GalleryController extends BaseController
             return;
         }
 
+        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        if ($userId > 0)
+        {
+            RoleHelper::requireLogin();
+            GroupPermissionHelper::requirePermission('report_images');
+        }
+
         $category = ImageReportHelper::normalizeCategory(Security::sanitizeString($_POST['report_category'] ?? ''));
         $subject = Security::sanitizeString($_POST['report_subject'] ?? '');
         $message = Security::sanitizeString($_POST['report_message'] ?? '');
@@ -1179,7 +1294,6 @@ class GalleryController extends BaseController
             return;
         }
 
-        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
         $sessionId = TypeHelper::toString(session_id(), allowEmpty: true) ?? '';
         $ip = inet_pton($_SERVER['REMOTE_ADDR'] ?? '') ?: null;
         $userAgent = TypeHelper::toString($_SERVER['HTTP_USER_AGENT'] ?? '', allowEmpty: true) ?? '';
@@ -1230,6 +1344,7 @@ class GalleryController extends BaseController
 
         // Require login
         RoleHelper::requireLogin();
+        GroupPermissionHelper::requirePermission('comment_images');
 
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
         {

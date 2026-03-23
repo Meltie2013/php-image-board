@@ -11,20 +11,20 @@
 
                 <div class="system-meta-list">
                     <div class="system-meta-item">
-                        <span>Category</span>
-                        <strong>Application Error</strong>
+                        <span>Status Code</span>
+                        <strong>{if isset($status_code) && $status_code}{$status_code}{else}Error{/if}</strong>
                     </div>
 
                     <div class="system-meta-item">
                         <span>Status</span>
-                        <strong>Request Blocked</strong>
+                        <strong>{if isset($status_label) && $status_label}{$status_label}{else}Request Blocked{/if}</strong>
                     </div>
                 </div>
             </aside>
 
             <section class="system-content-panel">
                 <div class="system-panel-header">
-                    <div class="system-eyebrow">Error Details</div>
+                    <div class="system-eyebrow">Request Details</div>
                     <div class="system-code-badge">Attention Required</div>
                 </div>
 
@@ -44,7 +44,7 @@
                     {if isset($link) && $link}
                     <a href="{$link}" class="system-action-primary">
                         <i class="fa-solid fa-arrow-left"></i>
-                        <span>Back to Image</span>
+                        <span>Go Back</span>
                     </a>
                     {else}
                     <a href="/index.php" class="system-action-primary">
