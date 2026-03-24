@@ -542,7 +542,6 @@ class UserModel extends BaseModel
         return TypeHelper::toInt($row['group_id'] ?? 0) ?? 0;
     }
 
-    
     /**
      * Backwards-compatible wrapper for legacy role-based callers.
      *
@@ -591,7 +590,7 @@ class UserModel extends BaseModel
         return self::fetchAll("SELECT id, name FROM app_groups ORDER BY id ASC");
     }
 
-    
+
     /**
      * Backwards-compatible wrapper for legacy role list callers.
      *

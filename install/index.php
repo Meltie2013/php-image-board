@@ -81,8 +81,15 @@ if (is_file(APP_ROOT . '/app/Core/SettingsRegistry.php'))
 // Minimal security helpers (standalone)
 // -------------------------------------------------
 
+/**
+ * Standalone security helpers used by the installer and updater.
+ */
 final class InstallerSecurity
 {
+    /**
+     * Initialize the installer CSRF token.
+     * @return void
+     */
     public static function initCsrf(): void
     {
         if (empty($_SESSION['csrf_token'])) {
@@ -90,18 +97,32 @@ final class InstallerSecurity
         }
     }
 
+    /**
+     * Get the active installer CSRF token.
+     * @return string
+     */
     public static function csrfToken(): string
     {
         self::initCsrf();
         return (string) $_SESSION['csrf_token'];
     }
 
+    /**
+     * Verify an installer CSRF token.
+     * @param ?string $token
+     * @return bool
+     */
     public static function verifyCsrf(?string $token): bool
     {
         self::initCsrf();
         return is_string($token) && hash_equals((string) $_SESSION['csrf_token'], $token);
     }
 
+    /**
+     * Hash an installer password using the best available algorithm.
+     * @param string $password
+     * @return string
+     */
     public static function hashPassword(string $password): string
     {
         if (defined('PASSWORD_ARGON2ID')) {
@@ -113,11 +134,22 @@ final class InstallerSecurity
         return $hash ?: '';
     }
 
+    /**
+     * Verify password.
+     * @param string $password
+     * @param string $hash
+     * @return bool
+     */
     public static function verifyPassword(string $password, string $hash): bool
     {
         return $hash !== '' && password_verify($password, $hash);
     }
 
+    /**
+     * Escape a string for safe HTML output.
+     * @param string $value
+     * @return string
+     */
     public static function e(string $value): string
     {
         return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -128,6 +160,11 @@ final class InstallerSecurity
 // Utility helpers
 // -------------------------------------------------
 
+/**
+ * Redirect to another installer page and stop execution.
+ * @param string $to
+ * @return void
+ */
 function installer_redirect(string $to): void
 {
     header('Location: ' . $to);
@@ -322,6 +359,12 @@ function installer_normalize_page(mixed $page): string
     return $page;
 }
 
+/**
+ * Normalize a return target to a safe local installer path.
+ * @param string $candidate
+ * @param string $fallback
+ * @return string
+ */
 function installer_safe_return_to(string $candidate, string $fallback): string
 {
     $candidate = trim($candidate);
@@ -339,6 +382,12 @@ function installer_safe_return_to(string $candidate, string $fallback): string
 }
 
 
+/**
+ * Add one flash message to the installer session queue.
+ * @param string $type
+ * @param string $message
+ * @return void
+ */
 function installer_flash_add(string $type, string $message): void
 {
     if (!isset($_SESSION['flash']) || !is_array($_SESSION['flash'])) {
@@ -348,6 +397,10 @@ function installer_flash_add(string $type, string $message): void
     $_SESSION['flash'][] = ['type' => $type, 'message' => $message];
 }
 
+/**
+ * Retrieve and clear all queued installer flash messages.
+ * @return array
+ */
 function installer_flash_get_all(): array
 {
     $flash = $_SESSION['flash'] ?? [];
@@ -355,11 +408,19 @@ function installer_flash_get_all(): array
     return is_array($flash) ? $flash : [];
 }
 
+/**
+ * Determine whether the installer session is authenticated.
+ * @return bool
+ */
 function installer_is_logged_in(): bool
 {
     return !empty($_SESSION['installer_authed']);
 }
 
+/**
+ * Require an authenticated installer session before continuing.
+ * @return void
+ */
 function installer_require_login(): void
 {
     if (!installer_is_logged_in()) {
@@ -367,6 +428,10 @@ function installer_require_login(): void
     }
 }
 
+/**
+ * Read the stored installer authentication configuration.
+ * @return ?array
+ */
 function installer_read_auth_config(): ?array
 {
     if (!is_file(INSTALLER_AUTH_FILE)) {
@@ -386,6 +451,12 @@ function installer_read_auth_config(): ?array
     return $data;
 }
 
+/**
+ * Write installer authentication credentials to disk.
+ * @param string $username
+ * @param string $password
+ * @return array
+ */
 function installer_write_auth_config(string $username, string $password): array
 {
     $username = trim($username);
@@ -431,6 +502,10 @@ function installer_write_auth_config(string $username, string $password): array
     ];
 }
 
+/**
+ * Load the distributed configuration template array.
+ * @return array
+ */
 function installer_load_config_dist(): array
 {
     if (!is_file(CONFIG_DIST)) {
@@ -441,6 +516,10 @@ function installer_load_config_dist(): array
     return is_array($arr) ? $arr : [];
 }
 
+/**
+ * Load the current live configuration array when available.
+ * @return array
+ */
 function installer_load_config_existing(): array
 {
     if (!is_file(CONFIG_FILE)) {
@@ -608,6 +687,11 @@ function installer_apply_values_to_template(string $template, array $finalConfig
     return implode("\n", $out) . "\n";
 }
 
+/**
+ * Installer write config from dist.
+ * @param array $finalConfig
+ * @return array
+ */
 function installer_write_config_from_dist(array $finalConfig): array
 {
     if (!is_file(CONFIG_DIST)) {
@@ -633,6 +717,10 @@ function installer_write_config_from_dist(array $finalConfig): array
     return ['ok' => $ok, 'error' => $err, 'content' => $rendered];
 }
 
+/**
+ * Return the list of directories required by the application.
+ * @return array
+ */
 function installer_required_dirs(): array
 {
     return [
@@ -647,6 +735,11 @@ function installer_required_dirs(): array
     ];
 }
 
+/**
+ * Ensure a protective index.html file exists in a directory.
+ * @param string $dir
+ * @return void
+ */
 function installer_ensure_index_html(string $dir): void
 {
     $idx = rtrim($dir, '/') . '/index.html';
@@ -692,6 +785,10 @@ function installer_harden_runtime_dir(string $dir): void
     }
 }
 
+/**
+ * Inspect required directories for existence and writability.
+ * @return array
+ */
 function installer_check_dirs(): array
 {
     $results = [];
@@ -717,6 +814,10 @@ function installer_check_dirs(): array
     return $results;
 }
 
+/**
+ * Create any missing runtime directories and apply hardening markers.
+ * @return array
+ */
 function installer_create_dirs(): array
 {
     $created = [];
@@ -791,6 +892,10 @@ function installer_collect_requirements(): array
     ];
 }
 
+/**
+ * Determine whether the installer requirements screen has passed.
+ * @return bool
+ */
 function installer_requirements_passed(): bool
 {
     foreach (installer_collect_requirements() as $requirement) {
@@ -964,6 +1069,12 @@ function installer_is_allowed_package_name(string $filename): bool
     return false;
 }
 
+/**
+ * Validate the detected MIME type for an updater package upload.
+ * @param string $filename
+ * @param string $tmpPath
+ * @return bool
+ */
 function installer_is_allowed_package_mime(string $filename, string $tmpPath): bool
 {
     $extension = strtolower((string) pathinfo($filename, PATHINFO_EXTENSION));
@@ -1104,6 +1215,11 @@ function installer_format_bytes(int $bytes): string
 
     return number_format($value, ($unit === 0 ? 0 : 2)) . ' ' . $units[$unit];
 }
+/**
+ * Create a PDO connection from installer database settings.
+ * @param array $config
+ * @return ?PDO
+ */
 function installer_pdo_from_config(array $config): ?PDO
 {
     if (empty($config['db']) || !is_array($config['db'])) {
@@ -1137,6 +1253,11 @@ function installer_pdo_from_config(array $config): ?PDO
     }
 }
 
+/**
+ * Test the installer database connection and required privileges.
+ * @param array $config
+ * @return array
+ */
 function installer_db_test(array $config): array
 {
     $db = $config['db'] ?? [];
@@ -1163,6 +1284,11 @@ function installer_db_test(array $config): array
     }
 }
 
+/**
+ * Ensure the updater bookkeeping table exists.
+ * @param PDO $pdo
+ * @return void
+ */
 function installer_db_ensure_updates_table(PDO $pdo): void
 {
     $pdo->exec("
@@ -1174,6 +1300,11 @@ function installer_db_ensure_updates_table(PDO $pdo): void
     ");
 }
 
+/**
+ * Fetch the set of update files already applied to the database.
+ * @param PDO $pdo
+ * @return array
+ */
 function installer_db_get_applied_updates(PDO $pdo): array
 {
     installer_db_ensure_updates_table($pdo);
@@ -1191,6 +1322,12 @@ function installer_db_get_applied_updates(PDO $pdo): array
     return $applied;
 }
 
+/**
+ * Record one applied database update file.
+ * @param PDO $pdo
+ * @param string $filename
+ * @return void
+ */
 function installer_db_mark_update_applied(PDO $pdo, string $filename): void
 {
     installer_db_ensure_updates_table($pdo);
@@ -1222,6 +1359,12 @@ function installer_sql_file_manages_transactions(string $sql): bool
     return (bool) preg_match('/\b(CREATE|ALTER|DROP|RENAME|TRUNCATE)\s+(?:TABLE|DATABASE|INDEX|VIEW|TRIGGER|PROCEDURE|FUNCTION|EVENT)\b/i', $sql);
 }
 
+/**
+ * Apply a SQL update file through the installer database connection.
+ * @param PDO $pdo
+ * @param string $sqlFilePath
+ * @return array
+ */
 function installer_apply_sql_file(PDO $pdo, string $sqlFilePath): array
 {
     if (!is_file($sqlFilePath)) {
@@ -1257,6 +1400,10 @@ function installer_apply_sql_file(PDO $pdo, string $sqlFilePath): array
     }
 }
 
+/**
+ * List available SQL update files in execution order.
+ * @return array
+ */
 function installer_list_update_files(): array
 {
     if (!is_dir(UPDATES_DIR)) {
@@ -2020,6 +2167,11 @@ if ($action === 'merge_config') {
 // Render helpers
 // -------------------------------------------------
 
+/**
+ * Render the shared installer page header.
+ * @param string $title
+ * @return void
+ */
 function installer_render_header(string $title = 'Installer'): void
 {
     $siteName = 'PHP Image Board Installer';
@@ -2185,6 +2337,10 @@ function installer_seed_settings_registry(PDO $pdo): array
 }
 
 
+/**
+ * Render the shared installer page footer.
+ * @return void
+ */
 function installer_render_footer(): void
 {
     ?>
@@ -2193,6 +2349,10 @@ function installer_render_footer(): void
 <?php
 }
 
+/**
+ * Render queued installer flash messages.
+ * @return void
+ */
 function installer_render_flash(): void
 {
     $flash = installer_flash_get_all();
@@ -2314,6 +2474,12 @@ function installer_render_config_form_fields(array $config, array $dist, array $
     }
 }
 
+/**
+ * Render configuration fields grouped into installer cards.
+ * @param array $config
+ * @param array $dist
+ * @return void
+ */
 function installer_render_config_cards(array $config, array $dist): void
 {
     echo '<div class="installer-config-grid">';
@@ -2343,6 +2509,10 @@ function installer_render_config_cards(array $config, array $dist): void
     echo '</div>';
 }
 
+/**
+ * Render the post-install security reminder panel.
+ * @return void
+ */
 function installer_render_security_reminder(): void
 {
     echo '<div class="alert alert-warning installer-security-reminder">';
@@ -2355,6 +2525,13 @@ function installer_render_security_reminder(): void
 }
 
 
+/**
+ * Render a status badge for installer progress indicators.
+ * @param bool $ok
+ * @param string $success
+ * @param string $pending
+ * @return string
+ */
 function installer_render_status_badge(bool $ok, string $success = 'Complete', string $pending = 'Pending'): string
 {
     $class = $ok ? 'installer-status-badge is-complete' : 'installer-status-badge is-pending';
@@ -2363,6 +2540,12 @@ function installer_render_status_badge(bool $ok, string $success = 'Complete', s
     return '<span class="' . InstallerSecurity::e($class) . '">' . InstallerSecurity::e($label) . '</span>';
 }
 
+/**
+ * Render the installer progress navigation for the current page.
+ * @param array $state
+ * @param string $currentPage
+ * @return void
+ */
 function installer_render_install_progress(array $state, string $currentPage): void
 {
     echo '<section class="installer-progress-grid">';

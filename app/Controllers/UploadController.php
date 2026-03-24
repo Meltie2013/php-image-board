@@ -363,10 +363,10 @@ class UploadController extends BaseController
                 {
                     $errors[] = "File extension .$ext is not allowed.";
                 }
-                
+
                 // Prefer extension derived from detected MIME to avoid spoofed filenames
                 $safeExt = $mimeToExt[$mimeType] ?? $ext;
-                
+
                 // Ensure the final extension is one of the allowed types
                 if (!in_array($safeExt, array_values($mimeToExt), true))
                 {
@@ -663,7 +663,7 @@ class UploadController extends BaseController
 
         return $hash;
     }
-  
+
     /**
      * Creates a resized copy of the given image while preserving
      * aspect ratio and handling transparency for PNG/WebP formats.

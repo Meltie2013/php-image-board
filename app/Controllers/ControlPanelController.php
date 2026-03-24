@@ -3358,7 +3358,11 @@ class ControlPanelController extends BaseController
         exit();
     }
 
-
+    /**
+     * Render the pending image moderation queue.
+     * @param mixed $page
+     * @return void
+     */
     public static function pending($page = null): void
     {
         $template = self::initTemplate();

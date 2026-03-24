@@ -164,7 +164,7 @@ class Security
      *
      * Returns null when the value cannot be parsed as a float.
      * (Note: If you need locale-aware parsing, handle that before calling this.)
-     * 
+     *
      * @param mixed $input Raw user input
      * @return float|null Valid float value, or null when invalid
      */

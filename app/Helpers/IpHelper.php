@@ -33,4 +33,3 @@ class IpHelper
         return $ip;
     }
 }
-

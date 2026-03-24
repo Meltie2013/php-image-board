@@ -74,7 +74,7 @@ class ProfileController extends BaseController
         {
             $roleName = RoleHelper::getRoleNameById($groupId);
         }
-        
+
         $ageGateStatus = AgeGateHelper::getUserAgeGateStatus($user);
 
         $template->assign('profile_username', ucfirst($username));

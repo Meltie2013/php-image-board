@@ -151,7 +151,7 @@ class DateHelper
      * Formats a given UTC date into the application's timezone.
      *
      * Shows date format without seconds, minutes and hours etc.
-     * 
+     *
      * @param string|null $date   Input date string in UTC (usually from DB).
      * @param string      $format Output format if not recent.
      *
