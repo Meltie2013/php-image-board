@@ -117,6 +117,7 @@ abstract class BaseController
             404 => 'Not Found',
             405 => 'Method Not Allowed',
             409 => 'Conflict',
+            423 => 'Locked',
             429 => 'Too Many Requests',
             500 => 'Server Error',
             503 => 'Service Unavailable',

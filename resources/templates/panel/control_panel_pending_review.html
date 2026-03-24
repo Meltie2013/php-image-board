@@ -1,0 +1,160 @@
+{include file="global/header.html"}
+
+    <main class="moderation-container">
+        <div class="moderation-shell moderation-layout">
+            <div class="moderation-sidebar">
+                <div class="moderation-sidebar-inner moderation-menu">
+                    {include file="panel/control_panel_menu.html"}
+                </div>
+            </div>
+
+            <div class="moderation-content moderation-dashboard">
+                <div class="moderation-page-header">
+                    <div>
+                        <div class="moderation-kicker">Control Panel</div>
+                        <h2>{$control_panel_page_title}</h2>
+                        <p>{$control_panel_page_description}</p>
+                    </div>
+
+                    <div class="moderation-page-actions">
+                        <a href="{$pending_review_back_url}" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back to Queue</a>
+                        <a href="{$pending_review_preview_url}" class="moderation-btn moderation-btn-secondary" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-up-right-from-square"></i> Open Preview</a>
+                    </div>
+                </div>
+
+                {if $pending_review_notice}
+                <div class="moderation-notice moderation-notice-success" style="margin-bottom: 14px;">
+                    {$pending_review_notice}
+                </div>
+                {/if}
+
+                <form method="POST" action="/panel/image-pending/review/{$pending_review_hash}" class="report-form-shell">
+                    <input type="hidden" name="csrf_token" value="{$csrf_token}">
+
+                    <div class="pending-review-grid">
+                        <section class="moderation-panel">
+                            <div class="moderation-panel-heading">
+                                <div>
+                                    <h3>Moderation Details</h3>
+                                    <p>Update the description, choose the correct content bracket, and review stored metadata before final action.</p>
+                                </div>
+                            </div>
+
+                            <div class="moderation-panel-body admin-dashboard">
+                                <div class="pending-review-meta-grid">
+                                    <div class="admin-field">
+                                        <label>Image Hash</label>
+                                        <div class="admin-form-readonly is-wrap">{$pending_review_hash}</div>
+                                    </div>
+
+                                    <div class="admin-field">
+                                        <label>Uploader</label>
+                                        <div class="admin-form-readonly">{$pending_review_uploader}</div>
+                                    </div>
+
+                                    <div class="admin-field">
+                                        <label>Uploaded</label>
+                                        <div class="admin-form-readonly">{$pending_review_created_at}</div>
+                                    </div>
+
+                                    <div class="admin-field">
+                                        <label>Last Updated</label>
+                                        <div class="admin-form-readonly">{$pending_review_updated_at}</div>
+                                    </div>
+                                </div>
+
+                                <div class="admin-field">
+                                    <label for="pending_review_description">Description</label>
+                                    <textarea id="pending_review_description" name="description" rows="7" placeholder="Add or refine the image description before approval.">{$pending_review_description}</textarea>
+                                </div>
+
+                                <div class="pending-review-meta-grid">
+                                    <div class="admin-field">
+                                        <label for="pending_review_content_rating">Content Bracket</label>
+                                        <select id="pending_review_content_rating" name="content_rating">
+                                            <option value="standard" {if $pending_review_content_rating == 'standard'}selected{/if}>Standard</option>
+                                            <option value="sensitive" {if $pending_review_content_rating == 'sensitive'}selected{/if}>Sensitive</option>
+                                            <option value="explicit" {if $pending_review_content_rating == 'explicit'}selected{/if}>Explicit</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="admin-field">
+                                        <label>Current Rating</label>
+                                        <div class="admin-form-readonly">{$pending_review_content_rating_label}</div>
+                                    </div>
+                                </div>
+
+                                <div class="admin-field">
+                                    <label for="pending_review_reject_reason">Reject Reason</label>
+                                    <textarea id="pending_review_reject_reason" name="reject_reason" rows="4" placeholder="Optional note stored when the image is rejected.">{$pending_review_reject_reason}</textarea>
+                                </div>
+
+                                <div class="pending-review-detail-card-list">
+                                    <div class="pending-review-detail-card">
+                                        <div class="pending-review-detail-title">Image Details</div>
+                                        <div class="pending-review-detail-row">
+                                            <span>Dimensions</span>
+                                            <strong>{$pending_review_dimensions}</strong>
+                                        </div>
+                                        <div class="pending-review-detail-row">
+                                            <span>File Size</span>
+                                            <strong>{$pending_review_file_size}</strong>
+                                        </div>
+                                        <div class="pending-review-detail-row">
+                                            <span>MIME Type</span>
+                                            <strong>{$pending_review_mime_type}</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="pending-review-detail-card">
+                                        <div class="pending-review-detail-title">Hash Summary</div>
+                                        <div class="pending-review-hash-list">
+                                            <div class="pending-review-hash-item">
+                                                <span>MD5</span>
+                                                <strong class="is-wrap">{$pending_review_md5}</strong>
+                                            </div>
+                                            <div class="pending-review-hash-item">
+                                                <span>SHA1</span>
+                                                <strong class="is-wrap">{$pending_review_sha1}</strong>
+                                            </div>
+                                            <div class="pending-review-hash-item">
+                                                <span>SHA256</span>
+                                                <strong class="is-wrap">{$pending_review_sha256}</strong>
+                                            </div>
+                                            <div class="pending-review-hash-item">
+                                                <span>SHA512</span>
+                                                <strong class="is-wrap">{$pending_review_sha512}</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="moderation-panel">
+                            <div class="moderation-panel-heading">
+                                <div>
+                                    <h3>Image Review Viewport</h3>
+                                    <p>Use the action bar above the preview to save changes, approve with the selected content bracket, or reject the image.</p>
+                                </div>
+                            </div>
+
+                            <div class="moderation-panel-body">
+                                <div class="pending-review-toolbar">
+                                    <button type="submit" name="review_action" value="save" class="moderation-btn moderation-btn-secondary"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+                                    <button type="submit" name="review_action" value="approve" class="moderation-btn"><i class="fa-solid fa-check"></i> Approve Image</button>
+                                    <button type="submit" name="review_action" value="reject" class="moderation-btn pending-review-btn-danger" onclick="return confirm('Reject this pending image?');"><i class="fa-solid fa-xmark"></i> Reject Image</button>
+                                </div>
+
+                                <div class="pending-review-preview-frame">
+                                    <img src="{$pending_review_preview_url}" alt="Pending image preview" class="pending-review-preview-image">
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+{include file="global/footer.html"}

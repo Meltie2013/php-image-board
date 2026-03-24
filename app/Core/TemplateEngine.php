@@ -75,6 +75,20 @@ class TemplateEngine
             'current_request_path' => RedirectHelper::getCurrentRequestPath(),
         ];
 
+        $siteUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        $this->globals['site_user_has_birthday_badge'] = 0;
+        if ($siteUserId > 0)
+        {
+            $siteUserDateOfBirth = TypeHelper::toString(SessionManager::get('user_date_of_birth'), allowEmpty: true);
+            if ($siteUserDateOfBirth === null)
+            {
+                $siteUserDateOfBirth = UserModel::getDateOfBirthById($siteUserId);
+                SessionManager::set('user_date_of_birth', $siteUserDateOfBirth);
+            }
+
+            $this->globals['site_user_has_birthday_badge'] = AgeGateHelper::shouldShowBirthdayBadge($siteUserDateOfBirth, $config) ? 1 : 0;
+        }
+
         // Allowed template functions (whitelisted)
         $allowed = [];
         if (!empty($config['template']['allowed_functions']) && is_array($config['template']['allowed_functions']))

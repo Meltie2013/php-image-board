@@ -6,18 +6,41 @@
 class ImageModel extends BaseModel
 {
     /**
+     * Build the approved-gallery content filter for one viewer access level.
+     *
+     * Access levels:
+     * - standard_only
+     * - sensitive
+     * - explicit
+     *
+     * @param string $viewerContentAccessLevel
+     * @return string
+     */
+    private static function buildApprovedGalleryContentWhereClause(string $viewerContentAccessLevel): string
+    {
+        $ratingSql = "CASE
+            WHEN content_rating IN ('standard', 'sensitive', 'explicit') THEN content_rating
+            WHEN age_sensitive = 1 THEN 'sensitive'
+            ELSE 'standard'
+        END";
+
+        return match ($viewerContentAccessLevel)
+        {
+            'explicit' => "WHERE status = 'approved'",
+            'sensitive' => "WHERE status = 'approved' AND {$ratingSql} IN ('standard', 'sensitive')",
+            default => "WHERE status = 'approved' AND {$ratingSql} = 'standard'",
+        };
+    }
+
+    /**
      * Count gallery images based on viewer access.
      *
-     * @param bool $canViewAgeSensitive
+     * @param string $viewerContentAccessLevel
      * @return int
      */
-    public static function countGalleryImages(bool $canViewAgeSensitive): int
+    public static function countGalleryImages(string $viewerContentAccessLevel): int
     {
-        $where = "WHERE status = 'approved'";
-        if (!$canViewAgeSensitive)
-        {
-            $where .= " AND age_sensitive = 0";
-        }
+        $where = self::buildApprovedGalleryContentWhereClause($viewerContentAccessLevel);
 
         $row = self::fetch("SELECT COUNT(*) AS total FROM app_images {$where}");
         return TypeHelper::toInt($row['total'] ?? 0) ?? 0;
@@ -26,20 +49,16 @@ class ImageModel extends BaseModel
     /**
      * Fetch one page of gallery images.
      *
-     * @param bool $canViewAgeSensitive
+     * @param string $viewerContentAccessLevel
      * @param int $limit
      * @param int $offset
      * @return array
      */
-    public static function fetchGalleryPage(bool $canViewAgeSensitive, int $limit, int $offset): array
+    public static function fetchGalleryPage(string $viewerContentAccessLevel, int $limit, int $offset): array
     {
-        $where = "WHERE status = 'approved'";
-        if (!$canViewAgeSensitive)
-        {
-            $where .= " AND age_sensitive = 0";
-        }
+        $where = self::buildApprovedGalleryContentWhereClause($viewerContentAccessLevel);
 
-        $sql = "SELECT image_hash, original_path, mime_type, age_sensitive, created_at, views
+        $sql = "SELECT image_hash, original_path, mime_type, age_sensitive, content_rating, created_at, views
                 FROM app_images
                 {$where}
                 ORDER BY created_at DESC
@@ -74,6 +93,7 @@ class ImageModel extends BaseModel
                 i.status,
                 i.description,
                 i.age_sensitive,
+                i.content_rating,
                 i.created_at,
                 i.mime_type,
                 i.width,
@@ -195,7 +215,7 @@ class ImageModel extends BaseModel
      */
     public static function fetchVisibleCommentsPage(int $imageId, int $limit, int $offset): array
     {
-        $sql = "SELECT c.comment_body, c.created_at, u.username
+        $sql = "SELECT c.comment_body, c.created_at, u.username, u.date_of_birth
                 FROM app_image_comments c
                 LEFT JOIN app_users u ON c.user_id = u.id
                 WHERE c.image_id = :image_id
@@ -355,7 +375,7 @@ class ImageModel extends BaseModel
     public static function findApprovedServableImageByHash(string $hash): ?array
     {
         return self::fetch(
-            "SELECT original_path, mime_type, age_sensitive
+            "SELECT original_path, mime_type, age_sensitive, content_rating
              FROM app_images
              WHERE image_hash = :hash
                AND status = 'approved'
@@ -401,10 +421,20 @@ class ImageModel extends BaseModel
      */
     public static function fetchPendingImagesPage(int $offset, int $perPage): array
     {
-        $sql = "SELECT image_hash, user_id, age_sensitive, mime_type, created_at
-                FROM app_images
-                WHERE status = 'pending'
-                ORDER BY created_at DESC
+        $sql = "SELECT
+                    i.image_hash,
+                    i.age_sensitive,
+                    i.content_rating,
+                    i.mime_type,
+                    i.width,
+                    i.height,
+                    i.size_bytes,
+                    i.created_at,
+                    COALESCE(u.username, 'Unknown') AS username
+                FROM app_images i
+                LEFT JOIN app_users u ON i.user_id = u.id
+                WHERE i.status = 'pending'
+                ORDER BY i.created_at DESC
                 LIMIT :offset, :perpage";
 
         $stmt = self::getPDO()->prepare($sql);
@@ -437,14 +467,17 @@ class ImageModel extends BaseModel
      *
      * @param string $hash
      * @param int $approvedBy
-     * @param bool $ageSensitive
+     * @param string $contentRating
      * @return int
      */
-    public static function approvePendingImage(string $hash, int $approvedBy, bool $ageSensitive = false): int
+    public static function approvePendingImage(string $hash, int $approvedBy, string $contentRating = 'standard'): int
     {
+        $contentRating = AgeGateHelper::normalizeContentRating($contentRating);
+
         return self::execute(
             "UPDATE app_images
              SET age_sensitive = :age_sensitive,
+                 content_rating = :content_rating,
                  status = 'approved',
                  approved_by = :approved_by,
                  moderated_at = NOW(),
@@ -452,7 +485,8 @@ class ImageModel extends BaseModel
              WHERE image_hash = :hash
                AND status = 'pending'",
             [
-                ':age_sensitive' => $ageSensitive ? 1 : 0,
+                ':age_sensitive' => $contentRating === 'standard' ? 0 : 1,
+                ':content_rating' => $contentRating,
                 ':approved_by' => $approvedBy,
                 ':hash' => $hash,
             ]
@@ -466,18 +500,87 @@ class ImageModel extends BaseModel
      * @param int $rejectedBy
      * @return int
      */
-    public static function rejectPendingImage(string $hash, int $rejectedBy): int
+    public static function rejectPendingImage(string $hash, int $rejectedBy, string $rejectReason = ''): int
     {
         return self::execute(
             "UPDATE app_images
              SET status = 'rejected',
                  rejected_by = :rejected_by,
+                 reject_reason = :reject_reason,
                  moderated_at = NOW(),
                  updated_at = NOW()
              WHERE image_hash = :hash
                AND status = 'pending'",
             [
                 ':rejected_by' => $rejectedBy,
+                ':reject_reason' => $rejectReason,
+                ':hash' => $hash,
+            ]
+        );
+    }
+
+
+    /**
+     * Fetch one full pending image row for moderation review.
+     *
+     * @param string $hash
+     * @return array|null
+     */
+    public static function findPendingModerationImageByHash(string $hash): ?array
+    {
+        return self::fetch(
+            "SELECT
+                id,
+                user_id,
+                image_hash,
+                description,
+                status,
+                reject_reason,
+                age_sensitive,
+                content_rating,
+                mime_type,
+                original_path,
+                width,
+                height,
+                size_bytes,
+                md5,
+                sha1,
+                sha256,
+                sha512,
+                created_at,
+                updated_at
+             FROM app_images
+             WHERE image_hash = :hash
+               AND status = 'pending'
+             LIMIT 1",
+            [':hash' => $hash]
+        );
+    }
+
+    /**
+     * Save pending-image moderation draft fields without approving or rejecting.
+     *
+     * @param string $hash
+     * @param string $description
+     * @param string $contentRating
+     * @return int
+     */
+    public static function updatePendingModerationDraft(string $hash, string $description, string $contentRating): int
+    {
+        $contentRating = AgeGateHelper::normalizeContentRating($contentRating);
+
+        return self::execute(
+            "UPDATE app_images
+             SET description = :description,
+                 age_sensitive = :age_sensitive,
+                 content_rating = :content_rating,
+                 updated_at = NOW()
+             WHERE image_hash = :hash
+               AND status = 'pending'",
+            [
+                ':description' => $description,
+                ':age_sensitive' => $contentRating === 'standard' ? 0 : 1,
+                ':content_rating' => $contentRating,
                 ':hash' => $hash,
             ]
         );
@@ -607,7 +710,7 @@ class ImageModel extends BaseModel
     public static function findPendingServableImageByHash(string $hash): ?array
     {
         return self::fetch(
-            "SELECT original_path, mime_type, age_sensitive
+            "SELECT original_path, mime_type, age_sensitive, content_rating
              FROM app_images
              WHERE image_hash = :hash
                AND status = 'pending'
@@ -633,11 +736,15 @@ class ImageModel extends BaseModel
         switch ($action)
         {
             case 'set_standard':
-                self::execute("UPDATE app_images SET age_sensitive = 0, updated_at = NOW() WHERE id = :image_id", [':image_id' => $imageId]);
+                self::execute("UPDATE app_images SET age_sensitive = 0, content_rating = 'standard', updated_at = NOW() WHERE id = :image_id", [':image_id' => $imageId]);
                 break;
 
             case 'set_sensitive':
-                self::execute("UPDATE app_images SET age_sensitive = 1, updated_at = NOW() WHERE id = :image_id", [':image_id' => $imageId]);
+                self::execute("UPDATE app_images SET age_sensitive = 1, content_rating = 'sensitive', updated_at = NOW() WHERE id = :image_id", [':image_id' => $imageId]);
+                break;
+
+            case 'set_explicit':
+                self::execute("UPDATE app_images SET age_sensitive = 1, content_rating = 'explicit', updated_at = NOW() WHERE id = :image_id", [':image_id' => $imageId]);
                 break;
 
             case 'set_pending':

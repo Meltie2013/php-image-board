@@ -75,7 +75,7 @@
                         {/if}
                         <span class="gallery-image-pill">{$img_approved_status}</span>
                         <span class="gallery-image-pill">{$img_mime_type}</span>
-                        <span class="gallery-image-pill">{if $img_age_sensitive}Sensitive{else}Standard{/if}</span>
+                        <span class="{$img_content_rating_pill_class}">{$img_content_rating_label}</span>
                     </div>
                 </div>
 
@@ -92,7 +92,7 @@
 
                     <div class="gallery-image-meta-item">
                         <span>Uploaded By</span>
-                        <strong>{$img_username}</strong>
+                        <strong>{$img_username}{if $img_uploader_has_birthday_badge} <i class="fa-solid fa-cake-candles birthday-badge-inline" title="Happy Birthday!"></i>{/if}</strong>
                     </div>
 
                     <div class="gallery-image-meta-item">
@@ -225,12 +225,6 @@
                 {if $report_notice_message}
                 <div class="alert {$report_notice_class}">
                     {$report_notice_message}
-                </div>
-                {/if}
-
-                {if $img_age_sensitive || $img_reject_reason}
-                <div class="alert {$alert_color}">
-                    {$alert_tag} {$alert_message} <a href="#">Learn more</a>
                 </div>
                 {/if}
 
@@ -373,10 +367,10 @@
                 {if $comment_rows}
                 <div class="gallery-comments-list">
                     <small>Comments are pulled from the latest approved conversation on this image page.</small>
-                    {foreach $comment_rows as list($comment_username, $comment_created_at, $comment_body)}
+                    {foreach $comment_rows as list($comment_username, $comment_created_at, $comment_body, $comment_has_birthday_badge)}
                     <div class="gallery-comment">
                         <div class="gallery-comment-meta">
-                            <b>{ucfirst($comment_username)}</b>
+                            <b>{ucfirst($comment_username)}{if $comment_has_birthday_badge} <i class="fa-solid fa-cake-candles birthday-badge-inline" title="Happy Birthday!"></i>{/if}</b>
                             <span>{$comment_created_at}</span>
                         </div>
 

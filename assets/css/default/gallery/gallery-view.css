@@ -551,3 +551,25 @@
 .gallery-view-page .gallery-image-stage-restored .gallery-image-stage-caption {
     display: none;
 }
+
+
+.gallery-image-pill-warning {
+    background: rgba(241, 196, 15, 0.18);
+    border-color: rgba(241, 196, 15, 0.40);
+    color: #fff0be;
+}
+
+.gallery-image-pill-danger {
+    background: rgba(231, 76, 60, 0.18);
+    border-color: rgba(231, 76, 60, 0.40);
+    color: #ffd8d2;
+}
+
+.birthday-badge-inline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 4px;
+    color: #ffd978;
+    font-size: 0.9em;
+}

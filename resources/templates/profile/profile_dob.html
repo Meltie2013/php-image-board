@@ -8,7 +8,7 @@
                 <div class="profile-dashboard">
                     <div class="profile-page-header">
                         <div>
-                            <div class="profile-kicker">Age Verification</div>
+                            <div class="profile-kicker">Content Access</div>
                             <h1>{$profile_page_title}</h1>
                             <p>{$profile_page_description}</p>
                         </div>
@@ -18,77 +18,288 @@
                         </div>
                     </div>
 
-                    <div class="profile-edit-grid">
+                    <div class="profile-message-stack">
+                        {if $error}
+                        <div class="profile-alert profile-alert-danger">
+                        {foreach $error as $err}
+                            <div>{$err}</div>
+                        {/foreach}
+                        </div>
+                        {/if}
+
+                        {if $success}
+                        <div class="profile-alert profile-alert-success">
+                            {$success}
+                        </div>
+                        {/if}
+                    </div>
+
+                    <div class="profile-edit-grid profile-age-gate-grid">
                         <article class="profile-panel">
                             <div class="profile-panel-header">
                                 <div>
-                                    <div class="profile-panel-kicker">Verification Record</div>
-                                    <h2>Manage your date of birth</h2>
+                                    <div class="profile-panel-kicker">Account Workflow</div>
+                                    <h2>Manage mature-content access</h2>
                                 </div>
                             </div>
 
-                            <div class="profile-message-stack">
-                                {if $error}
-                                <div class="profile-alert profile-alert-danger">
-                                {foreach $error as $err}
-                                    <div>{$err}</div>
-                                {/foreach}
-                                </div>
-                                {/if}
-
-                                {if $success}
-                                <div class="profile-alert profile-alert-success">
-                                    {$success}
-                                </div>
-                                {/if}
-
-                                {if $date_of_birth}
-                                <div class="profile-alert profile-alert-warning">
-                                    Once you submit your date of birth, it can no longer be changed through the profile page.
-                                </div>
-                                {else}
-                                <div class="profile-alert profile-alert-info">
-                                    To view sensitive content, you must verify your age.
-                                </div>
-                                {/if}
+                            {if !$age_gate_enabled}
+                            <div class="profile-alert profile-alert-info">
+                                This board currently has the age gate disabled, so sensitive and explicit content are not being locked behind account setup right now.
                             </div>
 
-                            <form method="post" class="profile-form-shell">
-                                <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                            <div class="profile-note-card">
+                                <div class="profile-note-title">Feature Disabled</div>
+                                Site staff have turned the age gate off. When it is enabled again, you can return here to manage self-serve or verified access.
+                            </div>
+                            {else if $age_gate_status == 'forced_review'}
+                            <div class="profile-alert profile-alert-warning">
+                                Staff have placed this account into review. Complete the date of birth check below before sensitive or explicit content can be viewed again.
+                            </div>
 
-                                <div class="profile-form-group">
-                                    <label for="profile_dob">Date of Birth</label>
-                                    <input id="profile_dob" type="date" name="date_of_birth" value="{$date_of_birth}">
+                            {if $age_gate_force_reason}
+                            <div class="profile-note-card">
+                                <div class="profile-note-title">Staff Review Note</div>
+                                {$age_gate_force_reason}
+                            </div>
+                            {/if}
+
+                            <div class="profile-age-gate-workflow">
+                                <div class="profile-age-gate-card profile-age-gate-card-emphasis">
+                                    <div class="profile-age-gate-card-header">
+                                        <div>
+                                            <div class="profile-panel-kicker">Required Review</div>
+                                            <h3>Complete staff-requested verification</h3>
+                                        </div>
+                                        <span class="profile-pill profile-pill-warning">DOB Check Required</span>
+                                    </div>
+
+                                    <div class="profile-checklist">
+                                        <div class="profile-checklist-item">
+                                            <i class="fa-solid fa-shield-heart"></i>
+                                            <span>This review path is only used when staff need to confirm that an account is allowed to view mature content.</span>
+                                        </div>
+                                        <div class="profile-checklist-item">
+                                            <i class="fa-solid fa-lock"></i>
+                                            <span>Sensitive and explicit content stay locked until this verification is completed.</span>
+                                        </div>
+                                    </div>
+
+                                    <form method="post" class="profile-form-shell">
+                                        <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                        <input type="hidden" name="age_gate_action" value="verify_date_of_birth">
+
+                                        <div class="profile-form-group">
+                                            <label for="profile_dob_forced">Date of Birth</label>
+                                            <input id="profile_dob_forced" type="date" name="date_of_birth" value="{$date_of_birth}">
+                                        </div>
+
+                                        <label class="profile-checkbox-card">
+                                            <input type="checkbox" name="mature_access_acknowledge" value="1">
+                                            <span>I understand this board may contain sensitive or explicit material and I only want to unlock content that I am legally allowed to view.</span>
+                                        </label>
+
+                                        <div class="profile-form-actions">
+                                            <button type="submit" class="profile-submit-btn">Complete Staff Review</button>
+                                        </div>
+                                    </form>
                                 </div>
+                            </div>
+                            {else if $age_gate_status == 'restricted_minor'}
+                            <div class="profile-alert profile-alert-danger">
+                                This account is currently restricted from mature-content access because it does not meet the board minimum age requirement.
+                            </div>
 
-                                <div class="profile-form-actions">
-                                    {if $date_of_birth}
-                                    <button type="submit" name="update_dob" class="profile-submit-btn" disabled>Birth Date Locked</button>
+                            {if $age_gate_force_reason}
+                            <div class="profile-note-card">
+                                <div class="profile-note-title">Restriction Note</div>
+                                {$age_gate_force_reason}
+                            </div>
+                            {/if}
+
+                            <div class="profile-age-gate-workflow">
+                                <div class="profile-age-gate-card">
+                                    <div class="profile-age-gate-card-header">
+                                        <div>
+                                            <div class="profile-panel-kicker">Current Restriction</div>
+                                            <h3>Mature content remains locked</h3>
+                                        </div>
+                                        <span class="profile-pill profile-pill-danger">Restricted</span>
+                                    </div>
+
+                                    <div class="profile-checklist">
+                                        <div class="profile-checklist-item">
+                                            <i class="fa-solid fa-lock"></i>
+                                            <span>Sensitive and explicit images remain unavailable for this account.</span>
+                                        </div>
+                                        <div class="profile-checklist-item">
+                                            <i class="fa-solid fa-envelope-open-text"></i>
+                                            <span>If this restriction was applied in error, contact the site staff for a manual review.</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {else}
+                            <div class="profile-age-gate-workflow">
+                                <div class="profile-age-gate-card">
+                                    <div class="profile-age-gate-card-header">
+                                        <div>
+                                            <div class="profile-panel-kicker">Step 1</div>
+                                            <h3>Unlock sensitive content</h3>
+                                        </div>
+                                        <span class="profile-pill {if $age_gate_access_sensitive}profile-pill-success{else}profile-pill-info{/if}">Sensitive {if $age_gate_access_sensitive}Enabled{else}Locked{/if}</span>
+                                    </div>
+
+                                    {if $age_gate_access_sensitive}
+                                    <div class="profile-alert profile-alert-success profile-alert-compact">
+                                        Sensitive-content access is already enabled for this account.
+                                    </div>
+                                    <div class="profile-note-card">
+                                        <div class="profile-note-title">Unlocked Tier</div>
+                                        This tier covers material marked sensitive while still keeping explicit content behind date-of-birth verification.
+                                    </div>
                                     {else}
-                                    <button type="submit" name="update_dob" class="profile-submit-btn">Save Date of Birth</button>
+                                    <div class="profile-alert profile-alert-info profile-alert-compact">
+                                        Sensitive content is currently locked for this account. You can unlock the friendlier self-serve path first and optionally verify your date of birth later for explicit access.
+                                    </div>
+
+                                    {if $age_gate_self_serve_enabled}
+                                    <form method="post" class="profile-form-shell">
+                                        <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                        <input type="hidden" name="age_gate_action" value="self_serve_unlock">
+
+                                        <label class="profile-checkbox-card">
+                                            <input type="checkbox" name="mature_access_acknowledge" value="1">
+                                            <span>I understand that this board may contain mature material and I only want to unlock access for content I am allowed to view.</span>
+                                        </label>
+
+                                        <div class="profile-form-actions">
+                                            <button type="submit" class="profile-submit-btn">Unlock Sensitive Content</button>
+                                        </div>
+                                    </form>
+                                    {else}
+                                    <div class="profile-note-card">
+                                        <div class="profile-note-title">Self-Serve Disabled</div>
+                                        The site owner has disabled self-serve unlocks. You can still complete date of birth verification below to request stronger access.
+                                    </div>
+                                    {/if}
                                     {/if}
                                 </div>
-                            </form>
+
+                                <div class="profile-age-gate-card">
+                                    <div class="profile-age-gate-card-header">
+                                        <div>
+                                            <div class="profile-panel-kicker">Step 2</div>
+                                            <h3>Verify for explicit content</h3>
+                                        </div>
+                                        <span class="profile-pill {if $age_gate_access_explicit}profile-pill-success{else}profile-pill-muted{/if}">Explicit {if $age_gate_access_explicit}Enabled{else}Locked{/if}</span>
+                                    </div>
+
+                                    {if $age_gate_access_explicit}
+                                    <div class="profile-alert profile-alert-success profile-alert-compact">
+                                        This account already has verified access for both sensitive and explicit content tiers.
+                                    </div>
+                                    <div class="profile-note-card">
+                                        <div class="profile-note-title">Verification Record</div>
+                                        Your date of birth has already been stored for verified access. No further action is required unless staff request a new review.
+                                    </div>
+                                    {else if $date_of_birth}
+                                    <div class="profile-alert profile-alert-info profile-alert-compact">
+                                        A date of birth is already stored for this account, but it does not meet the {$age_gate_explicit_years}+ requirement for explicit content. Sensitive access remains available.
+                                    </div>
+                                    <div class="profile-note-card">
+                                        <div class="profile-note-title">Current Tier</div>
+                                        This account can continue viewing sensitive content, but explicit content remains locked under the board age rules.
+                                    </div>
+                                    {else}
+                                    <div class="profile-alert profile-alert-warning profile-alert-compact">
+                                        Explicit content requires date-of-birth verification for the {$age_gate_explicit_years}+ access tier.
+                                    </div>
+
+                                    <form method="post" class="profile-form-shell">
+                                        <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                        <input type="hidden" name="age_gate_action" value="verify_date_of_birth">
+
+                                        <div class="profile-form-group">
+                                            <label for="profile_dob_optional">Date of Birth</label>
+                                            <input id="profile_dob_optional" type="date" name="date_of_birth" value="{$date_of_birth}">
+                                        </div>
+
+                                        <label class="profile-checkbox-card">
+                                            <input type="checkbox" name="mature_access_acknowledge" value="1">
+                                            <span>I understand that explicit content on this board requires date of birth verification and that access remains subject to the board age rules.</span>
+                                        </label>
+
+                                        <div class="profile-form-actions">
+                                            <button type="submit" class="profile-submit-btn">Save Date of Birth</button>
+                                        </div>
+                                    </form>
+                                    {/if}
+                                </div>
+                            </div>
+                            {/if}
                         </article>
 
                         <article class="profile-panel profile-panel-secondary">
                             <div class="profile-panel-header">
                                 <div>
-                                    <div class="profile-panel-kicker">Status</div>
-                                    <h2>Current verification state</h2>
+                                    <div class="profile-panel-kicker">Access Summary</div>
+                                    <h2>Current account state</h2>
                                 </div>
                             </div>
 
-                            <div class="profile-detail-stack">
+                            <div class="profile-badge-row profile-badge-row-summary">
+                                <span class="profile-pill profile-pill-{$age_gate_status_tone}">{$age_gate_status_label}</span>
+                                <span class="profile-pill profile-pill-muted">Sensitive {if $age_gate_access_sensitive}Enabled{else}Locked{/if}</span>
+                                <span class="profile-pill profile-pill-muted">Explicit {if $age_gate_access_explicit}Enabled{else}Locked{/if}</span>
+                            </div>
+
+                            <div class="profile-age-gate-summary-card">
                                 <div class="profile-detail-item profile-detail-item-full">
-                                    <span>Verification</span>
-                                    <strong>{if $date_of_birth}Verified{else}Pending{/if}</strong>
+                                    <span>Stored Date of Birth</span>
+                                    <strong>{if $date_of_birth}{$date_of_birth_format}{else}Not recorded{/if}</strong>
                                 </div>
-                                <div class="profile-detail-item profile-detail-item-full">
-                                    <span>Recorded Date</span>
-                                    <strong>{if $date_of_birth}{$date_of_birth_format}{else}Not set{/if}</strong>
+
+                                <div class="profile-detail-grid profile-detail-grid-tight">
+                                    <div class="profile-detail-item">
+                                        <span>Method</span>
+                                        <strong>{$age_gate_method_label}</strong>
+                                    </div>
+
+                                    <div class="profile-detail-item">
+                                        <span>Acknowledged</span>
+                                        <strong>{if $age_gate_acknowledged_at}{$age_gate_acknowledged_at}{else}Not yet{/if}</strong>
+                                    </div>
+
+                                    <div class="profile-detail-item">
+                                        <span>Sensitive Tier</span>
+                                        <strong>{$age_gate_sensitive_years}+</strong>
+                                    </div>
+
+                                    <div class="profile-detail-item">
+                                        <span>Explicit Tier</span>
+                                        <strong>{$age_gate_explicit_years}+</strong>
+                                    </div>
                                 </div>
                             </div>
+
+                            {if $age_gate_forced_at || $age_gate_force_reason}
+                            <div class="profile-note-card">
+                                <div class="profile-note-title">Staff Review Record</div>
+                                {if $age_gate_forced_at}
+                                <div class="profile-summary-row">
+                                    <span>Requested</span>
+                                    <strong>{$age_gate_forced_at}</strong>
+                                </div>
+                                {/if}
+                                {if $age_gate_force_reason}
+                                <div class="profile-summary-row profile-summary-row-stack">
+                                    <span>Reason</span>
+                                    <strong>{$age_gate_force_reason}</strong>
+                                </div>
+                                {/if}
+                            </div>
+                            {/if}
                         </article>
                     </div>
                 </div>

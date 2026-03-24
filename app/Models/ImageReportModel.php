@@ -138,6 +138,7 @@ class ImageReportModel extends BaseModel
                 i.image_hash,
                 i.status AS image_status,
                 i.age_sensitive,
+                i.content_rating,
                 i.created_at AS image_created_at,
                 au.username AS assigned_username
              FROM app_image_reports r

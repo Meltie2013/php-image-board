@@ -193,4 +193,32 @@ class DateHelper
 
         return $datetime->format($format) ?? '';
     }
+
+    /**
+     * Determine whether one stored birthday matches the current day.
+     *
+     * @param string|null $date Input birthday date string.
+     * @return bool
+     */
+    public static function isBirthdayToday(?string $date): bool
+    {
+        if (empty($date))
+        {
+            return false;
+        }
+
+        try
+        {
+            $datetime = new DateTime($date, self::getTimezone());
+            $datetime->setTimezone(self::getTimezone());
+        }
+        catch (Exception $e)
+        {
+            return false;
+        }
+
+        $today = new DateTime('now', self::getTimezone());
+
+        return $datetime->format('m-d') === $today->format('m-d');
+    }
 }

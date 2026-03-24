@@ -51,20 +51,25 @@ class GalleryController extends BaseController
 
 
     /**
-     * Check if a user has access to age-sensitive content.
+     * Render one friendly locked-content page for age-gated images.
      *
-     * Access requires:
-     * - A valid date_of_birth
-     * - A non-null age_verified_at timestamp (indicating verification occurred)
-     * - DOB being older than the minimum allowed birth date based on site policy
-     *
-     * @param array|null $user Array containing user's date_of_birth and age_verified_at
-     * @param string $minBirthDate Calculated minimum birth date
-     * @return bool True if allowed, false otherwise
+     * @param TemplateEngine $template
+     * @param array|null $user
+     * @param string $contentRating
+     * @param array $config
+     * @return void
      */
-    private static function checkAgeSensitiveAccess(?array $user, string $minBirthDate): bool
+    private static function renderLockedContentPage(TemplateEngine $template, ?array $user, string $contentRating, array $config): void
     {
-        return $user && !empty($user['date_of_birth']) && !empty($user['age_verified_at']) && $user['date_of_birth'] <= $minBirthDate;
+        $copy = AgeGateHelper::getLockedContentCopy($user, $contentRating, $config);
+
+        http_response_code(423);
+        $template->assign('title', $copy['title']);
+        $template->assign('message', $copy['message']);
+        $template->assign('status_code', 423);
+        $template->assign('status_label', 'Locked');
+        $template->assign('link', $user ? '/profile/dob' : '/user/login?return_to=' . rawurlencode(RedirectHelper::getCurrentRequestUri()));
+        $template->render('errors/error_page.html');
     }
 
     /**
@@ -281,14 +286,7 @@ class GalleryController extends BaseController
             $currentUser = UserModel::findAgeVerificationById($userId);
         }
 
-        $requiredYears = TypeHelper::toInt($config['profile']['years'] ?? 0) ?? 0;
-        if ($requiredYears < 0)
-        {
-            $requiredYears = 0;
-        }
-
-        $minBirthDate = (new DateTime())->modify("-{$requiredYears} years")->format('Y-m-d');
-        $canViewAgeSensitive = self::checkAgeSensitiveAccess($currentUser, $minBirthDate);
+        $viewerContentAccessLevel = AgeGateHelper::getViewerContentAccessLevel($currentUser, $config);
 
         if (RequestGuard::isGalleryPageRateLimited())
         {
@@ -300,14 +298,7 @@ class GalleryController extends BaseController
             return;
         }
 
-        $where = "WHERE status = 'approved'";
-        $params = [];
-        if (!$canViewAgeSensitive)
-        {
-            $where .= " AND age_sensitive = 0";
-        }
-
-        $totalImages = ImageModel::countGalleryImages($canViewAgeSensitive);
+        $totalImages = ImageModel::countGalleryImages($viewerContentAccessLevel);
         $totalPages = max(1, (int)ceil($totalImages / $limit));
         if ($page > $totalPages)
         {
@@ -316,7 +307,7 @@ class GalleryController extends BaseController
 
         $offset = ($page - 1) * $limit;
 
-        $pageImages = ImageModel::fetchGalleryPage($canViewAgeSensitive, $limit, $offset);
+        $pageImages = ImageModel::fetchGalleryPage($viewerContentAccessLevel, $limit, $offset);
 
         $galleryPageToken = GalleryPageTokenStore::issue(
             $pageImages,
@@ -481,21 +472,14 @@ class GalleryController extends BaseController
             return;
         }
 
-        $requiredYears = TypeHelper::toInt($config['profile']['years']) ?? 0;
-        if ($requiredYears < 0)
-        {
-            $requiredYears = 0;
-        }
+        $contentRating = AgeGateHelper::normalizeContentRating(
+            TypeHelper::toString($img['content_rating'] ?? '', allowEmpty: true) ?? '',
+            TypeHelper::toInt($img['age_sensitive'] ?? 0) ?? 0
+        );
 
-        $minBirthDate = (new DateTime())->modify("-{$requiredYears} years")->format('Y-m-d');
-
-        $ageSensitive = TypeHelper::toInt($img['age_sensitive']) ?? 0;
-        if ($ageSensitive === 1 && !self::checkAgeSensitiveAccess($currentUser, $minBirthDate))
+        if (!AgeGateHelper::canAccessContentRating($currentUser, $contentRating, $config))
         {
-            http_response_code(403);
-            $template->assign('title', 'Access Denied');
-            $template->assign('message', 'The server understood your request, but you are not authorized to view this image.');
-            $template->render('errors/error_page.html');
+            self::renderLockedContentPage($template, $currentUser, $contentRating, $config);
             return;
         }
 
@@ -525,30 +509,9 @@ class GalleryController extends BaseController
             $img['views'] = (TypeHelper::toInt($img['views']) ?? 0) + 1;
         }
 
-        if ($ageSensitive === 1)
-        {
-            $alertColor   = 'alert-warning';
-            $alertTag     = '<b>Heads Up!</b>';
-            $alertMessage = 'This image is marked <b>sensitive</b> and may not be suitable for users under <b>' . ($config['profile']['years'] ?? 0) . '</b> years of age.';
-
-            $template->assign('alert_color', $alertColor);
-            $template->assign('alert_tag', $alertTag);
-            $template->assign('alert_message', $alertMessage);
-        }
-
-        if ($img['status'] === 'rejected' && $img['reject_reason'] != null)
-        {
-            $alertColor   = 'alert-danger';
-            $alertTag     = '<b>Rejected</b>! <b>Message</b>: ';
-            $alertMessage = $img['reject_reason'];
-
-            $template->assign('alert_color', $alertColor);
-            $template->assign('alert_tag', $alertTag);
-            $template->assign('alert_message', $alertMessage);
-        }
-
         $ownerUserId = TypeHelper::toInt($img['user_id'] ?? null);
         $username = self::getUsernameById($ownerUserId);
+        $uploaderHasBirthdayBadge = AgeGateHelper::shouldShowBirthdayBadge($img['date_of_birth'] ?? null, $config) ? 1 : 0;
 
         $hasVoted = false;
         if ($userId > 0)
@@ -586,7 +549,8 @@ class GalleryController extends BaseController
             $commentRows[] = [
                 $row['username'] ?? 'Unknown',
                 DateHelper::format($row['created_at']),
-                $row['comment_body']
+                $row['comment_body'],
+                AgeGateHelper::shouldShowBirthdayBadge($row['date_of_birth'] ?? null, $config) ? 1 : 0,
             ];
         }
 
@@ -696,6 +660,10 @@ class GalleryController extends BaseController
         $template->assign('img_approved_status', ucfirst($img['status']));
         $template->assign('img_created_at', DateHelper::format($img['created_at']));
         $template->assign('img_age_sensitive', $img['age_sensitive']);
+        $template->assign('img_content_rating', $contentRating);
+        $template->assign('img_content_rating_label', AgeGateHelper::getContentRatingLabel($contentRating));
+        $template->assign('img_content_rating_pill_class', AgeGateHelper::getContentRatingPillClass($contentRating));
+        $template->assign('img_uploader_has_birthday_badge', $uploaderHasBirthdayBadge);
         $template->assign('img_votes', NumericalHelper::formatCount($img['votes']));
         $template->assign('img_has_voted', $hasVoted);
         $template->assign('img_favorites', NumericalHelper::formatCount($img['favorites']));
@@ -1562,26 +1530,19 @@ class GalleryController extends BaseController
             return;
         }
 
-        $ageSensitive = TypeHelper::toInt($image['age_sensitive']) ?? 0;
+        $config = self::getConfig();
+        $contentRating = AgeGateHelper::normalizeContentRating(
+            TypeHelper::toString($image['content_rating'] ?? '', allowEmpty: true) ?? '',
+            TypeHelper::toInt($image['age_sensitive'] ?? 0) ?? 0
+        );
 
         // Determine if per-user cache should be applied
-        $usePerUserCache = ($ageSensitive === 1);
+        $usePerUserCache = AgeGateHelper::shouldUsePerUserCache($contentRating, $config);
 
         // Age-restricted access check
-        $config = self::getConfig();
-        $requiredYears = TypeHelper::toInt($config['profile']['years']) ?? 0;
-        if ($requiredYears < 0)
+        if (!AgeGateHelper::canAccessContentRating($currentUser, $contentRating, $config))
         {
-            $requiredYears = 0;
-        }
-
-        $minBirthDate = (new DateTime())->modify("-{$requiredYears} years")->format('Y-m-d');
-        if ($usePerUserCache && !self::checkAgeSensitiveAccess($currentUser, $minBirthDate))
-        {
-            http_response_code(403);
-            $template->assign('title', 'Access Denied');
-            $template->assign('message', 'You are not authorized to view this image.');
-            $template->render('errors/error_page.html');
+            self::renderLockedContentPage($template, $currentUser, $contentRating, $config);
             return;
         }
 

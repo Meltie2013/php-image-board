@@ -75,7 +75,7 @@ class ProfileController extends BaseController
             $roleName = RoleHelper::getRoleNameById($groupId);
         }
         
-        $ageVerified = !empty($user['age_verified_at']) || !empty($user['date_of_birth']);
+        $ageGateStatus = AgeGateHelper::getUserAgeGateStatus($user);
 
         $template->assign('profile_username', ucfirst($username));
         $template->assign('profile_display_name', $displayName);
@@ -83,8 +83,9 @@ class ProfileController extends BaseController
         $template->assign('profile_status', $status);
         $template->assign('profile_role_name', $roleName ?: 'Member');
         $template->assign('profile_email', $user['email'] ?? '');
-        $template->assign('profile_age_status', $ageVerified ? 'Verified' : 'Pending');
+        $template->assign('profile_age_status', AgeGateHelper::getAgeGateStatusLabel($ageGateStatus));
         $template->assign('profile_member_since', !empty($user['created_at']) ? DateHelper::format($user['created_at']) : 'Unknown');
+        $template->assign('profile_has_birthday_badge', AgeGateHelper::shouldShowBirthdayBadge($user['date_of_birth'] ?? null, self::getConfig()) ? 1 : 0);
     }
 
     /**
@@ -204,7 +205,7 @@ class ProfileController extends BaseController
         $template->assign('account_role', RoleHelper::getRoleNameById(TypeHelper::toInt($user['group_id'] ?? 0) ?? 0));
         $template->assign('account_status', $accountStatus);
         $template->assign('account_standing', strtolower($accountStatus) === 'active' ? 'In good standing' : $accountStatus);
-        $template->assign('age_verification_status', !empty($user['age_verified_at']) ? 'Verified' : 'Pending');
+        $template->assign('age_verification_status', AgeGateHelper::getAgeGateStatusLabel(AgeGateHelper::getUserAgeGateStatus($user)));
         $template->assign('email', $user['email']);
         $template->assign('last_login', DateHelper::format($user['last_login']));
         $template->assign('date_of_birth', DateHelper::birthday_format($user['date_of_birth']) ?? 'Not set');
@@ -212,6 +213,7 @@ class ProfileController extends BaseController
         $template->assign('user_image_count', NumericalHelper::formatCount($uploadedImages['count']));
         $template->assign('user_favorite_count', NumericalHelper::formatCount($user['favorite_count']));
         $template->assign('user_vote_count', NumericalHelper::formatCount($user['vote_count']));
+        $template->assign('has_birthday_badge', AgeGateHelper::shouldShowBirthdayBadge($user['date_of_birth'] ?? null, self::getConfig()) ? 1 : 0);
 
         // Render profile overview template
         $template->render('profile/profile_overview.html');
@@ -250,7 +252,174 @@ class ProfileController extends BaseController
      */
     public static function dob(): void
     {
-        self::handleSingleUpdate('dob');
+        self::handleAgeGateUpdate();
+    }
+
+    /**
+     * Age gate and content access page.
+     *
+     * Provides:
+     * - A self-serve sensitive-content unlock for normal accounts
+     * - An optional DOB verification path for explicit-content access
+     * - A forced-review DOB flow when staff locks the account for review
+     *
+     * @return void
+     */
+    private static function handleAgeGateUpdate(): void
+    {
+        RoleHelper::requireLogin();
+
+        $errors = [];
+        $success = '';
+        $config = self::getConfig();
+
+        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        if ($userId < 1)
+        {
+            RedirectHelper::rememberLoginDestination();
+            header('Location: /user/login');
+            exit();
+        }
+
+        $user = UserModel::findProfileSettingsUserById($userId);
+        if (!$user)
+        {
+            SessionManager::destroy();
+            RedirectHelper::rememberLoginDestination();
+            header('Location: /user/login');
+            exit();
+        }
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')
+        {
+            $csrfToken = $_POST['csrf_token'] ?? '';
+            if (!Security::verifyCsrfToken($csrfToken))
+            {
+                $errors[] = 'Invalid request.';
+            }
+            else
+            {
+                $action = Security::sanitizeString($_POST['age_gate_action'] ?? '');
+                $status = AgeGateHelper::getUserAgeGateStatus($user);
+
+                switch ($action)
+                {
+                    case 'self_serve_unlock':
+                        if (!AgeGateHelper::isEnabled($config))
+                        {
+                            $errors[] = 'The board age gate is currently disabled by the site configuration.';
+                        }
+                        else if (!AgeGateHelper::isSelfServeEnabled($config))
+                        {
+                            $errors[] = 'Self-serve mature-content access is currently disabled on this board.';
+                        }
+                        else if (!empty($_POST['mature_access_acknowledge']))
+                        {
+                            if (in_array($status, ['forced_review', 'restricted_minor'], true))
+                            {
+                                $errors[] = 'This account cannot use self-serve access while a staff restriction is active.';
+                            }
+                            else
+                            {
+                                UserModel::markSelfServeAgeGate($userId);
+                                $success = 'Sensitive-content access has been enabled for your account.';
+                                $user = UserModel::findProfileSettingsUserById($userId) ?: $user;
+                            }
+                        }
+                        else
+                        {
+                            $errors[] = 'Please confirm that you understand the board content access notice before continuing.';
+                        }
+                        break;
+
+                    case 'verify_date_of_birth':
+                        $dobInput = $_POST['date_of_birth'] ?? '';
+                        $dob = Security::sanitizeDate(
+                            $dobInput,
+                            'Y-m-d',
+                            '1900-01-01',
+                            (new DateTimeImmutable('now'))->format('Y-m-d')
+                        );
+
+                        if (!$dob || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dob))
+                        {
+                            $errors[] = 'Invalid date format. Use YYYY-MM-DD.';
+                        }
+
+                        if (empty($_POST['mature_access_acknowledge']))
+                        {
+                            $errors[] = 'Please confirm that you understand the board content access notice before continuing.';
+                        }
+
+                        if ($status !== 'forced_review' && !empty($user['date_of_birth']))
+                        {
+                            $errors[] = 'Your date of birth is already on file. Contact staff if you need this record reviewed.';
+                        }
+
+                        if (empty($errors))
+                        {
+                            $isRestrictedMinor = !AgeGateHelper::isDateOfBirthOldEnough($dob, AgeGateHelper::getSensitiveYears($config));
+
+                            if ($status === 'forced_review')
+                            {
+                                UserModel::updateDobForForcedReview($userId, $dob, $isRestrictedMinor);
+                                $success = $isRestrictedMinor
+                                    ? 'This account does not meet the board minimum age requirement for mature content.'
+                                    : 'Your staff-requested age review has been completed.';
+                            }
+                            else
+                            {
+                                UserModel::updateDobForOptionalVerification($userId, $dob, $isRestrictedMinor);
+                                $success = $isRestrictedMinor
+                                    ? 'This account does not meet the board minimum age requirement for mature content.'
+                                    : 'Date of birth verification has been saved for your account.';
+                            }
+
+                            $user = UserModel::findProfileSettingsUserById($userId) ?: $user;
+                            SessionManager::set('user_date_of_birth', $user['date_of_birth'] ?? null);
+                        }
+                        break;
+
+                    default:
+                        $errors[] = 'Invalid request.';
+                        break;
+                }
+            }
+        }
+
+        $template = self::initTemplate();
+        self::assignProfileChrome($template, $user ?: []);
+        self::assignProfilePage(
+            $template,
+            'dob',
+            'Content Access',
+            'Control how your account handles sensitive and explicit content while keeping the process friendlier for normal members and available for staff review when needed.',
+            'security'
+        );
+
+        $ageGateStatus = AgeGateHelper::getUserAgeGateStatus($user);
+        $viewerAccessLevel = AgeGateHelper::getViewerContentAccessLevel($user, $config);
+
+        $template->assign('date_of_birth', $user['date_of_birth'] ?? '');
+        $template->assign('date_of_birth_format', DateHelper::birthday_format($user['date_of_birth']) ?? 'Not set');
+        $template->assign('age_gate_enabled', AgeGateHelper::isEnabled($config) ? 1 : 0);
+        $template->assign('age_gate_self_serve_enabled', AgeGateHelper::isSelfServeEnabled($config) ? 1 : 0);
+        $template->assign('age_gate_status', $ageGateStatus);
+        $template->assign('age_gate_status_label', AgeGateHelper::getAgeGateStatusLabel($ageGateStatus));
+        $template->assign('age_gate_status_tone', AgeGateHelper::getAgeGateStatusTone($ageGateStatus));
+        $template->assign('age_gate_sensitive_years', AgeGateHelper::getSensitiveYears($config));
+        $template->assign('age_gate_explicit_years', AgeGateHelper::getExplicitYears($config));
+        $template->assign('age_gate_access_sensitive', in_array($viewerAccessLevel, ['sensitive', 'explicit'], true) ? 1 : 0);
+        $template->assign('age_gate_access_explicit', $viewerAccessLevel === 'explicit' ? 1 : 0);
+        $template->assign('age_gate_force_reason', TypeHelper::toString($user['age_gate_force_reason'] ?? '', allowEmpty: true) ?? '');
+        $template->assign('age_gate_forced_at', !empty($user['age_gate_forced_at']) ? DateHelper::format($user['age_gate_forced_at']) : '');
+        $template->assign('age_gate_method', TypeHelper::toString($user['age_gate_method'] ?? '', allowEmpty: true) ?? 'none');
+        $template->assign('age_gate_method_label', AgeGateHelper::getAgeGateMethodLabel(TypeHelper::toString($user['age_gate_method'] ?? '', allowEmpty: true) ?? 'none'));
+        $template->assign('age_gate_acknowledged_at', !empty($user['mature_content_acknowledged_at']) ? DateHelper::format($user['mature_content_acknowledged_at']) : '');
+        $template->assign('error', $errors);
+        $template->assign('success', $success);
+        $template->assign('user', $user);
+        $template->render('profile/profile_dob.html');
     }
 
     /**

@@ -56,3 +56,28 @@ header nav a:hover {
     color: var(--color-text-main);
     transform: translateY(-1px);
 }
+
+
+.nav-user-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--color-text-main);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.nav-user-chip:hover {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.nav-user-chip i:first-child {
+    color: var(--color-text-muted);
+}

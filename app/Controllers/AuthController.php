@@ -161,6 +161,7 @@ class AuthController extends BaseController
                                 'user_id' => $userIdToCheck,
                                 'username' => $user['username'],
                                 'user_avatar' => $user['avatar_path'],
+                                'user_date_of_birth' => $user['date_of_birth'] ?? null,
                             ]);
                             GroupPermissionHelper::syncSessionForUser($userIdToCheck, true);
 

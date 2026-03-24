@@ -54,6 +54,24 @@
     }
 
     .pending-images-table {
-        min-width: 760px;
+        min-width: 1080px;
+    }
+}
+
+
+@media (max-width: 1200px) {
+    .pending-review-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 760px) {
+    .pending-review-meta-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .pending-review-preview-frame {
+        min-height: 280px;
+        padding: 14px;
     }
 }

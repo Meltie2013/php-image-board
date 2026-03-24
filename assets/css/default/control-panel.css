@@ -20,6 +20,7 @@
 @import "control-panel/moderation-storage-similarity.css";
 @import "control-panel/moderation-pending-table.css";
 @import "control-panel/moderation-pending-preview.css";
+@import "control-panel/moderation-pending-review.css";
 @import "control-panel/moderation-rehash-results.css";
 @import "control-panel/moderation-responsive.css";
 @import "control-panel/moderation-size-tuning.css";

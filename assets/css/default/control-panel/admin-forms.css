@@ -100,3 +100,14 @@
     white-space: normal !important;
     vertical-align: middle;
 }
+
+
+.admin-form-readonly {
+    min-height: 42px;
+    padding: 10px 11px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    background: rgba(10, 11, 14, 0.30);
+    color: #f0f2ff;
+    line-height: 1.55;
+}

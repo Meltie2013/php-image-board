@@ -96,6 +96,50 @@
                                 </div>
                             </div>
 
+                            <div class="admin-form-grid-two">
+                                <div class="admin-field">
+                                    <label>Age Gate Status</label>
+                                    <div class="admin-form-readonly">{$user_age_gate_status}</div>
+                                </div>
+
+                                <div class="admin-field">
+                                    <label>Age Gate Method</label>
+                                    <div class="admin-form-readonly">{$user_age_gate_method}</div>
+                                </div>
+                            </div>
+
+                            <div class="admin-form-grid-two">
+                                <div class="admin-field">
+                                    <label>Stored Date of Birth</label>
+                                    <div class="admin-form-readonly">{$user_date_of_birth}</div>
+                                </div>
+
+                                <div class="admin-field">
+                                    <label>Verified At</label>
+                                    <div class="admin-form-readonly">{$user_age_verified_at}</div>
+                                </div>
+                            </div>
+
+                            <div class="admin-field">
+                                <label>Age Gate Review Reason</label>
+                                <textarea name="age_gate_reason" rows="4" placeholder="Explain why this account needs a forced review or mature-content restriction...">{$user_age_gate_force_reason}</textarea>
+                            </div>
+
+                            <label class="moderation-check-option">
+                                <input type="checkbox" name="force_age_review" value="1">
+                                <span>Require a forced age review the next time this account tries to access mature content.</span>
+                            </label>
+
+                            <label class="moderation-check-option">
+                                <input type="checkbox" name="restrict_mature_content" value="1">
+                                <span>Restrict this account from mature content access.</span>
+                            </label>
+
+                            <label class="moderation-check-option">
+                                <input type="checkbox" name="reset_mature_content_access" value="1">
+                                <span>Reset the stored mature-content access record for this account.</span>
+                            </label>
+
                             <div class="admin-form-footer">
                                 <button type="submit" class="admin-btn admin-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
                                 <a href="/panel/users" class="admin-btn admin-btn-secondary">Back</a>

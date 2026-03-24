@@ -36,9 +36,44 @@ class UserModel extends BaseModel
         }
 
         return self::fetch(
-            "SELECT date_of_birth, age_verified_at FROM app_users WHERE id = :id LIMIT 1",
+            "SELECT
+                date_of_birth,
+                age_verified_at,
+                age_gate_status,
+                age_gate_method,
+                mature_content_acknowledged_at,
+                age_gate_forced_by,
+                age_gate_forced_at,
+                age_gate_force_reason
+             FROM app_users
+             WHERE id = :id
+             LIMIT 1",
             [':id' => $userId]
         );
+    }
+
+    /**
+     * Fetch one date of birth value by user id.
+     *
+     * @param int $userId
+     * @return string|null
+     */
+    public static function getDateOfBirthById(int $userId): ?string
+    {
+        if ($userId < 1)
+        {
+            return null;
+        }
+
+        $row = self::fetch(
+            "SELECT date_of_birth
+             FROM app_users
+             WHERE id = :id
+             LIMIT 1",
+            [':id' => $userId]
+        );
+
+        return TypeHelper::toString($row['date_of_birth'] ?? null, allowEmpty: false);
     }
 
     /**
@@ -194,6 +229,12 @@ class UserModel extends BaseModel
                 u.avatar_path,
                 u.date_of_birth,
                 u.age_verified_at,
+                u.age_gate_status,
+                u.age_gate_method,
+                u.mature_content_acknowledged_at,
+                u.age_gate_forced_by,
+                u.age_gate_forced_at,
+                u.age_gate_force_reason,
                 u.status,
                 u.last_login,
                 u.created_at,
@@ -265,7 +306,13 @@ class UserModel extends BaseModel
                 last_login,
                 created_at,
                 password_hash,
-                age_verified_at
+                age_verified_at,
+                age_gate_status,
+                age_gate_method,
+                mature_content_acknowledged_at,
+                age_gate_forced_by,
+                age_gate_forced_at,
+                age_gate_force_reason
              FROM app_users
              WHERE id = :id
              LIMIT 1",
@@ -297,9 +344,165 @@ class UserModel extends BaseModel
         self::query(
             "UPDATE app_users
              SET date_of_birth = :dob,
-                 age_verified_at = NOW()
+                 age_verified_at = NOW(),
+                 age_gate_status = 'verified',
+                 age_gate_method = 'dob_optional',
+                 mature_content_acknowledged_at = NOW(),
+                 updated_at = NOW()
              WHERE id = :id",
             ['dob' => $dob, 'id' => $userId]
+        );
+    }
+
+    /**
+     * Mark one account as self-served for sensitive-content access.
+     *
+     * @param int $userId
+     * @return void
+     */
+    public static function markSelfServeAgeGate(int $userId): void
+    {
+        self::query(
+            "UPDATE app_users
+             SET age_gate_status = 'self_served',
+                 age_gate_method = 'self_serve',
+                 mature_content_acknowledged_at = NOW(),
+                 updated_at = NOW()
+             WHERE id = :id",
+            ['id' => $userId]
+        );
+    }
+
+    /**
+     * Store one date of birth through the optional account self-service path.
+     *
+     * @param int $userId
+     * @param string $dob
+     * @param bool $restrictedMinor
+     * @return void
+     */
+    public static function updateDobForOptionalVerification(int $userId, string $dob, bool $restrictedMinor = false): void
+    {
+        self::query(
+            "UPDATE app_users
+             SET date_of_birth = :dob,
+                 age_verified_at = NOW(),
+                 age_gate_status = :status,
+                 age_gate_method = :method,
+                 mature_content_acknowledged_at = NOW(),
+                 updated_at = NOW()
+             WHERE id = :id",
+            [
+                'dob' => $dob,
+                'status' => $restrictedMinor ? 'restricted_minor' : 'verified',
+                'method' => $restrictedMinor ? 'admin_restricted' : 'dob_optional',
+                'id' => $userId,
+            ]
+        );
+    }
+
+    /**
+     * Store one date of birth through the forced-review path.
+     *
+     * @param int $userId
+     * @param string $dob
+     * @param bool $restrictedMinor
+     * @return void
+     */
+    public static function updateDobForForcedReview(int $userId, string $dob, bool $restrictedMinor = false): void
+    {
+        self::query(
+            "UPDATE app_users
+             SET date_of_birth = :dob,
+                 age_verified_at = NOW(),
+                 age_gate_status = :status,
+                 age_gate_method = :method,
+                 mature_content_acknowledged_at = NOW(),
+                 updated_at = NOW()
+             WHERE id = :id",
+            [
+                'dob' => $dob,
+                'status' => $restrictedMinor ? 'restricted_minor' : 'verified',
+                'method' => $restrictedMinor ? 'admin_restricted' : 'dob_forced',
+                'id' => $userId,
+            ]
+        );
+    }
+
+    /**
+     * Place one account into staff-requested age review.
+     *
+     * @param int $userId
+     * @param int $staffUserId
+     * @param string|null $reason
+     * @return void
+     */
+    public static function setForcedAgeReview(int $userId, int $staffUserId, ?string $reason = null): void
+    {
+        self::query(
+            "UPDATE app_users
+             SET age_gate_status = 'forced_review',
+                 age_gate_forced_by = :staff_user_id,
+                 age_gate_forced_at = NOW(),
+                 age_gate_force_reason = :reason,
+                 updated_at = NOW()
+             WHERE id = :id",
+            [
+                'staff_user_id' => $staffUserId > 0 ? $staffUserId : null,
+                'reason' => $reason,
+                'id' => $userId,
+            ]
+        );
+    }
+
+    /**
+     * Restrict one account from mature content.
+     *
+     * @param int $userId
+     * @param int $staffUserId
+     * @param string|null $reason
+     * @return void
+     */
+    public static function setRestrictedMinor(int $userId, int $staffUserId, ?string $reason = null): void
+    {
+        self::query(
+            "UPDATE app_users
+             SET age_gate_status = 'restricted_minor',
+                 age_gate_method = 'admin_restricted',
+                 age_gate_forced_by = :staff_user_id,
+                 age_gate_forced_at = NOW(),
+                 age_gate_force_reason = :reason,
+                 updated_at = NOW()
+             WHERE id = :id",
+            [
+                'staff_user_id' => $staffUserId > 0 ? $staffUserId : null,
+                'reason' => $reason,
+                'id' => $userId,
+            ]
+        );
+    }
+
+    /**
+     * Reset one account's stored age-gate access state.
+     *
+     * @param int $userId
+     * @return void
+     */
+    public static function resetAgeGateAccess(int $userId): void
+    {
+        self::query(
+            "UPDATE app_users
+             SET date_of_birth = NULL,
+                 age_verified_at = NULL,
+                 age_gate_status = 'not_started',
+                 age_gate_method = 'none',
+                 mature_content_acknowledged_at = NULL,
+                 age_gate_forced_by = NULL,
+                 age_gate_forced_at = NULL,
+                 age_gate_force_reason = NULL,
+                 updated_at = NOW()
+             WHERE id = :id",
+            ['id' => $userId]
         );
     }
 
@@ -440,7 +643,22 @@ class UserModel extends BaseModel
         }
 
         return self::fetch(
-            "SELECT u.id, u.group_id, u.username, u.display_name, u.email, u.status, r.name AS group_name
+            "SELECT
+                u.id,
+                u.group_id,
+                u.username,
+                u.display_name,
+                u.email,
+                u.date_of_birth,
+                u.age_verified_at,
+                u.age_gate_status,
+                u.age_gate_method,
+                u.mature_content_acknowledged_at,
+                u.age_gate_forced_by,
+                u.age_gate_forced_at,
+                u.age_gate_force_reason,
+                u.status,
+                r.name AS group_name
              FROM app_users u
              INNER JOIN app_groups r ON u.group_id = r.id
              WHERE u.id = :id

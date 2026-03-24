@@ -22,11 +22,17 @@
                     </div>
                 </div>
 
+                {if $pending_notice}
+                <div class="moderation-notice moderation-notice-success" style="margin-bottom: 14px;">
+                    {$pending_notice}
+                </div>
+                {/if}
+
                 <section class="moderation-panel">
                     <div class="moderation-panel-heading">
                         <div>
                             <h3>Approval Queue</h3>
-                            <p>{$pending_count} image{if $pending_count != 1}s{/if} currently waiting for review.</p>
+                            <p>{$pending_count_display} image{if $pending_count != 1}s{/if} currently waiting for review.</p>
                         </div>
                     </div>
 
@@ -36,50 +42,31 @@
                                 <table class="pending-images-table">
                                     <thead>
                                         <tr>
+                                            <th>#</th>
                                             <th>Image Hash</th>
                                             <th>Image Uploader</th>
                                             <th>Upload Date</th>
+                                            <th>Image Details</th>
+                                            <th>Content Bracket</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {foreach $pending_rows as list($image_hash, $username, $created_at)}
+                                        {foreach $pending_rows as list($pending_reference, $image_hash, $username, $created_at, $image_details, $content_rating_label, $content_rating_class)}
                                         <tr>
+                                            <td class="pending-images-cell-number">{$pending_reference}</td>
                                             <td class="is-wrap">{$image_hash}</td>
-                                            <td>{ucfirst($username)}</td>
+                                            <td>{$username}</td>
                                             <td>{$created_at}</td>
+                                            <td class="is-wrap">{$image_details}</td>
+                                            <td>
+                                                <span class="pending-rating-pill {$content_rating_class}">{$content_rating_label}</span>
+                                            </td>
                                             <td>
                                                 <div class="moderation-row-actions">
-                                                    <span class="hover-preview">
-                                                        <a
-                                                            class="btn-view moderation-preview-trigger"
-                                                            href="/panel/image-pending/{$image_hash}"
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            aria-label="View Image"
-                                                            data-preview-href="/panel/image-pending/{$image_hash}"
-                                                            data-preview-src="/panel/image-pending/{$image_hash}"
-                                                        >
-                                                            <i class="fa-solid fa-eye"></i>
-                                                        </a>
-                                                    </span>
-
-                                                    <button class="btn-edit" type="button" aria-label="Edit Image"><i class="fa-solid fa-pen"></i></button>
-
-                                                    <form method="POST" action="/panel/image-pending/approve/{$image_hash}" class="moderation-inline-form">
-                                                        <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                                                        <button type="submit" class="btn-approve" aria-label="Approve Image"><i class="fa-solid fa-check"></i></button>
-                                                    </form>
-
-                                                    <form method="POST" action="/panel/image-pending/approve/sensitive/{$image_hash}" class="moderation-inline-form" onsubmit="return confirm('Mark this image as sensitive?');">
-                                                        <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                                                        <button type="submit" class="btn-warning" aria-label="Approve Sensitive Image"><i class="fa-solid fa-exclamation"></i></button>
-                                                    </form>
-
-                                                    <form method="POST" action="/panel/image-pending/reject/{$image_hash}" class="moderation-inline-form" onsubmit="return confirm('Reject this image?');">
-                                                        <input type="hidden" name="csrf_token" value="{$csrf_token}">
-                                                        <button type="submit" class="btn-reject" aria-label="Reject Image"><i class="fa-solid fa-xmark"></i></button>
-                                                    </form>
+                                                    <a class="btn-edit" href="/panel/image-pending/review/{$image_hash}" aria-label="Review Image">
+                                                        <i class="fa-solid fa-pen"></i>
+                                                    </a>
                                                 </div>
                                             </td>
                                         </tr>
@@ -118,8 +105,5 @@
             </div>
         </div>
     </main>
-
-    <script src="/assets/js/panel-pending-preview.js"></script>
-
 
 {include file="global/footer.html"}

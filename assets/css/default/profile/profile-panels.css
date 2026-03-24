@@ -258,3 +258,105 @@
     border: 1px solid rgba(141, 145, 255, 0.18);
     color: #dde0ff;
 }
+
+
+.profile-panel-header-nested {
+    margin-top: 2px;
+    margin-bottom: 14px;
+}
+
+.profile-age-gate-grid .profile-panel {
+    min-height: 100%;
+}
+
+.profile-age-gate-divider {
+    height: 1px;
+    margin: 18px 0;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.profile-pill-success {
+    border-color: rgba(90, 210, 142, 0.20);
+    background: rgba(90, 210, 142, 0.12);
+    color: #d8ffe8;
+}
+
+.profile-pill-warning {
+    border-color: rgba(255, 205, 86, 0.24);
+    background: rgba(255, 205, 86, 0.12);
+    color: #fff0be;
+}
+
+.profile-pill-danger {
+    border-color: rgba(255, 107, 129, 0.22);
+    background: rgba(255, 107, 129, 0.10);
+    color: #ffd8df;
+}
+
+.profile-pill-info {
+    border-color: rgba(108, 156, 255, 0.20);
+    background: rgba(108, 156, 255, 0.11);
+    color: #dce7ff;
+}
+
+.profile-summary-row-stack {
+    display: grid;
+    align-items: start;
+}
+
+.birthday-badge-inline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 4px;
+    color: #ffd978;
+    font-size: 0.9em;
+}
+
+
+.profile-badge-row-summary {
+    margin-top: 2px;
+    margin-bottom: 16px;
+}
+
+.profile-age-gate-workflow {
+    display: grid;
+    gap: 14px;
+}
+
+.profile-age-gate-card,
+.profile-age-gate-summary-card {
+    display: grid;
+    gap: 14px;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.profile-age-gate-card-emphasis {
+    background: linear-gradient(180deg, rgba(118, 123, 255, 0.10), rgba(255, 255, 255, 0.03));
+    border-color: rgba(141, 145, 255, 0.16);
+}
+
+.profile-age-gate-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.profile-age-gate-card-header h3 {
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.2;
+}
+
+.profile-age-gate-summary-card .profile-detail-item {
+    margin: 0;
+}
+
+.profile-detail-grid-tight {
+    gap: 12px;
+}

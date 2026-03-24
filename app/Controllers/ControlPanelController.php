@@ -606,6 +606,10 @@ class ControlPanelController extends BaseController
             $groupId = TypeHelper::toInt($_POST['group_id'] ?? $user['group_id']) ?? TypeHelper::toInt($user['group_id']);
             $status = Security::sanitizeString($_POST['status'] ?? $user['status']);
             $password = Security::sanitizeString($_POST['password'] ?? '');
+            $forceAgeReview = !empty($_POST['force_age_review']);
+            $restrictMatureContent = !empty($_POST['restrict_mature_content']);
+            $resetMatureContentAccess = !empty($_POST['reset_mature_content_access']);
+            $ageGateReason = Security::sanitizeString($_POST['age_gate_reason'] ?? '');
 
             if ($username === '' || !$email)
             {
@@ -633,6 +637,20 @@ class ControlPanelController extends BaseController
                     {
                         $hash = Security::hashPassword($password);
                         UserModel::updatePasswordHash($id, $hash);
+                    }
+
+                    $currentStaffUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+                    if ($resetMatureContentAccess)
+                    {
+                        UserModel::resetAgeGateAccess($id);
+                    }
+                    else if ($restrictMatureContent)
+                    {
+                        UserModel::setRestrictedMinor($id, $currentStaffUserId, $ageGateReason !== '' ? $ageGateReason : null);
+                    }
+                    else if ($forceAgeReview)
+                    {
+                        UserModel::setForcedAgeReview($id, $currentStaffUserId, $ageGateReason !== '' ? $ageGateReason : null);
                     }
 
                     $success = 'User updated.';
@@ -669,6 +687,12 @@ class ControlPanelController extends BaseController
         $template->assign('user_username', TypeHelper::toString($user['username'] ?? ''));
         $template->assign('user_display_name', TypeHelper::toString($user['display_name'] ?? ''));
         $template->assign('user_email', TypeHelper::toString($user['email'] ?? ''));
+        $template->assign('user_status', TypeHelper::toString($user['status'] ?? 'active'));
+        $template->assign('user_date_of_birth', !empty($user['date_of_birth']) ? DateHelper::birthday_format($user['date_of_birth']) : 'Not set');
+        $template->assign('user_age_verified_at', !empty($user['age_verified_at']) ? DateHelper::format($user['age_verified_at']) : 'Not set');
+        $template->assign('user_age_gate_status', AgeGateHelper::getAgeGateStatusLabel(TypeHelper::toString($user['age_gate_status'] ?? 'not_started') ?? 'not_started'));
+        $template->assign('user_age_gate_method', TypeHelper::toString($user['age_gate_method'] ?? 'none'));
+        $template->assign('user_age_gate_force_reason', TypeHelper::toString($user['age_gate_force_reason'] ?? '', allowEmpty: true) ?? '');
         $currentGroup = GroupModel::findGroupById(TypeHelper::toInt($user['group_id'] ?? 0) ?? 0);
         $template->assign('user_current_group_name', TypeHelper::toString($currentGroup['name'] ?? ''));
         $template->assign('user_current_group_is_assignable', !empty($currentGroup['is_assignable']) ? 1 : 0);
@@ -1532,6 +1556,19 @@ class ControlPanelController extends BaseController
         }
 
         if (self::isSettingsReservedKey($key))
+        {
+            header('Location: ' . $redirectBase . '?error=reserved');
+            exit();
+        }
+
+        $siteAdministratorOnlyKeys = [
+            'profile.age_gate_enabled',
+            'profile.self_serve_age_gate',
+            'profile.explicit_years',
+            'profile.birthday_badge_enabled',
+        ];
+
+        if (in_array($key, $siteAdministratorOnlyKeys, true) && !GroupPermissionHelper::hasGroupSlug(['site-administrator']))
         {
             header('Location: ' . $redirectBase . '?error=reserved');
             exit();
@@ -3345,18 +3382,66 @@ class ControlPanelController extends BaseController
 
         // Flatten each row for template engine
         $flattenedRows = [];
-        foreach ($rows as $row)
+        foreach ($rows as $index => $row)
         {
+            $contentRating = AgeGateHelper::normalizeContentRating(
+                TypeHelper::toString($row['content_rating'] ?? '', allowEmpty: true) ?? '',
+                TypeHelper::toInt($row['age_sensitive'] ?? 0) ?? 0
+            );
+
+            $imageDetails = [];
+            $width = TypeHelper::toInt($row['width'] ?? 0) ?? 0;
+            $height = TypeHelper::toInt($row['height'] ?? 0) ?? 0;
+            if ($width > 0 && $height > 0)
+            {
+                $imageDetails[] = $width . ' × ' . $height . ' px';
+            }
+
+            $sizeBytes = TypeHelper::toInt($row['size_bytes'] ?? 0) ?? 0;
+            if ($sizeBytes > 0)
+            {
+                $imageDetails[] = StorageHelper::formatFileSize($sizeBytes);
+            }
+
+            $mimeType = TypeHelper::toString($row['mime_type'] ?? '', allowEmpty: true) ?? '';
+            if ($mimeType !== '')
+            {
+                $imageDetails[] = $mimeType;
+            }
+
             $flattenedRows[] = [
-                $row['image_hash'],
-                self::getUsernameById($row['user_id']),
+                $index + 1,
+                TypeHelper::toString($row['image_hash'] ?? ''),
+                ucfirst(TypeHelper::toString($row['username'] ?? 'Unknown') ?? 'Unknown'),
                 DateHelper::format($row['created_at']),
+                !empty($imageDetails) ? implode(' • ', $imageDetails) : 'Details unavailable',
+                AgeGateHelper::getContentRatingLabel($contentRating),
+                'pending-rating-pill-' . $contentRating,
             ];
+        }
+
+        $notice = Security::sanitizeString($_GET['notice'] ?? '');
+        $noticeMessage = '';
+        switch ($notice)
+        {
+            case 'approved':
+                $noticeMessage = 'The image has been approved.';
+                break;
+
+            case 'saved':
+                $noticeMessage = 'Pending-image moderation changes were saved.';
+                break;
+
+            case 'rejected':
+                $noticeMessage = 'The image has been rejected.';
+                break;
         }
 
         // Assign template variables
         $template->assign('pending_rows', $flattenedRows);
-        $template->assign('pending_count', count($flattenedRows));
+        $template->assign('pending_count', $totalCount);
+        $template->assign('pending_count_display', NumericalHelper::formatCount($totalCount));
+        $template->assign('pending_notice', $noticeMessage);
 
         // Pagination calculation
         $totalPages = (int)ceil($totalCount / $perPage);
@@ -3387,6 +3472,118 @@ class ControlPanelController extends BaseController
         );
 
         $template->render('panel/control_panel_pending.html');
+    }
+
+    /**
+     * Render and process one pending-image moderation review page.
+     *
+     * @param string $hash The image hash identifier from the route.
+     * @return void
+     */
+    public static function pendingImageReview(string $hash): void
+    {
+        $template = self::initTemplate();
+
+        // Require login and permission check
+        self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'moderate_image_queue'], $template);
+
+        $hash = TypeHelper::toString($hash);
+        if ($hash === '')
+        {
+            self::renderErrorPage(404, '404 Not Found', 'Oops! We couldn’t find that image.', $template);
+            return;
+        }
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')
+        {
+            $csrfToken = $_POST['csrf_token'] ?? '';
+            if (!Security::verifyCsrfToken($csrfToken))
+            {
+                self::renderInvalidRequest($template);
+                return;
+            }
+
+            $image = ImageModel::findPendingModerationImageByHash($hash);
+            if (!$image)
+            {
+                self::renderImageNotFound($template);
+                return;
+            }
+
+            $description = TypeHelper::toString($_POST['description'] ?? null, allowEmpty: true) ?? '';
+            $contentRating = AgeGateHelper::normalizeContentRating(TypeHelper::toString($_POST['content_rating'] ?? 'standard', allowEmpty: true) ?? 'standard');
+            $rejectReason = TypeHelper::toString($_POST['reject_reason'] ?? null, allowEmpty: true) ?? '';
+            $reviewAction = Security::sanitizeString($_POST['review_action'] ?? 'save');
+            $moderatorUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+
+            switch ($reviewAction)
+            {
+                case 'approve':
+                    ImageModel::updatePendingModerationDraft($hash, $description, $contentRating);
+                    ImageModel::approvePendingImage($hash, $moderatorUserId, $contentRating);
+                    header('Location: /panel/image-pending?notice=approved');
+                    exit;
+
+                case 'reject':
+                    ImageModel::rejectPendingImage($hash, $moderatorUserId, $rejectReason);
+                    header('Location: /panel/image-pending?notice=rejected');
+                    exit;
+
+                default:
+                    ImageModel::updatePendingModerationDraft($hash, $description, $contentRating);
+                    header('Location: /panel/image-pending/review/' . rawurlencode($hash) . '?notice=saved');
+                    exit;
+            }
+        }
+
+        $image = ImageModel::findPendingModerationImageByHash($hash);
+        if (!$image)
+        {
+            self::renderImageNotFound($template);
+            return;
+        }
+
+        $notice = Security::sanitizeString($_GET['notice'] ?? '');
+        $noticeMessage = '';
+        if ($notice === 'saved')
+        {
+            $noticeMessage = 'Pending-image moderation changes were saved.';
+        }
+
+        $contentRating = AgeGateHelper::normalizeContentRating(
+            TypeHelper::toString($image['content_rating'] ?? '', allowEmpty: true) ?? '',
+            TypeHelper::toInt($image['age_sensitive'] ?? 0) ?? 0
+        );
+
+        $template->assign('pending_review_notice', $noticeMessage);
+        $template->assign('pending_review_hash', TypeHelper::toString($image['image_hash'] ?? ''));
+        $template->assign('pending_review_description', TypeHelper::toString($image['description'] ?? '', allowEmpty: true) ?? '');
+        $template->assign('pending_review_reject_reason', TypeHelper::toString($image['reject_reason'] ?? '', allowEmpty: true) ?? '');
+        $template->assign('pending_review_content_rating', $contentRating);
+        $template->assign('pending_review_content_rating_label', AgeGateHelper::getContentRatingLabel($contentRating));
+        $template->assign('pending_review_uploader', ucfirst(self::getUsernameById(TypeHelper::toInt($image['user_id'] ?? 0) ?? 0)));
+        $template->assign('pending_review_created_at', !empty($image['created_at']) ? DateHelper::format($image['created_at']) : 'Unknown');
+        $template->assign('pending_review_updated_at', !empty($image['updated_at']) ? DateHelper::format($image['updated_at']) : 'Unknown');
+        $template->assign('pending_review_dimensions', (TypeHelper::toInt($image['width'] ?? 0) ?? 0) . ' × ' . (TypeHelper::toInt($image['height'] ?? 0) ?? 0) . ' px');
+        $template->assign('pending_review_file_size', StorageHelper::formatFileSize(TypeHelper::toInt($image['size_bytes'] ?? 0) ?? 0));
+        $template->assign('pending_review_mime_type', TypeHelper::toString($image['mime_type'] ?? 'Unknown'));
+        $template->assign('pending_review_original_path', TypeHelper::toString($image['original_path'] ?? '', allowEmpty: true) ?? '');
+        $template->assign('pending_review_md5', TypeHelper::toString($image['md5'] ?? '', allowEmpty: true) ?? '');
+        $template->assign('pending_review_sha1', TypeHelper::toString($image['sha1'] ?? '', allowEmpty: true) ?? '');
+        $template->assign('pending_review_sha256', TypeHelper::toString($image['sha256'] ?? '', allowEmpty: true) ?? '');
+        $template->assign('pending_review_sha512', TypeHelper::toString($image['sha512'] ?? '', allowEmpty: true) ?? '');
+        $template->assign('pending_review_preview_url', '/panel/image-pending/' . rawurlencode($hash));
+        $template->assign('pending_review_back_url', '/panel/image-pending');
+
+        self::assignPanelPage(
+            $template,
+            'pending',
+            'Pending Image Review',
+            'Open one queued upload in a focused moderation view so description edits, content rating, and final approval are handled from one page.',
+            'queue'
+        );
+
+        $template->render('panel/control_panel_pending_review.html');
     }
 
     /**
@@ -3435,9 +3632,6 @@ class ControlPanelController extends BaseController
 
         // Find the target image and confirm moderation state
         // (We only allow approving images that are currently pending.)
-        $sql = "SELECT image_hash, status
-                FROM app_images
-                WHERE image_hash = :hash LIMIT 1";
         $image = ImageModel::findModerationStatusByHash($hash);
 
         if (!$image)
@@ -3458,10 +3652,10 @@ class ControlPanelController extends BaseController
         // - Record the moderator user id for audit/history tracking
         // - Store moderation timestamps for UI / reporting
         $appUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        ImageModel::approvePendingImage($hash, $appUserId, false);
+        ImageModel::approvePendingImage($hash, $appUserId, 'standard');
 
         // Redirect back to the pending list after action completes
-        header('Location: /panel/image-pending');
+        header('Location: /panel/image-pending?notice=approved');
         exit;
     }
 
@@ -3511,9 +3705,6 @@ class ControlPanelController extends BaseController
 
         // Find the target image and confirm moderation state
         // (We only allow approving images that are currently pending.)
-        $sql = "SELECT image_hash, status
-                FROM app_images
-                WHERE image_hash = :hash LIMIT 1";
         $image = ImageModel::findModerationStatusByHash($hash);
 
         if (!$image)
@@ -3534,10 +3725,68 @@ class ControlPanelController extends BaseController
         // - Record the moderator user id for audit/history tracking
         // - Store moderation timestamps for UI / reporting
         $appUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        ImageModel::approvePendingImage($hash, $appUserId, true);
+        ImageModel::approvePendingImage($hash, $appUserId, 'sensitive');
 
         // Redirect back to the pending list after action completes
-        header('Location: /panel/image-pending');
+        header('Location: /panel/image-pending?notice=approved');
+        exit;
+    }
+
+    /**
+     * Approve a pending image from the control panel and mark it explicit.
+     *
+     * This action is POST-only and requires a valid CSRF token.
+     * Only images in "pending" status may be approved.
+     *
+     * @param string $hash The image hash identifier from the route.
+     * @return void
+     */
+    public static function approveImageExplicit(string $hash): void
+    {
+        $template = self::initTemplate();
+
+        self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'moderate_image_queue'], $template);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            http_response_code(405);
+            $template->assign('title', 'Method Not Allowed');
+            $template->assign('message', 'Invalid request.');
+            $template->render('errors/error_page.html');
+            return;
+        }
+
+        $csrfToken = $_POST['csrf_token'] ?? '';
+        if (!Security::verifyCsrfToken($csrfToken))
+        {
+            self::renderInvalidRequest($template);
+            return;
+        }
+
+        $hash = TypeHelper::toString($hash);
+        if ($hash === '')
+        {
+            self::renderErrorPage(404, '404 Not Found', 'Oops! We couldn’t find that image.', $template);
+            return;
+        }
+
+        $image = ImageModel::findModerationStatusByHash($hash);
+        if (!$image)
+        {
+            self::renderImageNotFound($template);
+            return;
+        }
+
+        if (($image['status'] ?? '') !== 'pending')
+        {
+            header('Location: /panel/image-pending');
+            exit;
+        }
+
+        $appUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        ImageModel::approvePendingImage($hash, $appUserId, 'explicit');
+
+        header('Location: /panel/image-pending?notice=approved');
         exit;
     }
 
@@ -3587,9 +3836,6 @@ class ControlPanelController extends BaseController
 
         // Find the target image and confirm moderation state
         // (We only allow rejecting images that are currently pending.)
-        $sql = "SELECT image_hash, status
-                FROM app_images
-                WHERE image_hash = :hash LIMIT 1";
         $image = ImageModel::findModerationStatusByHash($hash);
 
         if (!$image)
@@ -3613,7 +3859,7 @@ class ControlPanelController extends BaseController
         ImageModel::rejectPendingImage($hash, $rejUserId);
 
         // Redirect back to the pending list after action completes
-        header('Location: /panel/image-pending');
+        header('Location: /panel/image-pending?notice=rejected');
         exit;
     }
 
@@ -3770,7 +4016,10 @@ class ControlPanelController extends BaseController
         $template->assign('report_id', TypeHelper::toInt($report['id'] ?? 0));
         $template->assign('report_image_hash', TypeHelper::toString($report['image_hash'] ?? ''));
         $template->assign('report_image_status', ucfirst(TypeHelper::toString($report['image_status'] ?? '')));
-        $template->assign('report_image_visibility', (TypeHelper::toInt($report['age_sensitive'] ?? 0) ?? 0) === 1 ? 'Sensitive' : 'Standard');
+        $template->assign('report_image_visibility', AgeGateHelper::getContentRatingLabel(AgeGateHelper::normalizeContentRating(
+            TypeHelper::toString($report['content_rating'] ?? '', allowEmpty: true) ?? '',
+            TypeHelper::toInt($report['age_sensitive'] ?? 0) ?? 0
+        )));
         $template->assign('report_image_created_at', DateHelper::date_only_format(TypeHelper::toString($report['image_created_at'] ?? '')));
         $template->assign('report_category', ImageReportHelper::categoryLabel(TypeHelper::toString($report['report_category'] ?? 'other')));
         $template->assign('report_subject', TypeHelper::toString($report['report_subject'] ?? ''));
@@ -3902,6 +4151,7 @@ class ControlPanelController extends BaseController
             'none',
             'set_standard',
             'set_sensitive',
+            'set_explicit',
             'set_pending',
             'set_approved',
             'set_rejected',

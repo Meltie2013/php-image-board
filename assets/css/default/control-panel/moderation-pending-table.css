@@ -62,10 +62,7 @@
 }
 
 .pending-images-table .btn-view,
-.pending-images-table .btn-edit,
-.pending-images-table .btn-approve,
-.pending-images-table .btn-warning,
-.pending-images-table .btn-reject {
+.pending-images-table .btn-edit {
     width: 34px;
     height: 34px;
     min-height: 34px;
@@ -82,21 +79,6 @@
 
 .pending-images-table .btn-edit {
     background: rgba(34, 36, 38, 0.95);
-}
-
-.pending-images-table .btn-approve {
-    background: rgba(46, 204, 113, 0.18);
-    border-color: rgba(46, 204, 113, 0.45);
-}
-
-.pending-images-table .btn-warning {
-    background: rgba(241, 196, 15, 0.18);
-    border-color: rgba(241, 196, 15, 0.45);
-}
-
-.pending-images-table .btn-reject {
-    background: rgba(231, 76, 60, 0.18);
-    border-color: rgba(231, 76, 60, 0.45);
 }
 
 .pending-pagination {
@@ -125,4 +107,43 @@
     background: rgba(255, 255, 255, 0.08);
     border-color: rgba(255, 255, 255, 0.2);
     color: #ffffff;
+}
+
+.pending-images-cell-number {
+    width: 58px;
+    text-align: center;
+    font-weight: 700;
+    color: #f4f5ff;
+}
+
+.pending-rating-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    color: #f2f4ff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.pending-rating-pill-standard {
+    background: rgba(107, 114, 128, 0.16);
+    border-color: rgba(148, 163, 184, 0.35);
+}
+
+.pending-rating-pill-sensitive {
+    background: rgba(241, 196, 15, 0.18);
+    border-color: rgba(241, 196, 15, 0.38);
+}
+
+.pending-rating-pill-explicit {
+    background: rgba(231, 76, 60, 0.18);
+    border-color: rgba(231, 76, 60, 0.38);
 }

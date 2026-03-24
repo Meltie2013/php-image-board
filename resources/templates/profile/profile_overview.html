@@ -20,7 +20,7 @@
 
                             <div class="profile-page-copy">
                                 <div class="profile-kicker">Personal Space</div>
-                                <h1>{$display_name}</h1>
+                                <h1>{$display_name}{if $has_birthday_badge} <i class="fa-solid fa-cake-candles birthday-badge-inline" title="Happy Birthday!"></i>{/if}</h1>
                                 <p>{$profile_page_description}</p>
 
                                 <div class="profile-badge-row">
@@ -140,7 +140,7 @@
 
                                     <a href="/profile/dob" class="profile-shortcut-card">
                                         <span class="profile-shortcut-icon"><i class="fa-regular fa-calendar"></i></span>
-                                        <strong>Age verification</strong>
+                                        <strong>Content access</strong>
                                         <small>Manage access rules for sensitive content categories.</small>
                                     </a>
                                 </div>

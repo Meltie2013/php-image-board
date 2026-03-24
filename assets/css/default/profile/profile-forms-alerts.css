@@ -144,3 +144,51 @@
     color: #b6baff;
     margin-top: 2px;
 }
+
+
+.profile-form-group textarea,
+.profile-form-group select {
+    width: 100%;
+    min-height: 48px;
+    padding: 11px 14px;
+    border-radius: 13px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(7, 9, 13, 0.68);
+    color: #ffffff;
+    font-size: 14px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+}
+
+.profile-form-group textarea:focus,
+.profile-form-group select:focus {
+    outline: none;
+    border-color: rgba(130, 136, 255, 0.72);
+    box-shadow: 0 0 0 3px rgba(109, 114, 255, 0.12);
+    background: rgba(10, 12, 17, 0.78);
+}
+
+.profile-checkbox-card {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+    color: #d7daec;
+    line-height: 1.55;
+    font-size: 13px;
+}
+
+.profile-checkbox-card input {
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+}
+
+
+.profile-alert-compact {
+    margin-bottom: 0;
+}
