@@ -77,6 +77,14 @@ class TemplateEngine
 
         $siteUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
         $this->globals['site_user_has_birthday_badge'] = 0;
+        $this->globals['site_user_notification_unread_count'] = 0;
+        $this->globals['site_user_has_pending_rules_notice'] = 0;
+        $this->globals['site_user_rules_notice_blocking'] = 0;
+        $this->globals['site_user_rules_notice_title'] = '';
+        $this->globals['site_user_rules_notice_message'] = '';
+        $this->globals['site_user_rules_notice_link'] = '/community/rules';
+        $this->globals['site_user_rules_notice_deadline'] = '';
+
         if ($siteUserId > 0)
         {
             $siteUserDateOfBirth = TypeHelper::toString(SessionManager::get('user_date_of_birth'), allowEmpty: true);
@@ -87,6 +95,15 @@ class TemplateEngine
             }
 
             $this->globals['site_user_has_birthday_badge'] = AgeGateHelper::shouldShowBirthdayBadge($siteUserDateOfBirth, $config) ? 1 : 0;
+            $this->globals['site_user_notification_unread_count'] = NotificationModel::countUnreadForUser($siteUserId);
+
+            $rulesState = RulesHelper::getCurrentStateForUser($siteUserId);
+            $this->globals['site_user_has_pending_rules_notice'] = !empty($rulesState['has_pending']) ? 1 : 0;
+            $this->globals['site_user_rules_notice_blocking'] = !empty($rulesState['is_blocking']) ? 1 : 0;
+            $this->globals['site_user_rules_notice_title'] = TypeHelper::toString($rulesState['notice_title'] ?? '', allowEmpty: true) ?? '';
+            $this->globals['site_user_rules_notice_message'] = TypeHelper::toString($rulesState['notice_message'] ?? '', allowEmpty: true) ?? '';
+            $this->globals['site_user_rules_notice_link'] = TypeHelper::toString($rulesState['notice_link'] ?? '/community/rules', allowEmpty: true) ?? '/community/rules';
+            $this->globals['site_user_rules_notice_deadline'] = TypeHelper::toString($rulesState['deadline_display'] ?? '', allowEmpty: true) ?? '';
         }
 
         // Allowed template functions (whitelisted)

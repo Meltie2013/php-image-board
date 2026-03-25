@@ -542,6 +542,7 @@ class UserModel extends BaseModel
         return TypeHelper::toInt($row['group_id'] ?? 0) ?? 0;
     }
 
+
     /**
      * Backwards-compatible wrapper for legacy role-based callers.
      *

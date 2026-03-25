@@ -59,6 +59,13 @@ class SettingsRegistry
                 'sort_order' => 60,
                 'is_system' => 1,
             ],
+            'rules' => [
+                'title' => 'Rules',
+                'description' => 'Controls community rules behavior, release notices, and the enforcement window for updated rules.',
+                'icon' => 'fa-book-open',
+                'sort_order' => 80,
+                'is_system' => 1,
+            ],
         ];
     }
 
@@ -339,6 +346,19 @@ class SettingsRegistry
                 'sort_order' => 20,
                 'is_system' => 1,
             ],
+            'rules.enforcement_window_days' => [
+                'category' => 'rules',
+                'title' => 'Rules Enforcement Window (Days)',
+                'description' => 'Defines how many days existing active members have to accept an updated rules release before account interaction becomes blocked.',
+                'type' => 'int',
+                'input' => 'number',
+                'min' => 0,
+                'max' => 365,
+                'help' => 'Set this to 0 to require immediate acceptance for existing users when rules are updated.',
+                'default' => 14,
+                'sort_order' => 10,
+                'is_system' => 1,
+            ],
             'upload.hash_type' => [
                 'category' => 'upload',
                 'title' => 'Generated Image Hash Format',
@@ -375,6 +395,7 @@ class SettingsRegistry
             ['fa-window-maximize', 'Window'],
             ['fa-code', 'Code'],
             ['fa-upload', 'Upload'],
+            ['fa-book-open', 'Book Open'],
             ['fa-plug', 'Plug'],
             ['fa-shield-halved', 'Shield'],
             ['fa-server', 'Server'],

@@ -194,6 +194,7 @@ class RoleHelper
         }
 
         GroupPermissionHelper::syncSessionForUser($userId);
+        RulesHelper::enforceBlockingRedirectIfNeeded($userId);
         self::$validatedUserId = $userId;
     }
 

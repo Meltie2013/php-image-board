@@ -1,0 +1,71 @@
+{include file="global/header.html"}
+
+    <main class="gallery-container gallery-index-shell rules-page-shell">
+        {include file="global/rules_notice.html"}
+        <section class="gallery-index-board rules-index-board">
+            <div class="gallery-index-board-header gallery-index-board-header-actions">
+                <div class="gallery-index-board-intro">
+                    <span class="gallery-panel-kicker">Community Inbox</span>
+                    <h1>{$notifications_page_title}</h1>
+                    <p>{$notifications_page_description}</p>
+                </div>
+            </div>
+
+            {if !empty($notification_rows)}
+            <div class="notifications-list">
+                {foreach $notification_rows as list($notification_id, $notification_type, $notification_title, $notification_message, $notification_link, $notification_is_read, $notification_created_at)}
+                <article class="notification-card rules-surface-card {if !$notification_is_read}notification-card-unread{/if}">
+                    <div class="notification-card-header">
+                        <div class="notification-card-meta">
+                            <h2>{$notification_title}</h2>
+                            <p>{$notification_created_at}</p>
+                        </div>
+
+                        <div class="notification-card-badge">
+                            {if $notification_type == 'rules_update'}Rules Update{else if $notification_type == 'image_approved'}Image Approved{else if $notification_type == 'image_rejected'}Image Update{else}Notice{/if}
+                        </div>
+                    </div>
+
+                    <div class="notification-card-copy"><p>{$notification_message}</p></div>
+
+                    {if $notification_link}
+                    <div class="notification-card-actions">
+                        <a href="{$notification_link}" class="gallery-hero-btn gallery-hero-btn-button">
+                            <i class="fa-solid fa-arrow-right"></i>
+                            {if $notification_type == 'rules_update'}Review Rules{else if $notification_type == 'image_approved'}View Image{else}Open{/if}
+                        </a>
+                    </div>
+                    {/if}
+                </article>
+                {/foreach}
+            </div>
+
+            {if $pagination_prev || $pagination_next}
+            <div class="gallery-pagination notifications-pagination">
+                {if $pagination_prev}
+                <a href="{$pagination_prev}">Prev</a>
+                {/if}
+
+                {foreach $pagination_pages as list($page_url, $page_number, $current)}
+                    {if $page_url}
+                    <a href="{$page_url}" class="{if $current}current{/if}">{$page_number}</a>
+                    {else}
+                    <a class="disabled">{$page_number}</a>
+                    {/if}
+                {/foreach}
+
+                {if $pagination_next}
+                <a href="{$pagination_next}">Next</a>
+                {/if}
+            </div>
+            {/if}
+            {else}
+            <div class="rules-empty-state">
+                <i class="fa-regular fa-bell-slash"></i>
+                <p>You do not have any notifications yet.</p>
+            </div>
+            {/if}
+        </section>
+    </main>
+
+{include file="global/footer.html"}

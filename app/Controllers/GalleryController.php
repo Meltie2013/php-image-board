@@ -1519,6 +1519,7 @@ class GalleryController extends BaseController
         // Fetch current user data for age-sensitive checks
         if ($userId > 0)
         {
+            RulesHelper::enforceBlockingRedirectIfNeeded($userId);
             $currentUser = UserModel::findAgeVerificationById($userId);
         }
 

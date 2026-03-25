@@ -1,0 +1,108 @@
+{include file="global/header.html"}
+
+    <main class="gallery-container gallery-index-shell rules-page-shell">
+        {if $rules_is_logged_in}
+        {include file="global/rules_notice.html"}
+        {/if}
+
+        <section class="gallery-index-board rules-index-board">
+            <div class="gallery-index-board-header gallery-index-board-header-actions">
+                <div class="gallery-index-board-intro">
+                    <span class="gallery-panel-kicker">Community Standards</span>
+                    <h1>{$rules_page_title}</h1>
+                    <p>{$rules_page_description}</p>
+
+                    <div class="gallery-index-board-notes">
+                        {if $rules_has_release}
+                        <span class="gallery-index-board-note">
+                            <i class="fa-solid fa-tag"></i>
+                            {$rules_release_label}
+                        </span>
+                        {/if}
+
+                        {if $rules_release_published_display}
+                        <span class="gallery-index-board-note">
+                            <i class="fa-regular fa-clock"></i>
+                            {$rules_release_published_display}
+                        </span>
+                        {/if}
+                    </div>
+                </div>
+            </div>
+
+            {if $rules_release_summary}
+            <div class="rules-release-summary rules-surface-card">
+                <i class="fa-solid fa-circle-info"></i>
+                <p>{$rules_release_summary}</p>
+            </div>
+            {/if}
+
+            {if $rules_is_logged_in && $rules_has_pending}
+            <div class="rules-acceptance-panel rules-surface-card {if $rules_is_blocking}rules-acceptance-panel-blocking{/if}">
+                <div>
+                    <h2>{if $rules_is_blocking}Rules Acceptance Required{else}Rules Acceptance Pending{/if}</h2>
+                    <p>{$rules_notice_message}</p>
+                    {if $rules_deadline_display}
+                    <small>Deadline: {$rules_deadline_display}</small>
+                    {/if}
+                </div>
+
+                <div class="rules-acceptance-actions">
+                    <form method="POST" action="/community/rules/accept">
+                        <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                        <input type="hidden" name="return_to" value="{$rules_accept_return_to}">
+                        <button type="submit" class="gallery-hero-btn gallery-hero-btn-button">
+                            <i class="fa-solid fa-check"></i>
+                            I Agree To The Rules
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {else if $rules_is_logged_in && $rules_is_accepted}
+            <div class="rules-acceptance-panel rules-surface-card rules-acceptance-panel-success">
+                <div>
+                    <h2>Rules Accepted</h2>
+                    <p>Your account has already accepted the latest rules release.</p>
+                </div>
+            </div>
+            {/if}
+
+            {if !empty($rules_categories)}
+            <div class="rules-category-list">
+                {foreach $rules_categories as list($category_id, $category_title, $category_slug, $category_description, $category_marker, $category_rules)}
+                <section class="rules-category-card rules-surface-card" id="{$category_slug}">
+                    <div class="rules-category-header">
+                        <div>
+                            <span class="gallery-panel-kicker">Rules Category</span>
+                            <div class="rules-category-title-line">
+                                <span class="rules-category-marker">{$category_marker})</span>
+                                <h2>{$category_title}</h2>
+                            </div>
+                            <div class="rules-category-description">{$category_description}</div>
+                        </div>
+                    </div>
+
+                    <div class="rules-entry-list">
+                        {foreach $category_rules as list($rule_id, $rule_title, $rule_slug, $rule_body_html, $rule_number)}
+                        <article class="rules-entry-card" id="{$rule_slug}">
+                            <div class="rules-entry-title-line">
+                                <span class="rules-entry-number">{$rule_number}.</span>
+                                <h3>{$rule_title}</h3>
+                            </div>
+                            <div class="rules-entry-body">{raw $rule_body_html}</div>
+                        </article>
+                        {/foreach}
+                    </div>
+                </section>
+                {/foreach}
+            </div>
+            {else}
+            <div class="rules-empty-state">
+                <i class="fa-regular fa-file-lines"></i>
+                <p>No rules have been published yet.</p>
+            </div>
+            {/if}
+        </section>
+    </main>
+
+{include file="global/footer.html"}

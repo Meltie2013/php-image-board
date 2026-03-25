@@ -55,6 +55,7 @@ class ControlPanelController extends BaseController
         $canManageGroups = GroupPermissionHelper::hasPermission('manage_groups');
         $canManageGroupPermissions = GroupPermissionHelper::hasPermission('manage_group_permissions');
         $canManageSettings = GroupPermissionHelper::hasPermission('manage_settings');
+        $canManageRules = GroupPermissionHelper::hasPermission('manage_rules');
         $canViewSecurity = GroupPermissionHelper::hasPermission('view_security');
         $canManageBlocks = GroupPermissionHelper::hasPermission('manage_block_list');
         $canModerateImages = GroupPermissionHelper::hasAnyPermission(['moderate_site', 'moderate_gallery', 'moderate_image_queue', 'manage_image_reports']);
@@ -75,6 +76,7 @@ class ControlPanelController extends BaseController
         $template->assign('cp_can_manage_groups', $canManageGroups ? 1 : 0);
         $template->assign('cp_can_manage_group_permissions', $canManageGroupPermissions ? 1 : 0);
         $template->assign('cp_can_manage_settings', $canManageSettings ? 1 : 0);
+        $template->assign('cp_can_manage_rules', $canManageRules ? 1 : 0);
         $template->assign('cp_can_view_security', $canViewSecurity ? 1 : 0);
         $template->assign('cp_can_manage_blocks', $canManageBlocks ? 1 : 0);
         $template->assign('cp_can_moderate_images', $canModerateImages ? 1 : 0);
@@ -92,6 +94,77 @@ class ControlPanelController extends BaseController
         return TypeHelper::toString(SessionManager::get('user_group'), allowEmpty: true)
             ?? TypeHelper::toString(SessionManager::get('user_role'), allowEmpty: true)
             ?? '';
+    }
+
+    /**
+     * Return the configured rules enforcement window in days.
+     *
+     * @return int
+     */
+    private static function getRulesEnforcementWindowDays(): int
+    {
+        return max(0, TypeHelper::toInt(SettingsManager::get('rules.enforcement_window_days', 14)) ?? 14);
+    }
+
+    /**
+     * Create one user notification after a pending image moderation action.
+     *
+     * @param string $hash
+     * @param string $action
+     * @param string $contentRating
+     * @param string $rejectReason
+     * @return void
+     */
+    private static function createPendingImageNotification(string $hash, string $action, string $contentRating = 'standard', string $rejectReason = ''): void
+    {
+        if (!NotificationModel::isSchemaAvailable())
+        {
+            return;
+        }
+
+        $image = ImageModel::findEditableImageByHash($hash);
+        if (!$image)
+        {
+            return;
+        }
+
+        $userId = TypeHelper::toInt($image['user_id'] ?? 0) ?? 0;
+        $imageHash = TypeHelper::toString($image['image_hash'] ?? '', allowEmpty: true) ?? '';
+        if ($userId < 1 || $imageHash === '')
+        {
+            return;
+        }
+
+        $contentRating = AgeGateHelper::normalizeContentRating($contentRating);
+        $contentRatingLabel = AgeGateHelper::getContentRatingLabel($contentRating);
+        $rejectReason = trim($rejectReason);
+
+        switch ($action)
+        {
+            case 'approved':
+                $title = 'Image Approved';
+                $message = 'Your image submission has been approved and is now available in the community gallery.';
+
+                if ($contentRating !== 'standard')
+                {
+                    $message .= ' It is listed with the ' . $contentRatingLabel . ' content setting.';
+                }
+
+                NotificationModel::create($userId, 'image_approved', $title, $message, '/gallery/' . rawurlencode($imageHash));
+                break;
+
+            case 'rejected':
+                $title = 'Image Moderation Update';
+                $message = 'Your recent image submission could not be added to the community gallery at this time.';
+
+                if ($rejectReason !== '')
+                {
+                    $message .= ' Moderator note: ' . $rejectReason;
+                }
+
+                NotificationModel::create($userId, 'image_rejected', $title, $message, '');
+                break;
+        }
     }
 
     /**
@@ -952,6 +1025,28 @@ class ControlPanelController extends BaseController
         return $value;
     }
 
+
+    /**
+     * Normalize a rules category or rule title into a safe slug.
+     *
+     * @param string $value
+     * @return string
+     */
+    private static function normalizeRulesSlug(string $value): string
+    {
+        $value = strtolower(trim($value));
+        $value = preg_replace('/[^a-z0-9]+/', '-', $value) ?? '';
+        $value = trim($value, '-');
+
+        if (strlen($value) > 80)
+        {
+            $value = substr($value, 0, 80);
+            $value = trim($value, '-');
+        }
+
+        return $value;
+    }
+
     /**
      * Return known registry key definitions for the settings UI.
      *
@@ -1013,6 +1108,408 @@ class ControlPanelController extends BaseController
         }
 
         return $catalog;
+    }
+
+    /**
+     * Render the rules management overview.
+     *
+     * @return void
+     */
+    public static function rules(): void
+    {
+        self::requirePanelPermission('manage_rules');
+
+        $template = self::initTemplate();
+        $notice = Security::sanitizeString($_GET['notice'] ?? '');
+        $noticeMessage = '';
+        $noticeType = 'success';
+
+        if ($notice === 'saved')
+        {
+            $noticeMessage = 'Rule saved and rules update published.';
+        }
+        else if ($notice === 'schema_missing')
+        {
+            $noticeMessage = 'The rules database tables are not available yet. Please apply the latest rules migration first.';
+            $noticeType = 'error';
+        }
+
+        $ruleRows = [];
+        foreach (RulesModel::listRulesForAdmin() as $row)
+        {
+            $body = TypeHelper::toString($row['body'] ?? '', allowEmpty: true) ?? '';
+            $preview = trim(preg_replace('/\s+/', ' ', $body) ?? '');
+            if (strlen($preview) > 140)
+            {
+                $preview = substr($preview, 0, 137) . '...';
+            }
+
+            $ruleRows[] = [
+                TypeHelper::toInt($row['id'] ?? 0) ?? 0,
+                TypeHelper::toString($row['title'] ?? ''),
+                TypeHelper::toString($row['slug'] ?? ''),
+                TypeHelper::toString($row['category_title'] ?? ''),
+                $preview,
+                TypeHelper::toInt($row['sort_order'] ?? 0) ?? 0,
+                !empty($row['is_active']) ? 1 : 0,
+                DateHelper::format(TypeHelper::toString($row['updated_at'] ?? '', allowEmpty: true)),
+            ];
+        }
+
+        self::assignPanelPage(
+            $template,
+            'rules',
+            'Rules Management',
+            'Organize rules by category, edit rule entries, and publish updates that notify members when the rules change.',
+            'rules'
+        );
+
+        $template->assign('control_panel_notice', $noticeMessage);
+        $template->assign('control_panel_notice_type', $noticeType);
+        $template->assign('rule_rows', $ruleRows);
+        $template->render('panel/control_panel_rules.html');
+    }
+
+    /**
+     * Render the rules categories management overview.
+     *
+     * @return void
+     */
+    public static function rulesCategories(): void
+    {
+        self::requirePanelPermission('manage_rules');
+
+        $template = self::initTemplate();
+        $notice = Security::sanitizeString($_GET['notice'] ?? '');
+        $noticeMessage = '';
+        $noticeType = 'success';
+
+        if ($notice === 'saved')
+        {
+            $noticeMessage = 'Rules category saved and rules update published.';
+        }
+        else if ($notice === 'schema_missing')
+        {
+            $noticeMessage = 'The rules database tables are not available yet. Please apply the latest rules migration first.';
+            $noticeType = 'error';
+        }
+
+        $categoryRows = [];
+        foreach (RulesModel::listCategorySummaries() as $row)
+        {
+            $categoryRows[] = [
+                TypeHelper::toInt($row['id'] ?? 0) ?? 0,
+                TypeHelper::toString($row['title'] ?? ''),
+                TypeHelper::toString($row['slug'] ?? ''),
+                TypeHelper::toString($row['description'] ?? ''),
+                TypeHelper::toInt($row['sort_order'] ?? 0) ?? 0,
+                !empty($row['is_active']) ? 1 : 0,
+                TypeHelper::toInt($row['rule_count'] ?? 0) ?? 0,
+            ];
+        }
+
+        self::assignPanelPage(
+            $template,
+            'rule-categories',
+            'Rules Categories',
+            'Maintain the top-level rules sections that group related rule entries for the public rules page.',
+            'rules'
+        );
+
+        $template->assign('control_panel_notice', $noticeMessage);
+        $template->assign('control_panel_notice_type', $noticeType);
+        $template->assign('rule_category_rows', $categoryRows);
+        $template->render('panel/control_panel_rule_categories.html');
+    }
+
+    /**
+     * Create one rules category.
+     *
+     * @return void
+     */
+    public static function ruleCategoryCreate(): void
+    {
+        self::requirePanelPermission('manage_rules');
+        self::handleRuleCategoryEditor(0);
+    }
+
+    /**
+     * Edit one rules category.
+     *
+     * @param int $id
+     * @return void
+     */
+    public static function ruleCategoryEdit(int $id): void
+    {
+        self::requirePanelPermission('manage_rules');
+        self::handleRuleCategoryEditor($id);
+    }
+
+    /**
+     * Create one rule entry.
+     *
+     * @return void
+     */
+    public static function ruleCreate(): void
+    {
+        self::requirePanelPermission('manage_rules');
+        self::handleRuleEditor(0);
+    }
+
+    /**
+     * Edit one rule entry.
+     *
+     * @param int $id
+     * @return void
+     */
+    public static function ruleEdit(int $id): void
+    {
+        self::requirePanelPermission('manage_rules');
+        self::handleRuleEditor($id);
+    }
+
+    /**
+     * Shared rules category create/edit handler.
+     *
+     * @param int $id
+     * @return void
+     */
+    private static function handleRuleCategoryEditor(int $id): void
+    {
+        if (!RulesModel::isSchemaAvailable())
+        {
+            header('Location: /panel/rules/categories?notice=schema_missing');
+            exit();
+        }
+
+        $category = $id > 0 ? RulesModel::findCategoryById($id) : null;
+        if ($id > 0 && !$category)
+        {
+            self::renderErrorPage(404, 'Category Not Found', 'That rules category could not be found.');
+            return;
+        }
+
+        $errors = [];
+        $currentUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        $isCreate = $category === null;
+        $form = [
+            'title' => TypeHelper::toString($category['title'] ?? '', allowEmpty: true) ?? '',
+            'slug' => TypeHelper::toString($category['slug'] ?? '', allowEmpty: true) ?? '',
+            'description' => TypeHelper::toString($category['description'] ?? '', allowEmpty: true) ?? '',
+            'sort_order' => TypeHelper::toInt($category['sort_order'] ?? 0) ?? 0,
+            'is_active' => !empty($category['is_active']) ? 1 : 0,
+        ];
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST')
+        {
+            $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
+            if (!Security::verifyCsrfToken($csrf))
+            {
+                $errors[] = 'Invalid request.';
+            }
+
+            $form['title'] = trim(Security::sanitizeString($_POST['title'] ?? ''));
+            $submittedSlug = trim(Security::sanitizeString($_POST['slug'] ?? ''));
+            $form['slug'] = $submittedSlug !== '' ? self::normalizeRulesSlug($submittedSlug) : self::normalizeRulesSlug($form['title']);
+            $form['description'] = trim(Security::sanitizeString($_POST['description'] ?? ''));
+            $form['sort_order'] = TypeHelper::toInt($_POST['sort_order'] ?? 0) ?? 0;
+            $form['is_active'] = !empty($_POST['is_active']) ? 1 : 0;
+
+            if ($form['title'] === '')
+            {
+                $errors[] = 'Category title is required.';
+            }
+
+            if ($form['slug'] === '')
+            {
+                $errors[] = 'Category slug is required.';
+            }
+
+            $existing = RulesModel::findCategoryBySlug($form['slug']);
+            if ($existing && (TypeHelper::toInt($existing['id'] ?? 0) ?? 0) !== $id)
+            {
+                $errors[] = 'Another rules category already uses that slug.';
+            }
+
+            if (empty($errors))
+            {
+                RulesModel::saveCategory([
+                    'id' => $id,
+                    'title' => $form['title'],
+                    'slug' => $form['slug'],
+                    'description' => $form['description'],
+                    'sort_order' => $form['sort_order'],
+                    'is_active' => $form['is_active'],
+                    'created_by' => $currentUserId,
+                    'updated_by' => $currentUserId,
+                ]);
+
+                RulesModel::publishCurrentRulesRelease(
+                    $currentUserId,
+                    ($isCreate ? 'Rules category created: ' : 'Rules category updated: ') . $form['title'],
+                    self::getRulesEnforcementWindowDays()
+                );
+
+                header('Location: /panel/rules/categories?notice=saved');
+                exit();
+            }
+        }
+
+        $template = self::initTemplate();
+        self::assignPanelPage(
+            $template,
+            'rule-categories',
+            $isCreate ? 'Create Rules Category' : 'Edit Rules Category',
+            'Manage one rules category and publish the latest rules structure to members after saving.',
+            'rules'
+        );
+
+        $template->assign('rule_category_form_mode', $isCreate ? 'create' : 'edit');
+        $template->assign('rule_category_id', $id);
+        $template->assign('rule_category_title', $form['title']);
+        $template->assign('rule_category_slug', $form['slug']);
+        $template->assign('rule_category_description', $form['description']);
+        $template->assign('rule_category_sort_order', $form['sort_order']);
+        $template->assign('rule_category_is_active', $form['is_active']);
+        $template->assign('error', $errors);
+        $template->assign('csrf_token', Security::generateCsrfToken());
+        $template->render('panel/control_panel_rule_category_edit.html');
+    }
+
+    /**
+     * Shared rule create/edit handler.
+     *
+     * @param int $id
+     * @return void
+     */
+    private static function handleRuleEditor(int $id): void
+    {
+        if (!RulesModel::isSchemaAvailable())
+        {
+            header('Location: /panel/rules?notice=schema_missing');
+            exit();
+        }
+
+        $rule = $id > 0 ? RulesModel::findRuleById($id) : null;
+        if ($id > 0 && !$rule)
+        {
+            self::renderErrorPage(404, 'Rule Not Found', 'That rule entry could not be found.');
+            return;
+        }
+
+        $errors = [];
+        $currentUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        $isCreate = $rule === null;
+        $form = [
+            'category_id' => TypeHelper::toInt($rule['category_id'] ?? 0) ?? 0,
+            'title' => TypeHelper::toString($rule['title'] ?? '', allowEmpty: true) ?? '',
+            'slug' => TypeHelper::toString($rule['slug'] ?? '', allowEmpty: true) ?? '',
+            'body' => TypeHelper::toString($rule['body'] ?? '', allowEmpty: true) ?? '',
+            'sort_order' => TypeHelper::toInt($rule['sort_order'] ?? 0) ?? 0,
+            'is_active' => !empty($rule['is_active']) ? 1 : 0,
+        ];
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST')
+        {
+            $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
+            if (!Security::verifyCsrfToken($csrf))
+            {
+                $errors[] = 'Invalid request.';
+            }
+
+            $form['category_id'] = TypeHelper::toInt($_POST['category_id'] ?? 0) ?? 0;
+            $form['title'] = trim(Security::sanitizeString($_POST['title'] ?? ''));
+            $submittedSlug = trim(Security::sanitizeString($_POST['slug'] ?? ''));
+            $form['slug'] = $submittedSlug !== '' ? self::normalizeRulesSlug($submittedSlug) : self::normalizeRulesSlug($form['title']);
+            $form['body'] = trim(Security::sanitizeString($_POST['body'] ?? ''));
+            $form['sort_order'] = TypeHelper::toInt($_POST['sort_order'] ?? 0) ?? 0;
+            $form['is_active'] = !empty($_POST['is_active']) ? 1 : 0;
+
+            if ($form['category_id'] < 1)
+            {
+                $errors[] = 'Choose a rules category.';
+            }
+            else if (!RulesModel::findCategoryById($form['category_id']))
+            {
+                $errors[] = 'The selected rules category does not exist.';
+            }
+
+            if ($form['title'] === '')
+            {
+                $errors[] = 'Rule title is required.';
+            }
+
+            if ($form['slug'] === '')
+            {
+                $errors[] = 'Rule slug is required.';
+            }
+
+            if ($form['body'] === '')
+            {
+                $errors[] = 'Rule body is required.';
+            }
+
+            $existing = RulesModel::findRuleBySlug($form['slug']);
+            if ($existing && (TypeHelper::toInt($existing['id'] ?? 0) ?? 0) !== $id)
+            {
+                $errors[] = 'Another rule already uses that slug.';
+            }
+
+            if (empty($errors))
+            {
+                RulesModel::saveRule([
+                    'id' => $id,
+                    'category_id' => $form['category_id'],
+                    'title' => $form['title'],
+                    'slug' => $form['slug'],
+                    'body' => $form['body'],
+                    'sort_order' => $form['sort_order'],
+                    'is_active' => $form['is_active'],
+                    'created_by' => $currentUserId,
+                    'updated_by' => $currentUserId,
+                ]);
+
+                RulesModel::publishCurrentRulesRelease(
+                    $currentUserId,
+                    ($isCreate ? 'Rule created: ' : 'Rule updated: ') . $form['title'],
+                    self::getRulesEnforcementWindowDays()
+                );
+
+                header('Location: /panel/rules?notice=saved');
+                exit();
+            }
+        }
+
+        $categoryOptions = [];
+        foreach (RulesModel::listCategoryOptions() as $row)
+        {
+            $categoryOptions[] = [
+                TypeHelper::toInt($row['id'] ?? 0) ?? 0,
+                TypeHelper::toString($row['title'] ?? ''),
+            ];
+        }
+
+        $template = self::initTemplate();
+        self::assignPanelPage(
+            $template,
+            'rules',
+            $isCreate ? 'Create Rule Entry' : 'Edit Rule Entry',
+            'Update one rule entry, place it inside a rules category, and publish the latest rules update after saving.',
+            'rules'
+        );
+
+        $template->assign('rule_form_mode', $isCreate ? 'create' : 'edit');
+        $template->assign('rule_id', $id);
+        $template->assign('rule_category_id', $form['category_id']);
+        $template->assign('rule_title', $form['title']);
+        $template->assign('rule_slug', $form['slug']);
+        $template->assign('rule_body', $form['body']);
+        $template->assign('rule_sort_order', $form['sort_order']);
+        $template->assign('rule_is_active', $form['is_active']);
+        $template->assign('rule_category_options', $categoryOptions);
+        $template->assign('error', $errors);
+        $template->assign('csrf_token', Security::generateCsrfToken());
+        $template->render('panel/control_panel_rule_edit.html');
     }
 
     /**
@@ -3358,6 +3855,7 @@ class ControlPanelController extends BaseController
         exit();
     }
 
+
     /**
      * Render the pending image moderation queue.
      * @param mixed $page
@@ -3524,12 +4022,20 @@ class ControlPanelController extends BaseController
             {
                 case 'approve':
                     ImageModel::updatePendingModerationDraft($hash, $description, $contentRating);
-                    ImageModel::approvePendingImage($hash, $moderatorUserId, $contentRating);
+                    $updatedRows = ImageModel::approvePendingImage($hash, $moderatorUserId, $contentRating);
+                    if ($updatedRows > 0)
+                    {
+                        self::createPendingImageNotification($hash, 'approved', $contentRating);
+                    }
                     header('Location: /panel/image-pending?notice=approved');
                     exit;
 
                 case 'reject':
-                    ImageModel::rejectPendingImage($hash, $moderatorUserId, $rejectReason);
+                    $updatedRows = ImageModel::rejectPendingImage($hash, $moderatorUserId, $rejectReason);
+                    if ($updatedRows > 0)
+                    {
+                        self::createPendingImageNotification($hash, 'rejected', 'standard', $rejectReason);
+                    }
                     header('Location: /panel/image-pending?notice=rejected');
                     exit;
 
@@ -3656,7 +4162,11 @@ class ControlPanelController extends BaseController
         // - Record the moderator user id for audit/history tracking
         // - Store moderation timestamps for UI / reporting
         $appUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        ImageModel::approvePendingImage($hash, $appUserId, 'standard');
+        $updatedRows = ImageModel::approvePendingImage($hash, $appUserId, 'standard');
+        if ($updatedRows > 0)
+        {
+            self::createPendingImageNotification($hash, 'approved', 'standard');
+        }
 
         // Redirect back to the pending list after action completes
         header('Location: /panel/image-pending?notice=approved');
@@ -3729,7 +4239,11 @@ class ControlPanelController extends BaseController
         // - Record the moderator user id for audit/history tracking
         // - Store moderation timestamps for UI / reporting
         $appUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        ImageModel::approvePendingImage($hash, $appUserId, 'sensitive');
+        $updatedRows = ImageModel::approvePendingImage($hash, $appUserId, 'sensitive');
+        if ($updatedRows > 0)
+        {
+            self::createPendingImageNotification($hash, 'approved', 'sensitive');
+        }
 
         // Redirect back to the pending list after action completes
         header('Location: /panel/image-pending?notice=approved');
@@ -3788,7 +4302,11 @@ class ControlPanelController extends BaseController
         }
 
         $appUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        ImageModel::approvePendingImage($hash, $appUserId, 'explicit');
+        $updatedRows = ImageModel::approvePendingImage($hash, $appUserId, 'explicit');
+        if ($updatedRows > 0)
+        {
+            self::createPendingImageNotification($hash, 'approved', 'explicit');
+        }
 
         header('Location: /panel/image-pending?notice=approved');
         exit;
@@ -3860,7 +4378,11 @@ class ControlPanelController extends BaseController
         // - Record the moderator user id for audit/history tracking
         // - Store moderation timestamps for UI / reporting
         $rejUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        ImageModel::rejectPendingImage($hash, $rejUserId);
+        $updatedRows = ImageModel::rejectPendingImage($hash, $rejUserId);
+        if ($updatedRows > 0)
+        {
+            self::createPendingImageNotification($hash, 'rejected');
+        }
 
         // Redirect back to the pending list after action completes
         header('Location: /panel/image-pending?notice=rejected');

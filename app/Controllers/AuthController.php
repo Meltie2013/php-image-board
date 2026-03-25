@@ -168,6 +168,13 @@ class AuthController extends BaseController
                             // Record device fingerprint for this account
                             DevicePolicy::recordForUser($userIdToCheck);
 
+                            $rulesState = RulesHelper::getCurrentStateForUser($userIdToCheck);
+                            if (!empty($rulesState['is_blocking']))
+                            {
+                                header('Location: /community/rules');
+                                exit();
+                            }
+
                             // Redirect user to their intended destination
                             header('Location: ' . RedirectHelper::takeLoginDestination($submittedReturnTo, '/profile/overview'));
                             exit();

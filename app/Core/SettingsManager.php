@@ -58,7 +58,8 @@ class SettingsManager
         'gallery',
         'profile',
         'debugging',
-        'upload'
+        'upload',
+        'rules'
     ];
 
     /**

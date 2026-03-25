@@ -1,0 +1,18 @@
+    {if $is_logged_in && $site_user_has_pending_rules_notice}
+    <div class="rules-site-notice {if $site_user_rules_notice_blocking}rules-site-notice-blocking{else}rules-site-notice-warning{/if}">
+        <div class="rules-site-notice-copy">
+            <strong>{$site_user_rules_notice_title}</strong>
+            <span>{$site_user_rules_notice_message}</span>
+            {if $site_user_rules_notice_deadline}
+            <small>Deadline: {$site_user_rules_notice_deadline}</small>
+            {/if}
+        </div>
+
+        <div class="rules-site-notice-actions">
+            <a href="{$site_user_rules_notice_link}" class="gallery-hero-btn gallery-hero-btn-button">
+                <i class="fa-solid fa-book-open"></i>
+                Review Rules
+            </a>
+        </div>
+    </div>
+    {/if}

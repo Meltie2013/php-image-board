@@ -76,6 +76,7 @@ $config = SettingsManager::getConfig();
 
 // Ensure built-in groups + RBAC defaults exist
 GroupModel::ensureBuiltInData();
+RulesModel::ensureBuiltInData();
 
 // Session
 SessionManager::init($config['session']);
@@ -156,6 +157,12 @@ if (str_starts_with($requestPath, '/user/register') && !ControlServer::serviceEn
     exit;
 }
 
+$userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+if ($userId > 0)
+{
+    RulesHelper::enforceBlockingRedirectIfNeeded($userId);
+}
+
 // -------------------------
 // Initialize Router
 // -------------------------
@@ -204,6 +211,11 @@ $router->add([
     ['/user/register', [AuthController::class, 'register'], ['GET', 'POST']],
     ['/user/logout', [AuthController::class, 'logout'], ['POST']],
 
+    ['/community/rules', [RulesController::class, 'index'], ['GET']],
+    ['/community/rules/accept', [RulesController::class, 'accept'], ['POST']],
+    ['/community/notifications', [NotificationsController::class, 'index'], ['GET']],
+    ['/community/notifications/page/(\d+)', function ($page) { NotificationsController::index((int) $page); }, ['GET']],
+
     ['/profile/overview', [ProfileController::class, 'index'], ['GET']],
     ['/profile/avatar', [ProfileController::class, 'avatar'], ['GET', 'POST']],
     ['/profile/email', [ProfileController::class, 'email'], ['GET', 'POST']],
@@ -217,6 +229,12 @@ $router->add([
     ['/panel/users/edit/(\d+)', function ($id) { ControlPanelController::userEdit((int)$id); }, ['GET', 'POST']],
     ['/panel/groups', [ControlPanelController::class, 'groups'], ['GET', 'POST']],
     ['/panel/groups/edit/(\d+)', function ($id) { ControlPanelController::groupEdit((int)$id); }, ['GET', 'POST']],
+    ['/panel/rules', [ControlPanelController::class, 'rules'], ['GET']],
+    ['/panel/rules/create', [ControlPanelController::class, 'ruleCreate'], ['GET', 'POST']],
+    ['/panel/rules/edit/(\d+)', function ($id) { ControlPanelController::ruleEdit((int)$id); }, ['GET', 'POST']],
+    ['/panel/rules/categories', [ControlPanelController::class, 'rulesCategories'], ['GET']],
+    ['/panel/rules/categories/create', [ControlPanelController::class, 'ruleCategoryCreate'], ['GET', 'POST']],
+    ['/panel/rules/categories/edit/(\d+)', function ($id) { ControlPanelController::ruleCategoryEdit((int)$id); }, ['GET', 'POST']],
     ['/panel/settings', [ControlPanelController::class, 'settings'], ['GET']],
     ['/panel/settings/categories', [ControlPanelController::class, 'settingsCategories'], ['GET']],
     ['/panel/settings/save', [ControlPanelController::class, 'settingsSave'], ['POST']],

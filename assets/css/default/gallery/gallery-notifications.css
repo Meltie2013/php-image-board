@@ -1,0 +1,117 @@
+/*
+ * gallery.css
+ * Section: COMMUNITY NOTIFICATIONS
+ */
+
+/* =========================================================
+   COMMUNITY NOTIFICATIONS
+========================================================= */
+.notifications-list {
+    display: grid;
+    gap: 10px;
+}
+
+.notification-card {
+    display: grid;
+    gap: 8px;
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 16px;
+}
+
+.notification-card-unread {
+    border-color: rgba(224, 184, 77, 0.28);
+}
+
+.notification-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 0;
+}
+
+.notification-card-meta {
+    display: grid;
+    gap: 3px;
+}
+
+.notification-card-header h2 {
+    margin: 0;
+    font-size: 1.35rem;
+    line-height: 1.2;
+}
+
+.notification-card-header p,
+.notification-card-copy p {
+    margin: 0;
+}
+
+.notification-card-header p {
+    font-size: 1.05rem;
+}
+
+.notification-card-header p,
+.notification-card-copy {
+    color: var(--color-text-muted);
+}
+
+.notification-card-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 0 9px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--color-text-main);
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.notification-card-copy {
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(0, 0, 0, 0.14);
+    line-height: 1.45;
+    font-size: 1.12rem;
+}
+
+.notification-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 0;
+}
+
+.notification-card .gallery-hero-btn {
+    min-width: 0;
+    min-height: 32px;
+    padding: 0 12px;
+    justify-content: center;
+    font-size: 1.05rem;
+}
+
+.notification-card .gallery-hero-btn i {
+    font-size: 0.95em;
+}
+
+.notifications-pagination {
+    margin-top: 14px;
+}
+
+@media (max-width: 900px)
+{
+    .notification-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .notification-card {
+        padding: 12px;
+    }
+}

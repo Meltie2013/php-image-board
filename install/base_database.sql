@@ -265,6 +265,7 @@ INSERT INTO `app_group_permissions` (`group_id`, `permission_token`, `permission
     (1, 'manage_groups', 1),
     (1, 'manage_group_permissions', 1),
     (1, 'manage_settings', 1),
+    (1, 'manage_rules', 1),
     (1, 'view_security', 1),
     (1, 'manage_block_list', 1),
     (1, 'moderate_site', 1),
@@ -285,6 +286,7 @@ INSERT INTO `app_group_permissions` (`group_id`, `permission_token`, `permission
     (2, 'access_control_panel', 1),
     (2, 'manage_users', 1),
     (2, 'manage_settings', 1),
+    (2, 'manage_rules', 1),
     (2, 'view_security', 1),
     (2, 'manage_block_list', 1),
     (2, 'moderate_site', 1),
@@ -303,6 +305,7 @@ INSERT INTO `app_group_permissions` (`group_id`, `permission_token`, `permission
     (3, 'edit_own_image', 1),
     (3, 'edit_any_image', 1),
     (3, 'access_control_panel', 1),
+    (3, 'manage_rules', 0),
     (3, 'moderate_site', 1),
     (3, 'moderate_forums', 1),
     (3, 'moderate_gallery', 1),
@@ -316,6 +319,7 @@ INSERT INTO `app_group_permissions` (`group_id`, `permission_token`, `permission
     (4, 'favorite_images', 1),
     (4, 'edit_own_image', 1),
     (4, 'access_control_panel', 1),
+    (4, 'manage_rules', 0),
     (4, 'moderate_forums', 1),
     (5, 'view_gallery', 1),
     (5, 'upload_images', 1),
@@ -326,6 +330,7 @@ INSERT INTO `app_group_permissions` (`group_id`, `permission_token`, `permission
     (5, 'edit_own_image', 1),
     (5, 'edit_any_image', 1),
     (5, 'access_control_panel', 1),
+    (5, 'manage_rules', 0),
     (5, 'moderate_gallery', 1),
     (5, 'moderate_image_queue', 1),
     (5, 'manage_image_reports', 1),
@@ -337,6 +342,7 @@ INSERT INTO `app_group_permissions` (`group_id`, `permission_token`, `permission
     (6, 'vote_images', 1),
     (6, 'favorite_images', 1),
     (6, 'edit_own_image', 1),
+    (6, 'manage_rules', 0),
     (7, 'view_gallery', 0),
     (7, 'upload_images', 0),
     (7, 'comment_images', 0),
@@ -350,6 +356,7 @@ INSERT INTO `app_group_permissions` (`group_id`, `permission_token`, `permission
     (7, 'manage_groups', 0),
     (7, 'manage_group_permissions', 0),
     (7, 'manage_settings', 0),
+    (7, 'manage_rules', 0),
     (7, 'view_security', 0),
     (7, 'manage_block_list', 0),
     (7, 'moderate_site', 0),
@@ -429,7 +436,8 @@ INSERT INTO `app_settings_categories` (`id`, `slug`, `title`, `description`, `ic
     (3, 'profile', 'User Profile', 'Profile presentation defaults, avatar sizing, and age-gate requirements.', 'fa-id-card', 30, 1),
     (4, 'site', 'Site', 'Board identity, naming, and build metadata exposed across the public interface.', 'fa-window-maximize', 40, 1),
     (5, 'template', 'Template', 'Template engine behavior, cache handling, and approved helper functions.', 'fa-code', 50, 1),
-    (6, 'upload', 'Upload', 'Controls how new upload hashes are generated and how upload behavior is presented.', 'fa-upload', 60, 1);
+    (6, 'upload', 'Upload', 'Controls how new upload hashes are generated and how upload behavior is presented.', 'fa-upload', 60, 1),
+    (7, 'rules', 'Rules', 'Controls community rules behavior, release notices, and the enforcement window for updated rules.', 'fa-book-open', 80, 1);
 
 -- --------------------------------------------------------
 
@@ -470,7 +478,8 @@ INSERT INTO `app_settings_data` (`id`, `category_id`, `key`, `title`, `descripti
     (11, 4, 'site.version', 'Build Version', 'Version or build string shown in the interface for release tracking and support reference.', '0.2.3', 'string', 'text', 20, 1),
     (12, 5, 'template.allowed_functions', 'Allowed Template Functions', 'JSON array of trusted PHP function names that templates may call. This list should stay minimal and only contain simple, safe helpers.', '["strtoupper","strtolower","ucfirst","lcfirst"]', 'json', 'json', 10, 1),
     (13, 5, 'template.disable_cache', 'Disable Template Cache', 'Turns off compiled template caching so visual and template updates appear immediately during development.', '1', 'bool', 'bool', 20, 1),
-    (14, 6, 'upload.hash_type', 'Generated Image Hash Format', 'Chooses the character format used when generating new image hashes for uploads.', 'mixed_lower', 'string', 'select', 10, 1);
+    (14, 6, 'upload.hash_type', 'Generated Image Hash Format', 'Chooses the character format used when generating new image hashes for uploads.', 'mixed_lower', 'string', 'select', 10, 1),
+    (15, 7, 'rules.enforcement_window_days', 'Rules Enforcement Window (Days)', 'Defines how many days existing active members have to accept an updated rules release before account interaction becomes blocked.', '14', 'int', 'number', 10, 1);
 
 -- --------------------------------------------------------
 
@@ -568,6 +577,101 @@ CREATE TABLE `app_user_devices` (
     `last_ip` varbinary(16) DEFAULT NULL,
     `user_agent_hash` char(64) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `app_rule_categories`
+--
+
+CREATE TABLE `app_rule_categories` (
+    `id` bigint(20) UNSIGNED NOT NULL,
+    `title` varchar(150) NOT NULL,
+    `slug` varchar(80) NOT NULL,
+    `description` varchar(255) DEFAULT NULL,
+    `sort_order` int(10) UNSIGNED NOT NULL DEFAULT 0,
+    `is_active` tinyint(1) NOT NULL DEFAULT 1,
+    `created_by` bigint(20) UNSIGNED DEFAULT NULL,
+    `updated_by` bigint(20) UNSIGNED DEFAULT NULL,
+    `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+    `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `app_rules`
+--
+
+CREATE TABLE `app_rules` (
+    `id` bigint(20) UNSIGNED NOT NULL,
+    `category_id` bigint(20) UNSIGNED NOT NULL,
+    `title` varchar(180) NOT NULL,
+    `slug` varchar(80) NOT NULL,
+    `body` text NOT NULL,
+    `sort_order` int(10) UNSIGNED NOT NULL DEFAULT 0,
+    `is_active` tinyint(1) NOT NULL DEFAULT 1,
+    `created_by` bigint(20) UNSIGNED DEFAULT NULL,
+    `updated_by` bigint(20) UNSIGNED DEFAULT NULL,
+    `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+    `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `app_rule_releases`
+--
+
+CREATE TABLE `app_rule_releases` (
+    `id` bigint(20) UNSIGNED NOT NULL,
+    `version_label` varchar(150) NOT NULL,
+    `summary` varchar(255) DEFAULT NULL,
+    `grace_days` int(10) UNSIGNED NOT NULL DEFAULT 14,
+    `published_by` bigint(20) UNSIGNED DEFAULT NULL,
+    `published_at` datetime NOT NULL DEFAULT current_timestamp(),
+    `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+    `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `app_rule_acceptances`
+--
+
+CREATE TABLE `app_rule_acceptances` (
+    `id` bigint(20) UNSIGNED NOT NULL,
+    `release_id` bigint(20) UNSIGNED NOT NULL,
+    `user_id` bigint(20) UNSIGNED NOT NULL,
+    `status` enum('pending','accepted') NOT NULL DEFAULT 'pending',
+    `enforce_after` datetime DEFAULT NULL,
+    `accepted_at` datetime DEFAULT NULL,
+    `notified_at` datetime DEFAULT NULL,
+    `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+    `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `app_notifications`
+--
+
+CREATE TABLE `app_notifications` (
+    `id` bigint(20) UNSIGNED NOT NULL,
+    `user_id` bigint(20) UNSIGNED NOT NULL,
+    `notification_type` varchar(80) NOT NULL DEFAULT 'general',
+    `title` varchar(180) NOT NULL,
+    `message` text NOT NULL,
+    `link_url` varchar(255) DEFAULT NULL,
+    `is_read` tinyint(1) NOT NULL DEFAULT 0,
+    `read_at` datetime DEFAULT NULL,
+    `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+    `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
 
 --
 -- Indexes for dumped tables
@@ -758,6 +862,85 @@ ALTER TABLE `app_device_overrides`
 -- AUTO_INCREMENT for dumped tables
 --
 
+
+--
+-- Indexes for table `app_rule_categories`
+--
+ALTER TABLE `app_rule_categories`
+    ADD PRIMARY KEY (`id`),
+    ADD UNIQUE KEY `uniq_app_rule_categories_slug` (`slug`),
+    ADD KEY `idx_app_rule_categories_sort` (`sort_order`),
+    ADD KEY `idx_app_rule_categories_created_by` (`created_by`),
+    ADD KEY `idx_app_rule_categories_updated_by` (`updated_by`);
+
+--
+-- Indexes for table `app_rules`
+--
+ALTER TABLE `app_rules`
+    ADD PRIMARY KEY (`id`),
+    ADD UNIQUE KEY `uniq_app_rules_slug` (`slug`),
+    ADD KEY `idx_app_rules_category` (`category_id`),
+    ADD KEY `idx_app_rules_sort` (`sort_order`),
+    ADD KEY `idx_app_rules_created_by` (`created_by`),
+    ADD KEY `idx_app_rules_updated_by` (`updated_by`);
+
+--
+-- Indexes for table `app_rule_releases`
+--
+ALTER TABLE `app_rule_releases`
+    ADD PRIMARY KEY (`id`),
+    ADD KEY `idx_app_rule_releases_published_at` (`published_at`),
+    ADD KEY `idx_app_rule_releases_published_by` (`published_by`);
+
+--
+-- Indexes for table `app_rule_acceptances`
+--
+ALTER TABLE `app_rule_acceptances`
+    ADD PRIMARY KEY (`id`),
+    ADD UNIQUE KEY `uniq_app_rule_acceptances_release_user` (`release_id`,`user_id`),
+    ADD KEY `idx_app_rule_acceptances_user` (`user_id`),
+    ADD KEY `idx_app_rule_acceptances_status` (`status`),
+    ADD KEY `idx_app_rule_acceptances_enforce_after` (`enforce_after`);
+
+--
+-- Indexes for table `app_notifications`
+--
+ALTER TABLE `app_notifications`
+    ADD PRIMARY KEY (`id`),
+    ADD KEY `idx_app_notifications_user` (`user_id`),
+    ADD KEY `idx_app_notifications_unread` (`user_id`,`is_read`),
+    ADD KEY `idx_app_notifications_type` (`notification_type`);
+
+--
+-- AUTO_INCREMENT for table `app_rule_categories`
+--
+ALTER TABLE `app_rule_categories`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `app_rules`
+--
+ALTER TABLE `app_rules`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `app_rule_releases`
+--
+ALTER TABLE `app_rule_releases`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `app_rule_acceptances`
+--
+ALTER TABLE `app_rule_acceptances`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `app_notifications`
+--
+ALTER TABLE `app_notifications`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
 --
 -- AUTO_INCREMENT for table `app_block_list`
 --
@@ -804,7 +987,7 @@ ALTER TABLE `app_image_votes`
 -- AUTO_INCREMENT for table `app_groups`
 --
 ALTER TABLE `app_groups`
-  MODIFY `id` tinyint(3) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id` tinyint(3) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `app_group_permissions`
@@ -834,13 +1017,13 @@ ALTER TABLE `app_device_overrides`
 -- AUTO_INCREMENT for table `app_settings_categories`
 --
 ALTER TABLE `app_settings_categories`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT
 
 --
 -- AUTO_INCREMENT for table `app_settings_data`
 --
 ALTER TABLE `app_settings_data`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `app_updates`
@@ -861,8 +1044,46 @@ ALTER TABLE `app_user_devices`
   MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
+
+
+--
 -- Constraints for dumped tables
 --
+
+
+--
+-- Constraints for table `app_rule_categories`
+--
+ALTER TABLE `app_rule_categories`
+    ADD CONSTRAINT `fk_rule_categories_created_by` FOREIGN KEY (`created_by`) REFERENCES `app_users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+    ADD CONSTRAINT `fk_rule_categories_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `app_users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
+-- Constraints for table `app_rules`
+--
+ALTER TABLE `app_rules`
+    ADD CONSTRAINT `fk_rules_category` FOREIGN KEY (`category_id`) REFERENCES `app_rule_categories` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    ADD CONSTRAINT `fk_rules_created_by` FOREIGN KEY (`created_by`) REFERENCES `app_users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+    ADD CONSTRAINT `fk_rules_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `app_users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
+-- Constraints for table `app_rule_releases`
+--
+ALTER TABLE `app_rule_releases`
+    ADD CONSTRAINT `fk_rule_releases_published_by` FOREIGN KEY (`published_by`) REFERENCES `app_users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
+-- Constraints for table `app_rule_acceptances`
+--
+ALTER TABLE `app_rule_acceptances`
+    ADD CONSTRAINT `fk_rule_acceptances_release` FOREIGN KEY (`release_id`) REFERENCES `app_rule_releases` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    ADD CONSTRAINT `fk_rule_acceptances_user` FOREIGN KEY (`user_id`) REFERENCES `app_users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Constraints for table `app_notifications`
+--
+ALTER TABLE `app_notifications`
+    ADD CONSTRAINT `fk_notifications_user` FOREIGN KEY (`user_id`) REFERENCES `app_users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `app_settings_data`

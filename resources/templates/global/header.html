@@ -15,12 +15,16 @@
         <div class="logo">{$site_name}</div>
 
         <nav>
+            <a class="nav-icon" href="/community/rules" aria-label="Community Rules" data-tooltip="Community Rules">
+                <i class="fa-solid fa-book"></i>
+            </a>
+
             <a class="nav-icon" href="#" aria-label="Community Forum" data-tooltip="Community Forum">
-                <i class="fa-regular fa-comments"></i>
+                <i class="fa-solid fa-comments"></i>
             </a>
 
             <a class="nav-icon" href="/gallery" aria-label="Image Gallery" data-tooltip="Image Gallery">
-                <i class="fa-regular fa-image"></i>
+                <i class="fa-solid fa-image"></i>
             </a>
 
             {if $is_logged_in}
@@ -30,12 +34,15 @@
             </a>
             {/if}
 
-            <a class="nav-icon" href="#" aria-label="Notifications" data-tooltip="Notifications">
-                <i class="fa-regular fa-bell"></i>
+            <a class="nav-icon nav-icon-with-badge" href="/community/notifications" aria-label="Notifications" data-tooltip="Notifications">
+                <i class="fa-solid fa-bell"></i>
+                {if $site_user_notification_unread_count > 0}
+                <span class="nav-notification-badge">{$site_user_notification_unread_count}</span>
+                {/if}
             </a>
 
             <a class="nav-icon" href="/profile/overview" aria-label="My Profile" data-tooltip="My Profile">
-                <i class="fa-regular fa-user"></i>
+                <i class="fa-solid fa-user"></i>
             </a>
 
             <form action="/user/logout" method="post" style="display: inline; margin: 0; padding: 0;">

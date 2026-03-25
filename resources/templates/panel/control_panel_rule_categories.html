@@ -1,0 +1,83 @@
+{include file="global/header.html"}
+
+    <main class="admin-container">
+        {include file="global/rules_notice.html"}
+        <div class="admin-shell admin-layout">
+            <div class="admin-sidebar">
+                <div class="admin-sidebar-inner admin-menu">
+                    {include file="panel/control_panel_menu.html"}
+                </div>
+            </div>
+
+            <div class="admin-content admin-dashboard">
+                <div class="admin-page-header">
+                    <div>
+                        <div class="admin-kicker">Control Panel</div>
+                        <h2>{$control_panel_page_title}</h2>
+                        <p>{$control_panel_page_description}</p>
+                    </div>
+
+                    <div class="admin-page-actions">
+                        <a href="/panel/rules" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-book"></i> Rule Entries</a>
+                        <a href="/panel/rules/categories/create" class="admin-btn admin-btn-primary"><i class="fa-solid fa-plus"></i> New Category</a>
+                    </div>
+                </div>
+
+                {if !empty($control_panel_notice)}
+                    <div class="admin-notice admin-notice-{$control_panel_notice_type}">
+                        <i class="fa-solid {if $control_panel_notice_type == 'success'}fa-circle-check{else}fa-circle-exclamation{/if}"></i>
+                        <p>{$control_panel_notice}</p>
+                    </div>
+                {/if}
+
+                <section class="admin-panel">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <h3>Rules Categories</h3>
+                            <p>These sections control the top-level grouping on the public rules page.</p>
+                        </div>
+                    </div>
+
+                    <div class="admin-panel-body">
+                        <div class="pending-images-wrapper">
+                            <table class="pending-images-table">
+                                <thead>
+                                    <tr>
+                                        <th>Category</th>
+                                        <th>Description</th>
+                                        <th>Rules</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {if !empty($rule_category_rows)}
+                                    {foreach $rule_category_rows as list($category_id, $category_title, $category_slug, $category_description, $category_sort_order, $category_is_active, $category_rule_count)}
+                                    <tr>
+                                        <td>
+                                            <strong>{$category_title}</strong><br>
+                                            <small>{$category_slug}</small>
+                                        </td>
+                                        <td class="is-wrap">{$category_description}</td>
+                                        <td>{$category_rule_count}</td>
+                                        <td>{if $category_is_active}Active{else}Disabled{/if}</td>
+                                        <td>
+                                            <a href="/panel/rules/categories/edit/{$category_id}" class="admin-btn admin-btn-secondary">Edit</a>
+                                        </td>
+                                    </tr>
+                                    {/foreach}
+                                    {else}
+                                    <tr>
+                                        <td colspan="5">No rules categories have been created yet.</td>
+                                    </tr>
+                                    {/if}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+{include file="global/footer.html"}

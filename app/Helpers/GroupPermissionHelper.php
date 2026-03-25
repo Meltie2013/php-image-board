@@ -99,6 +99,11 @@ class GroupPermissionHelper
                 'description' => 'Allows editing site and application settings through the ACP.',
                 'input_type' => 'select',
             ],
+            'manage_rules' => [
+                'label' => 'Can Manage Rules',
+                'description' => 'Allows editing rules categories, rule entries, and publishing rules updates.',
+                'input_type' => 'select',
+            ],
             'view_security' => [
                 'label' => 'Can View Security Logs',
                 'description' => 'Allows reviewing security logs and audit details.',
@@ -180,6 +185,7 @@ class GroupPermissionHelper
                     'access_control_panel',
                     'manage_users',
                     'manage_settings',
+                    'manage_rules',
                     'view_security',
                     'manage_block_list',
                     'moderate_site',
@@ -512,6 +518,7 @@ class GroupPermissionHelper
             'manage_groups' => 'Your account group cannot manage groups.',
             'manage_group_permissions' => 'Your account group cannot manage group permissions.',
             'manage_settings' => 'Your account group cannot manage site settings.',
+            'manage_rules' => 'Your account group cannot manage site rules.',
             'view_security' => 'Your account group cannot view security information.',
             'manage_block_list' => 'Your account group cannot manage the block list.',
             'moderate_site' => 'Your account group cannot access site moderation tools.',

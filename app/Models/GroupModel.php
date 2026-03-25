@@ -27,7 +27,7 @@ class GroupModel extends BaseModel
     /**
      * Increment this when the built-in group or permission seed changes.
      */
-    private const BUILT_IN_SEED_VERSION = '2026-03-22-rbac-v1';
+    private const BUILT_IN_SEED_VERSION = '2026-03-24-rbac-v2';
 
     /**
      * Per-request guard so bootstrap only verifies built-in data once.

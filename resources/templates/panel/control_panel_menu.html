@@ -44,6 +44,7 @@
                     </span>
                 </a>
 
+
                 {if $cp_is_admin}
                 <a href="/panel/groups" class="admin-menu-link {if $current_control_panel_nav == 'groups'}is-active{/if}">
                     <span class="admin-menu-link-icon"><i class="fa-solid fa-user-shield"></i></span>
@@ -110,6 +111,37 @@
                     <span class="admin-menu-link-text">
                         <span class="admin-menu-link-title">Category Settings</span>
                         <span class="admin-menu-link-desc">Edit category names, descriptions, icons, and custom settings groups.</span>
+                    </span>
+                </a>
+            </div>
+        </div>
+    </details>
+    {/if}
+
+    {if $cp_can_manage_rules}
+    <details class="admin-menu-dropdown" {if $current_control_panel_section == 'rules'}open{/if}>
+        <summary class="admin-menu-dropdown-toggle">
+            <span class="admin-menu-dropdown-copy">
+                <span class="admin-menu-group-title admin-menu-dropdown-title">Rules</span>
+                <span class="admin-menu-dropdown-desc">Community standards, release publishing, and user-acceptance workflows.</span>
+            </span>
+            <span class="admin-menu-dropdown-icon" aria-hidden="true"><i class="fa-solid fa-chevron-down"></i></span>
+        </summary>
+        <div class="admin-menu-group admin-menu-group-dropdown">
+            <div class="admin-menu-links admin-menu-dropdown-links">
+                <a href="/panel/rules" class="admin-menu-link {if $current_control_panel_nav == 'rules'}is-active{/if}">
+                    <span class="admin-menu-link-icon"><i class="fa-solid fa-book"></i></span>
+                    <span class="admin-menu-link-text">
+                        <span class="admin-menu-link-title">Rules</span>
+                        <span class="admin-menu-link-desc">Manage site rules, releases, and member acceptance updates.</span>
+                    </span>
+                </a>
+
+                <a href="/panel/rules/categories" class="admin-menu-link {if $current_control_panel_nav == 'rule-categories'}is-active{/if}">
+                    <span class="admin-menu-link-icon"><i class="fa-solid fa-folder-open"></i></span>
+                    <span class="admin-menu-link-text">
+                        <span class="admin-menu-link-title">Rules Categories</span>
+                        <span class="admin-menu-link-desc">Organize public rules into category sections for the rules page.</span>
                     </span>
                 </a>
             </div>

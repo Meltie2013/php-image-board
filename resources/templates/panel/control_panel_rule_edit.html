@@ -1,0 +1,97 @@
+{include file="global/header.html"}
+
+    <main class="admin-container">
+        {include file="global/rules_notice.html"}
+        <div class="admin-shell admin-layout">
+            <div class="admin-sidebar">
+                <div class="admin-sidebar-inner admin-menu">
+                    {include file="panel/control_panel_menu.html"}
+                </div>
+            </div>
+
+            <div class="admin-content admin-dashboard">
+                <div class="admin-page-header">
+                    <div>
+                        <div class="admin-kicker">Control Panel</div>
+                        <h2>{$control_panel_page_title}</h2>
+                        <p>{$control_panel_page_description}</p>
+                    </div>
+
+                    <div class="admin-page-actions">
+                        <a href="/panel/rules" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back to Rules</a>
+                    </div>
+                </div>
+
+                {if !empty($error)}
+                    <div class="error-box">
+                        {foreach $error as $e}
+                            <p>{$e}</p>
+                        {/foreach}
+                    </div>
+                {/if}
+
+                <section class="admin-panel">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <h3>{if $rule_form_mode == 'create'}New Rule Entry{else}Edit Rule Entry{/if}</h3>
+                            <p>Saving this rule publishes a fresh rules update so members can review the latest content.</p>
+                        </div>
+                    </div>
+
+                    <div class="admin-panel-body">
+                        <form method="POST" action="{if $rule_form_mode == 'create'}/panel/rules/create{else}/panel/rules/edit/{$rule_id}{/if}" class="admin-form">
+                            <input type="hidden" name="csrf_token" value="{$csrf_token}">
+
+                            <div class="admin-form-grid-two">
+                                <div class="admin-field">
+                                    <label>Rule Title</label>
+                                    <input type="text" name="title" value="{$rule_title}" required>
+                                </div>
+
+                                <div class="admin-field">
+                                    <label>Rule Slug</label>
+                                    <input type="text" name="slug" value="{$rule_slug}">
+                                </div>
+                            </div>
+
+                            <div class="admin-form-grid-two">
+                                <div class="admin-field">
+                                    <label>Category</label>
+                                    <select name="category_id" required>
+                                        <option value="">Choose Category</option>
+                                        {foreach $rule_category_options as list($category_id, $category_title)}
+                                        <option value="{$category_id}" {if $rule_category_id == $category_id}selected{/if}>{$category_title}</option>
+                                        {/foreach}
+                                    </select>
+                                </div>
+
+                                <div class="admin-field">
+                                    <label>Sort Order</label>
+                                    <input type="number" name="sort_order" value="{$rule_sort_order}" min="0">
+                                </div>
+                            </div>
+
+                            <div class="admin-field">
+                                <label>Rule Body</label>
+                                <textarea name="body" rows="10" required>{$rule_body}</textarea>
+                            </div>
+
+                            <div class="admin-field">
+                                <label style="display:flex; gap:10px; align-items:center;">
+                                    <input type="checkbox" name="is_active" value="1" {if $rule_is_active}checked{/if}>
+                                    Show this rule on the public rules page
+                                </label>
+                            </div>
+
+                            <div class="admin-form-footer">
+                                <button type="submit" class="admin-btn admin-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Rule</button>
+                                <a href="/panel/rules" class="admin-btn admin-btn-secondary">Back</a>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+{include file="global/footer.html"}
