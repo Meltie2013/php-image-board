@@ -50,6 +50,20 @@ class ProfileController extends BaseController
     }
 
     /**
+     * Resolve the current authenticated user id for profile flows.
+     *
+     * Forces login first, then hard-fails back to the login page when the
+     * session no longer contains a usable numeric user id. This prevents
+     * nullable session values from reaching strictly typed model methods.
+     *
+     * @return int
+     */
+    private static function requireAuthenticatedProfileUserId(): int
+    {
+        return self::requireAuthenticatedUserId(true);
+    }
+
+    /**
      * Assign shared profile shell data used by the sidebar and overview hero.
      *
      * @param TemplateEngine $template Active template engine instance.
@@ -169,12 +183,17 @@ class ProfileController extends BaseController
      */
     public static function index(): void
     {
-        // Require login
-        RoleHelper::requireLogin();
-
         // Fetch current user data from database
-        $userId = TypeHelper::toInt(SessionManager::get('user_id'));
+        $userId = self::requireAuthenticatedProfileUserId();
         $user = UserModel::findProfileOverviewById($userId);
+        if (!$user)
+        {
+            SessionManager::destroy();
+            RedirectHelper::rememberLoginDestination();
+            header('Location: /user/login');
+            exit();
+        }
+
         $uploadedImages = [
             'count' => UserModel::countApprovedImagesByUserId($userId),
         ];
@@ -256,138 +275,165 @@ class ProfileController extends BaseController
     }
 
     /**
-     * Age gate and content access page.
+     * Handle one self-serve mature-content unlock request.
      *
-     * Provides:
-     * - A self-serve sensitive-content unlock for normal accounts
-     * - An optional DOB verification path for explicit-content access
-     * - A forced-review DOB flow when staff locks the account for review
-     *
+     * @param int $userId Authenticated user id.
+     * @param array $user Mutable user record used by the template.
+     * @param array $config Application configuration.
+     * @param string $status Current age-gate status.
+     * @param array<int, string> $errors Collected validation errors.
+     * @param string $success Success banner text.
      * @return void
      */
-    private static function handleAgeGateUpdate(): void
+    private static function handleSelfServeAgeGateUnlock(int $userId, array &$user, array $config, string $status, array &$errors, string &$success): void
     {
-        RoleHelper::requireLogin();
-
-        $errors = [];
-        $success = '';
-        $config = self::getConfig();
-
-        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        if ($userId < 1)
+        if (!AgeGateHelper::isEnabled($config))
         {
-            RedirectHelper::rememberLoginDestination();
-            header('Location: /user/login');
-            exit();
+            $errors[] = 'The board age gate is currently disabled by the site configuration.';
+            return;
         }
 
-        $user = UserModel::findProfileSettingsUserById($userId);
-        if (!$user)
+        if (!AgeGateHelper::isSelfServeEnabled($config))
         {
-            SessionManager::destroy();
-            RedirectHelper::rememberLoginDestination();
-            header('Location: /user/login');
-            exit();
+            $errors[] = 'Self-serve mature-content access is currently disabled on this board.';
+            return;
         }
 
-        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')
+        if (empty($_POST['mature_access_acknowledge']))
         {
-            $csrfToken = $_POST['csrf_token'] ?? '';
-            if (!Security::verifyCsrfToken($csrfToken))
-            {
+            $errors[] = 'Please confirm that you understand the board content access notice before continuing.';
+            return;
+        }
+
+        if (in_array($status, ['forced_review', 'restricted_minor'], true))
+        {
+            $errors[] = 'This account cannot use self-serve access while a staff restriction is active.';
+            return;
+        }
+
+        UserModel::markSelfServeAgeGate($userId);
+        $success = 'Sensitive-content access has been enabled for your account.';
+        $user = self::loadRequiredProfileSettingsUser($userId);
+    }
+
+    /**
+     * Validate one posted date of birth for the age-gate workflow.
+     *
+     * @param array $user Current user record.
+     * @param string $status Current age-gate status.
+     * @param array<int, string> $errors Collected validation errors.
+     * @return string|null Sanitized date of birth when valid.
+     */
+    private static function validateAgeGateDateOfBirth(array $user, string $status, array &$errors): ?string
+    {
+        $dob = Security::sanitizeDate(
+            $_POST['date_of_birth'] ?? '',
+            'Y-m-d',
+            '1900-01-01',
+            (new DateTimeImmutable('now'))->format('Y-m-d')
+        );
+
+        if (!$dob || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dob))
+        {
+            $errors[] = 'Invalid date format. Use YYYY-MM-DD.';
+        }
+
+        if (empty($_POST['mature_access_acknowledge']))
+        {
+            $errors[] = 'Please confirm that you understand the board content access notice before continuing.';
+        }
+
+        if ($status !== 'forced_review' && !empty($user['date_of_birth']))
+        {
+            $errors[] = 'Your date of birth is already on file. Contact staff if you need this record reviewed.';
+        }
+
+        return empty($errors) ? $dob : null;
+    }
+
+    /**
+     * Handle one date-of-birth verification request for the age gate.
+     *
+     * @param int $userId Authenticated user id.
+     * @param array $user Mutable user record used by the template.
+     * @param array $config Application configuration.
+     * @param string $status Current age-gate status.
+     * @param array<int, string> $errors Collected validation errors.
+     * @param string $success Success banner text.
+     * @return void
+     */
+    private static function handleAgeGateDobVerification(int $userId, array &$user, array $config, string $status, array &$errors, string &$success): void
+    {
+        $dob = self::validateAgeGateDateOfBirth($user, $status, $errors);
+        if ($dob === null)
+        {
+            return;
+        }
+
+        $isRestrictedMinor = !AgeGateHelper::isDateOfBirthOldEnough($dob, AgeGateHelper::getSensitiveYears($config));
+
+        if ($status === 'forced_review')
+        {
+            UserModel::updateDobForForcedReview($userId, $dob, $isRestrictedMinor);
+            $success = $isRestrictedMinor
+                ? 'This account does not meet the board minimum age requirement for mature content.'
+                : 'Your staff-requested age review has been completed.';
+        }
+        else
+        {
+            UserModel::updateDobForOptionalVerification($userId, $dob, $isRestrictedMinor);
+            $success = $isRestrictedMinor
+                ? 'This account does not meet the board minimum age requirement for mature content.'
+                : 'Date of birth verification has been saved for your account.';
+        }
+
+        $user = self::loadRequiredProfileSettingsUser($userId);
+        SessionManager::set('user_date_of_birth', $user['date_of_birth'] ?? null);
+    }
+
+    /**
+     * Process one posted age-gate action.
+     *
+     * @param int $userId Authenticated user id.
+     * @param array $user Mutable user record used by the template.
+     * @param array $config Application configuration.
+     * @param array<int, string> $errors Collected validation errors.
+     * @param string $success Success banner text.
+     * @return void
+     */
+    private static function processAgeGateActionSubmission(int $userId, array &$user, array $config, array &$errors, string &$success): void
+    {
+        $action = Security::sanitizeString($_POST['age_gate_action'] ?? '');
+        $status = AgeGateHelper::getUserAgeGateStatus($user);
+
+        switch ($action)
+        {
+            case 'self_serve_unlock':
+                self::handleSelfServeAgeGateUnlock($userId, $user, $config, $status, $errors, $success);
+                break;
+
+            case 'verify_date_of_birth':
+                self::handleAgeGateDobVerification($userId, $user, $config, $status, $errors, $success);
+                break;
+
+            default:
                 $errors[] = 'Invalid request.';
-            }
-            else
-            {
-                $action = Security::sanitizeString($_POST['age_gate_action'] ?? '');
-                $status = AgeGateHelper::getUserAgeGateStatus($user);
-
-                switch ($action)
-                {
-                    case 'self_serve_unlock':
-                        if (!AgeGateHelper::isEnabled($config))
-                        {
-                            $errors[] = 'The board age gate is currently disabled by the site configuration.';
-                        }
-                        else if (!AgeGateHelper::isSelfServeEnabled($config))
-                        {
-                            $errors[] = 'Self-serve mature-content access is currently disabled on this board.';
-                        }
-                        else if (!empty($_POST['mature_access_acknowledge']))
-                        {
-                            if (in_array($status, ['forced_review', 'restricted_minor'], true))
-                            {
-                                $errors[] = 'This account cannot use self-serve access while a staff restriction is active.';
-                            }
-                            else
-                            {
-                                UserModel::markSelfServeAgeGate($userId);
-                                $success = 'Sensitive-content access has been enabled for your account.';
-                                $user = UserModel::findProfileSettingsUserById($userId) ?: $user;
-                            }
-                        }
-                        else
-                        {
-                            $errors[] = 'Please confirm that you understand the board content access notice before continuing.';
-                        }
-                        break;
-
-                    case 'verify_date_of_birth':
-                        $dobInput = $_POST['date_of_birth'] ?? '';
-                        $dob = Security::sanitizeDate(
-                            $dobInput,
-                            'Y-m-d',
-                            '1900-01-01',
-                            (new DateTimeImmutable('now'))->format('Y-m-d')
-                        );
-
-                        if (!$dob || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dob))
-                        {
-                            $errors[] = 'Invalid date format. Use YYYY-MM-DD.';
-                        }
-
-                        if (empty($_POST['mature_access_acknowledge']))
-                        {
-                            $errors[] = 'Please confirm that you understand the board content access notice before continuing.';
-                        }
-
-                        if ($status !== 'forced_review' && !empty($user['date_of_birth']))
-                        {
-                            $errors[] = 'Your date of birth is already on file. Contact staff if you need this record reviewed.';
-                        }
-
-                        if (empty($errors))
-                        {
-                            $isRestrictedMinor = !AgeGateHelper::isDateOfBirthOldEnough($dob, AgeGateHelper::getSensitiveYears($config));
-
-                            if ($status === 'forced_review')
-                            {
-                                UserModel::updateDobForForcedReview($userId, $dob, $isRestrictedMinor);
-                                $success = $isRestrictedMinor
-                                    ? 'This account does not meet the board minimum age requirement for mature content.'
-                                    : 'Your staff-requested age review has been completed.';
-                            }
-                            else
-                            {
-                                UserModel::updateDobForOptionalVerification($userId, $dob, $isRestrictedMinor);
-                                $success = $isRestrictedMinor
-                                    ? 'This account does not meet the board minimum age requirement for mature content.'
-                                    : 'Date of birth verification has been saved for your account.';
-                            }
-
-                            $user = UserModel::findProfileSettingsUserById($userId) ?: $user;
-                            SessionManager::set('user_date_of_birth', $user['date_of_birth'] ?? null);
-                        }
-                        break;
-
-                    default:
-                        $errors[] = 'Invalid request.';
-                        break;
-                }
-            }
+                break;
         }
+    }
 
-        $template = self::initTemplate();
+    /**
+     * Assign the profile age-gate template state.
+     *
+     * @param TemplateEngine $template Active template engine instance.
+     * @param array $user Current user record.
+     * @param array $config Application configuration.
+     * @param array<int, string> $errors Validation errors.
+     * @param string $success Success banner text.
+     * @return void
+     */
+    private static function assignAgeGatePage(TemplateEngine $template, array $user, array $config, array $errors, string $success): void
+    {
         self::assignProfileChrome($template, $user ?: []);
         self::assignProfilePage(
             $template,
@@ -419,6 +465,41 @@ class ProfileController extends BaseController
         $template->assign('error', $errors);
         $template->assign('success', $success);
         $template->assign('user', $user);
+    }
+
+    /**
+     * Age gate and content access page.
+     *
+     * Provides:
+     * - A self-serve sensitive-content unlock for normal accounts
+     * - An optional DOB verification path for explicit-content access
+     * - A forced-review DOB flow when staff locks the account for review
+     *
+     * @return void
+     */
+    private static function handleAgeGateUpdate(): void
+    {
+        $errors = [];
+        $success = '';
+        $config = self::getConfig();
+        $userId = self::requireAuthenticatedProfileUserId();
+        $user = self::loadRequiredProfileSettingsUser($userId);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')
+        {
+            $csrfToken = $_POST['csrf_token'] ?? '';
+            if (!Security::verifyCsrfToken($csrfToken))
+            {
+                $errors[] = 'Invalid request.';
+            }
+            else
+            {
+                self::processAgeGateActionSubmission($userId, $user, $config, $errors, $success);
+            }
+        }
+
+        $template = self::initTemplate();
+        self::assignAgeGatePage($template, $user, $config, $errors, $success);
         $template->render('profile/profile_dob.html');
     }
 
@@ -435,325 +516,41 @@ class ProfileController extends BaseController
     }
 
     /**
-     * Private helper to handle single-field profile updates.
+     * Load the settings-focused profile record for the current account.
      *
-     * Handles updating avatar, email, date of birth, or password depending on $type.
-     * Includes form validation, file handling, resizing, and database updates.
+     * Profile settings pages depend on this record for avatar/email/password
+     * state. When the account can no longer be found, the session is treated as
+     * stale and the visitor is returned to login.
      *
-     * @param string $type The type of update (email, dob, avatar, change_password).
+     * @param int $userId Authenticated user id.
+     * @return array
+     */
+    private static function loadRequiredProfileSettingsUser(int $userId): array
+    {
+        $user = UserModel::findProfileSettingsUserById($userId);
+        if ($user)
+        {
+            return $user;
+        }
+
+        SessionManager::destroy();
+        RedirectHelper::rememberLoginDestination();
+        header('Location: /user/login');
+        exit();
+    }
+
+    /**
+     * Apply page metadata for one of the single-field profile editors.
+     *
+     * Keeping this in one method makes it easier to extend the account center
+     * without scattering template copy across the controller.
+     *
+     * @param TemplateEngine $template Active template engine instance.
+     * @param string $type Editor type (avatar, email, dob, change_password).
      * @return void
      */
-    private static function handleSingleUpdate(string $type): void
+    private static function assignSingleUpdatePage(TemplateEngine $template, string $type): void
     {
-        $errors = [];
-        $success = '';
-
-        $config = self::getConfig();
-
-        // Fetch user record
-        $userId = TypeHelper::toInt(SessionManager::get('user_id'));
-        if (!$userId)
-        {
-            $errors[] = "User not found.";
-        }
-
-        $user = UserModel::findProfileSettingsUserById($userId);
-
-        if (!$user)
-        {
-            SessionManager::destroy();
-            RedirectHelper::rememberLoginDestination();
-            header('Location: /user/login');
-            exit();
-        }
-
-        // Handle form submission
-        if ($_SERVER['REQUEST_METHOD'] === 'POST')
-        {
-            $csrfToken = $_POST['csrf_token'] ?? '';
-
-            // Verify CSRF token to prevent cross-site request forgery
-            if (!Security::verifyCsrfToken($csrfToken))
-            {
-                $errors[] = "Invalid request.";
-            }
-
-            switch ($type)
-            {
-                case 'email':
-                    // Validate and update email
-                    $newEmail = Security::sanitizeEmail($_POST['email'] ?? '');
-                    if (!$newEmail)
-                    {
-                        $errors[] = "Invalid email address.";
-                    }
-                    else
-                    {
-                        UserModel::updateEmail($userId, $newEmail);
-
-                        $success = "Email updated successfully.";
-                        $user['email'] = $newEmail;
-                    }
-                    break;
-
-                case 'dob':
-                    // Validate and update date of birth
-                    $dobInput = $_POST['date_of_birth'] ?? '';
-
-                    // YYYY-MM-DD, must be a real calendar date, and not in the future
-                    $dob = Security::sanitizeDate($dobInput, 'Y-m-d', '1900-01-01',
-                        (new DateTimeImmutable('now'))->format('Y-m-d')
-                    );
-
-                    if (!$dob || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dob))
-                    {
-                        $errors[] = "Invalid date format. Use YYYY-MM-DD.";
-                    }
-                    else
-                    {
-                        UserModel::updateDobAndVerify($userId, $dob);
-
-                        $success = "Date of birth updated successfully.";
-                        $user['date_of_birth'] = $dob;
-                        $user['age_verified_at'] = date('Y-m-d H:i:s');
-                    }
-                    break;
-
-                case 'avatar':
-                    // Handle avatar upload and validation
-                    if (isset($_FILES['avatar']))
-                    {
-                        $avatar = $_FILES['avatar'];
-                        if ($avatar['error'] === UPLOAD_ERR_OK)
-                        {
-                            $ext = strtolower(pathinfo($avatar['name'], PATHINFO_EXTENSION));
-                            $allowed = ['jpg','jpeg','png','gif'];
-                            $maxAvatarMb = (int)($config['profile']['avatar_max_upload_size_mb'] ?? 5);
-                            $maxAvatarBytes = $maxAvatarMb * 1024 * 1024;
-
-                            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-                            $mimeType = $finfo ? finfo_file($finfo, $avatar['tmp_name']) : '';
-                            if ($finfo)
-                            {
-                                finfo_close($finfo);
-                            }
-
-                            $allowedMimes = ['image/jpeg', 'image/png', 'image/gif'];
-                            if (!in_array($mimeType, $allowedMimes, true))
-                            {
-                                $errors[] = "Invalid file type. Only JPG, PNG, GIF allowed.";
-                            }
-
-                            if (!in_array($ext, $allowed, true))
-                            {
-                                $errors[] = "Invalid file type. Only JPG, PNG, GIF allowed.";
-                            }
-
-                            if (($avatar['size'] ?? 0) > $maxAvatarBytes)
-                            {
-                                $errors[] = "Avatar exceeds maximum allowed size of {$maxAvatarMb} MB.";
-                            }
-
-                            if (empty($errors) && !self::hasValidAvatarSignature($avatar['tmp_name'], $mimeType))
-                            {
-                                $errors[] = "Uploaded file signature does not match the detected image type.";
-                            }
-
-                            $size = null;
-                            if (empty($errors))
-                            {
-                                $size = @getimagesize($avatar['tmp_name']);
-                                if (!$size)
-                                {
-                                    $errors[] = "Uploaded file is not a valid image.";
-                                }
-                                else
-                                {
-                                    $avatarValidationError = self::validateAvatarImage($size, $config);
-                                    if ($avatarValidationError !== null)
-                                    {
-                                        $errors[] = $avatarValidationError;
-                                    }
-                                }
-                            }
-
-                            if (empty($errors) && is_array($size))
-                            {
-                                $avatar_size = $config['profile']['avatar_size'];
-                                $resized = false;
-
-                                // Resize if uploaded image is not the correct size
-                                if ($size[0] != $avatar_size)
-                                {
-                                    $resized = true;
-
-                                    // Create image resource based on extension
-                                    switch ($ext)
-                                    {
-                                        case 'jpg':
-                                        case 'jpeg':
-                                            $srcImg = @imagecreatefromjpeg($avatar['tmp_name']);
-                                            break;
-
-                                        case 'png':
-                                            $srcImg = @imagecreatefrompng($avatar['tmp_name']);
-                                            break;
-
-                                        case 'gif':
-                                            $srcImg = @imagecreatefromgif($avatar['tmp_name']);
-                                            break;
-
-                                        default:
-                                            $srcImg = false;
-                                            break;
-                                    }
-
-                                    if (!$srcImg)
-                                    {
-                                        $errors[] = "Failed to process uploaded image.";
-                                        break;
-                                    }
-
-                                    $dstImg = imagecreatetruecolor($avatar_size, $avatar_size);
-
-                                    // Preserve transparency for PNG and GIF
-                                    if ($ext === 'png' || $ext === 'gif')
-                                    {
-                                        imagecolortransparent($dstImg, imagecolorallocatealpha($dstImg, 0, 0, 0, 127));
-                                        imagealphablending($dstImg, false);
-                                        imagesavealpha($dstImg, true);
-                                    }
-
-                                    // Resample image to desired size
-                                    imagecopyresampled($dstImg, $srcImg, 0, 0, 0, 0, $avatar_size, $avatar_size, $size[0], $size[1]);
-
-                                    // Save temporary resized image
-                                    $tmpPath = sys_get_temp_dir() . '/' . uniqid('avatar_') . '.' . $ext;
-                                    switch ($ext)
-                                    {
-                                        case 'jpg':
-                                        case 'jpeg':
-                                            imagejpeg($dstImg, $tmpPath, 90);
-                                            break;
-
-                                        case 'png':
-                                            imagepng($dstImg, $tmpPath);
-                                            break;
-
-                                        case 'gif':
-                                            imagegif($dstImg, $tmpPath);
-                                            break;
-                                    }
-
-                                    // Free memory
-                                    imagedestroy($srcImg);
-                                    imagedestroy($dstImg);
-
-                                    // Replace tmp_name with resized file
-                                    $avatar['tmp_name'] = $tmpPath;
-                                }
-
-                                // Save avatar to permanent location
-                                $filename = uniqid('avatar_') . '.' . $ext;
-                                $dest = UPLOAD_PATH . '/avatars/' . $filename;
-                                if (!is_dir(UPLOAD_PATH . '/avatars/'))
-                                {
-                                    mkdir(UPLOAD_PATH . '/avatars/', 0750, true);
-                                }
-
-                                // Copy resized image or move original upload
-                                if ($resized)
-                                {
-                                    if (!copy($avatar['tmp_name'], $dest) || !@unlink($avatar['tmp_name']))
-                                    {
-                                        $errors[] = "Failed to upload avatar.";
-                                    }
-                                }
-                                else
-                                {
-                                    if (!move_uploaded_file($avatar['tmp_name'], $dest))
-                                    {
-                                        $errors[] = "Failed to upload avatar.";
-                                    }
-                                }
-
-                                if (empty($errors))
-                                {
-                                    // Remove old avatar if it exists
-                                    if (!empty($user['avatar_path'])
-                                        && strpos($user['avatar_path'], '/uploads/avatars/') === 0)
-                                    {
-                                        $oldAvatar = APP_ROOT . '/' . ltrim($user['avatar_path'], '/');
-                                        if (file_exists($oldAvatar) && !@unlink($oldAvatar))
-                                        {
-                                            $errors[] = "Warning: failed to remove old avatar.";
-                                        }
-                                    }
-
-                                    if (empty($errors))
-                                    {
-                                        // Update DB with new avatar path
-                                        UserModel::updateAvatarPath($userId, '/uploads/avatars/' . $filename);
-
-                                        $success = "Avatar updated successfully.";
-                                        $user['avatar_path'] = '/uploads/avatars/' . $filename;
-                                    }
-                                }
-                            }
-                        }
-                        else
-                        {
-                            $errors[] = "Error uploading avatar.";
-                        }
-                    }
-                    break;
-
-                case 'change_password':
-                    // Handle password change
-                    $currentPassword = $_POST['current_password'] ?? '';
-                    $newPassword = $_POST['new_password'] ?? '';
-                    $confirmPassword = $_POST['confirm_password'] ?? '';
-
-                    // Verify current password
-                    if (!$currentPassword || !Security::verifyPassword($currentPassword, $user['password_hash']))
-                    {
-                        $errors[] = "Current password is incorrect.";
-                    }
-
-                    // Validate new password
-                    if (!$newPassword || strlen($newPassword) < 8)
-                    {
-                        $errors[] = "New password must be at least 8 characters long.";
-                    }
-                    else if ($newPassword !== $confirmPassword)
-                    {
-                        $errors[] = "New password and confirmation do not match.";
-                    }
-
-                    if ($currentPassword === $newPassword)
-                    {
-                        $errors[] = "Your new password cannot be the same as your current one.";
-                    }
-
-                    // If all validations pass, update password
-                    if (empty($errors))
-                    {
-                        $hashedPassword = Security::hashPassword($newPassword);
-                        UserModel::updatePasswordHash($userId, $hashedPassword);
-
-                        $success = "Password updated successfully.";
-
-                        // Regenerate session after password change
-                        SessionManager::regenerate();
-                    }
-                    break;
-            }
-        }
-
-        // Initialize template engine
-        $template = self::initTemplate();
-        self::assignProfileChrome($template, $user ?: []);
-
         switch ($type)
         {
             case 'avatar':
@@ -797,8 +594,404 @@ class ProfileController extends BaseController
                 );
                 break;
         }
+    }
 
-        // Assign template variables
+    /**
+     * Update the account email address from the profile editor.
+     *
+     * @param int $userId Authenticated user id.
+     * @param array $user Mutable user record used by the template.
+     * @return array<string>
+     */
+    private static function handleEmailUpdate(int $userId, array &$user): array
+    {
+        $errors = [];
+        $newEmail = Security::sanitizeEmail($_POST['email'] ?? '');
+        if (!$newEmail)
+        {
+            $errors[] = 'Invalid email address.';
+            return $errors;
+        }
+
+        UserModel::updateEmail($userId, $newEmail);
+        $user['email'] = $newEmail;
+
+        return $errors;
+    }
+
+    /**
+     * Update the stored date of birth from the legacy single-field editor.
+     *
+     * The dedicated content-access workflow remains the preferred path, but
+     * this editor is still supported so existing routes and templates continue
+     * to work as expected.
+     *
+     * @param int $userId Authenticated user id.
+     * @param array $user Mutable user record used by the template.
+     * @return array<string>
+     */
+    private static function handleLegacyDobUpdate(int $userId, array &$user): array
+    {
+        $errors = [];
+        $dobInput = $_POST['date_of_birth'] ?? '';
+        $dob = Security::sanitizeDate(
+            $dobInput,
+            'Y-m-d',
+            '1900-01-01',
+            (new DateTimeImmutable('now'))->format('Y-m-d')
+        );
+
+        if (!$dob || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dob))
+        {
+            $errors[] = 'Invalid date format. Use YYYY-MM-DD.';
+            return $errors;
+        }
+
+        UserModel::updateDobAndVerify($userId, $dob);
+        $user['date_of_birth'] = $dob;
+        $user['age_verified_at'] = date('Y-m-d H:i:s');
+
+        return $errors;
+    }
+
+    /**
+     * Update the account password after verifying the current credential.
+     *
+     * @param int $userId Authenticated user id.
+     * @param array $user Current user record including password hash.
+     * @return array<string>
+     */
+    private static function handlePasswordUpdate(int $userId, array $user): array
+    {
+        $errors = [];
+        $currentPassword = $_POST['current_password'] ?? '';
+        $newPassword = $_POST['new_password'] ?? '';
+        $confirmPassword = $_POST['confirm_password'] ?? '';
+
+        if (!$currentPassword || !Security::verifyPassword($currentPassword, $user['password_hash']))
+        {
+            $errors[] = 'Current password is incorrect.';
+        }
+
+        if (!$newPassword || strlen($newPassword) < 8)
+        {
+            $errors[] = 'New password must be at least 8 characters long.';
+        }
+        else if ($newPassword !== $confirmPassword)
+        {
+            $errors[] = 'New password and confirmation do not match.';
+        }
+
+        if ($currentPassword === $newPassword)
+        {
+            $errors[] = 'Your new password cannot be the same as your current one.';
+        }
+
+        if (!empty($errors))
+        {
+            return $errors;
+        }
+
+        $hashedPassword = Security::hashPassword($newPassword);
+        UserModel::updatePasswordHash($userId, $hashedPassword);
+        SessionManager::regenerate();
+
+        return $errors;
+    }
+
+    /**
+     * Resize one uploaded avatar image to the configured square dimensions.
+     *
+     * @param string $tmpPath Temporary source file path.
+     * @param string $ext Avatar extension used to select image handlers.
+     * @param int $targetSize Required avatar width/height.
+     * @param array $sourceSize Original image dimensions from getimagesize().
+     * @return string|null Temporary resized file path or null on failure.
+     */
+    private static function resizeAvatarToConfiguredSquare(string $tmpPath, string $ext, int $targetSize, array $sourceSize): ?string
+    {
+        switch ($ext)
+        {
+            case 'jpg':
+            case 'jpeg':
+                $srcImg = @imagecreatefromjpeg($tmpPath);
+                break;
+
+            case 'png':
+                $srcImg = @imagecreatefrompng($tmpPath);
+                break;
+
+            case 'gif':
+                $srcImg = @imagecreatefromgif($tmpPath);
+                break;
+
+            default:
+                $srcImg = false;
+                break;
+        }
+
+        if (!$srcImg)
+        {
+            return null;
+        }
+
+        $dstImg = imagecreatetruecolor($targetSize, $targetSize);
+
+        if ($ext === 'png' || $ext === 'gif')
+        {
+            imagecolortransparent($dstImg, imagecolorallocatealpha($dstImg, 0, 0, 0, 127));
+            imagealphablending($dstImg, false);
+            imagesavealpha($dstImg, true);
+        }
+
+        imagecopyresampled(
+            $dstImg,
+            $srcImg,
+            0,
+            0,
+            0,
+            0,
+            $targetSize,
+            $targetSize,
+            (int)($sourceSize[0] ?? 0),
+            (int)($sourceSize[1] ?? 0)
+        );
+
+        $resizedPath = sys_get_temp_dir() . '/' . uniqid('avatar_') . '.' . $ext;
+        $saved = match ($ext)
+        {
+            'jpg', 'jpeg' => imagejpeg($dstImg, $resizedPath, 90),
+            'png' => imagepng($dstImg, $resizedPath),
+            'gif' => imagegif($dstImg, $resizedPath),
+            default => false,
+        };
+
+        imagedestroy($srcImg);
+        imagedestroy($dstImg);
+
+        return $saved ? $resizedPath : null;
+    }
+
+    /**
+     * Persist a validated avatar file into the permanent avatar directory.
+     *
+     * @param array $avatar Uploaded avatar payload.
+     * @param string $ext Sanitized avatar extension.
+     * @param bool $wasResized Whether tmp_name points to a generated temporary file.
+     * @return string|null Stored public avatar path or null on failure.
+     */
+    private static function storeAvatarFile(array $avatar, string $ext, bool $wasResized): ?string
+    {
+        $filename = uniqid('avatar_') . '.' . $ext;
+        $avatarDirectory = UPLOAD_PATH . '/avatars/';
+        $dest = $avatarDirectory . $filename;
+
+        if (!is_dir($avatarDirectory) && !mkdir($avatarDirectory, 0750, true) && !is_dir($avatarDirectory))
+        {
+            return null;
+        }
+
+        if ($wasResized)
+        {
+            if (!copy($avatar['tmp_name'], $dest) || !@unlink($avatar['tmp_name']))
+            {
+                return null;
+            }
+        }
+        else if (!move_uploaded_file($avatar['tmp_name'], $dest))
+        {
+            return null;
+        }
+
+        return '/uploads/avatars/' . $filename;
+    }
+
+    /**
+     * Remove the previous stored avatar when it belongs to this application.
+     *
+     * @param string|null $avatarPath Existing avatar path from the user record.
+     * @return string|null Error message when cleanup fails.
+     */
+    private static function removePreviousAvatar(?string $avatarPath): ?string
+    {
+        if (empty($avatarPath) || strpos($avatarPath, '/uploads/avatars/') !== 0)
+        {
+            return null;
+        }
+
+        $oldAvatar = APP_ROOT . '/' . ltrim($avatarPath, '/');
+        if (file_exists($oldAvatar) && !@unlink($oldAvatar))
+        {
+            return 'Warning: failed to remove old avatar.';
+        }
+
+        return null;
+    }
+
+    /**
+     * Validate, optionally resize, and persist one new profile avatar.
+     *
+     * This helper keeps avatar file-processing concerns grouped in one place so
+     * the main profile update action can stay focused on routing and template
+     * rendering.
+     *
+     * @param int $userId Authenticated user id.
+     * @param array $user Mutable user record used by the template.
+     * @param array $config Application configuration.
+     * @return array{0: array<string>, 1: string}
+     */
+    private static function handleAvatarUpdate(int $userId, array &$user, array $config): array
+    {
+        $errors = [];
+        if (!isset($_FILES['avatar']))
+        {
+            return [$errors, ''];
+        }
+
+        $avatar = $_FILES['avatar'];
+        if (($avatar['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK)
+        {
+            return [['Error uploading avatar.'], ''];
+        }
+
+        $ext = strtolower(pathinfo($avatar['name'] ?? '', PATHINFO_EXTENSION));
+        $allowed = ['jpg', 'jpeg', 'png', 'gif'];
+        $maxAvatarMb = (int)($config['profile']['avatar_max_upload_size_mb'] ?? 5);
+        $maxAvatarBytes = $maxAvatarMb * 1024 * 1024;
+
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo ? finfo_file($finfo, $avatar['tmp_name']) : '';
+        if ($finfo)
+        {
+            finfo_close($finfo);
+        }
+
+        $allowedMimes = ['image/jpeg', 'image/png', 'image/gif'];
+        if (!in_array($mimeType, $allowedMimes, true) || !in_array($ext, $allowed, true))
+        {
+            $errors[] = 'Invalid file type. Only JPG, PNG, GIF allowed.';
+        }
+
+        if (($avatar['size'] ?? 0) > $maxAvatarBytes)
+        {
+            $errors[] = "Avatar exceeds maximum allowed size of {$maxAvatarMb} MB.";
+        }
+
+        if (empty($errors) && !self::hasValidAvatarSignature($avatar['tmp_name'], $mimeType))
+        {
+            $errors[] = 'Uploaded file signature does not match the detected image type.';
+        }
+
+        $size = null;
+        if (empty($errors))
+        {
+            $size = @getimagesize($avatar['tmp_name']);
+            if (!$size)
+            {
+                $errors[] = 'Uploaded file is not a valid image.';
+            }
+            else
+            {
+                $avatarValidationError = self::validateAvatarImage($size, $config);
+                if ($avatarValidationError !== null)
+                {
+                    $errors[] = $avatarValidationError;
+                }
+            }
+        }
+
+        if (!empty($errors) || !is_array($size))
+        {
+            return [$errors, ''];
+        }
+
+        $avatarSize = (int)($config['profile']['avatar_size'] ?? 150);
+        $wasResized = false;
+        if ((int)($size[0] ?? 0) !== $avatarSize)
+        {
+            $resizedPath = self::resizeAvatarToConfiguredSquare($avatar['tmp_name'], $ext, $avatarSize, $size);
+            if ($resizedPath === null)
+            {
+                return [['Failed to process uploaded image.'], ''];
+            }
+
+            $avatar['tmp_name'] = $resizedPath;
+            $wasResized = true;
+        }
+
+        $storedAvatarPath = self::storeAvatarFile($avatar, $ext, $wasResized);
+        if ($storedAvatarPath === null)
+        {
+            return [['Failed to upload avatar.'], ''];
+        }
+
+        $cleanupError = self::removePreviousAvatar($user['avatar_path'] ?? null);
+        if ($cleanupError !== null)
+        {
+            return [[$cleanupError], ''];
+        }
+
+        UserModel::updateAvatarPath($userId, $storedAvatarPath);
+        $user['avatar_path'] = $storedAvatarPath;
+
+        return [$errors, 'Avatar updated successfully.'];
+    }
+
+    /**
+     * Private helper to handle single-field profile updates.
+     *
+     * Handles updating avatar, email, date of birth, or password depending on
+     * $type while keeping each update path grouped into smaller helper methods.
+     *
+     * @param string $type The type of update (email, dob, avatar, change_password).
+     * @return void
+     */
+    private static function handleSingleUpdate(string $type): void
+    {
+        $errors = [];
+        $success = '';
+        $config = self::getConfig();
+
+        $userId = self::requireAuthenticatedProfileUserId();
+        $user = self::loadRequiredProfileSettingsUser($userId);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')
+        {
+            $csrfToken = $_POST['csrf_token'] ?? '';
+            if (!Security::verifyCsrfToken($csrfToken))
+            {
+                $errors[] = 'Invalid request.';
+            }
+            else
+            {
+                switch ($type)
+                {
+                    case 'email':
+                        $errors = self::handleEmailUpdate($userId, $user);
+                        $success = empty($errors) ? 'Email updated successfully.' : '';
+                        break;
+
+                    case 'dob':
+                        $errors = self::handleLegacyDobUpdate($userId, $user);
+                        $success = empty($errors) ? 'Date of birth updated successfully.' : '';
+                        break;
+
+                    case 'avatar':
+                        [$errors, $success] = self::handleAvatarUpdate($userId, $user, $config);
+                        break;
+
+                    case 'change_password':
+                        $errors = self::handlePasswordUpdate($userId, $user);
+                        $success = empty($errors) ? 'Password updated successfully.' : '';
+                        break;
+                }
+            }
+        }
+
+        $template = self::initTemplate();
+        self::assignProfileChrome($template, $user ?: []);
+        self::assignSingleUpdatePage($template, $type);
+
         $template->assign('avatar_size', $config['profile']['avatar_size']);
         $template->assign('email', $user['email']);
         $template->assign('avatar_path', $user['avatar_path']);
@@ -807,8 +1000,6 @@ class ProfileController extends BaseController
         $template->assign('user', $user);
         $template->assign('error', $errors);
         $template->assign('success', $success);
-
-        // Render update template based on update type
         $template->render("profile/profile_{$type}.html");
     }
 }

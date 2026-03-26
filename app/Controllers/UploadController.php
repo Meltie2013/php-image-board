@@ -221,6 +221,288 @@ class UploadController extends BaseController
         ]);
     }
 
+
+    /**
+     * Detect the real MIME type of one uploaded image payload.
+     *
+     * The detection order is intentionally layered so uploads remain resilient
+     * across different server environments while still preferring server-side
+     * inspection over browser-reported metadata.
+     *
+     * @param array $file Uploaded file payload from $_FILES.
+     * @return array{mime_type: string, image_info: mixed}
+     */
+    private static function detectUploadedImagePayload(array $file): array
+    {
+        $mimeType = '';
+        $tmpPath = $file['tmp_name'] ?? '';
+
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        if ($finfo)
+        {
+            $mimeType = finfo_file($finfo, $tmpPath) ?: '';
+            finfo_close($finfo);
+        }
+
+        $imgInfo = @getimagesize($tmpPath);
+        if (($mimeType === '' || $mimeType === 'application/octet-stream') && !empty($imgInfo['mime']))
+        {
+            $mimeType = $imgInfo['mime'];
+        }
+
+        if ($mimeType === '' || $mimeType === 'application/octet-stream')
+        {
+            $mimeType = @mime_content_type($tmpPath) ?: ($file['type'] ?? 'unknown');
+        }
+
+        return [
+            'mime_type' => $mimeType,
+            'image_info' => $imgInfo,
+        ];
+    }
+
+    /**
+     * Validate the uploaded file and normalize the derived image metadata.
+     *
+     * Returns both user-safe errors and more detailed audit messages so upload
+     * logs remain useful during abuse reviews and troubleshooting.
+     *
+     * @param array $file Uploaded file payload from $_FILES.
+     * @param array $config Application configuration.
+     * @return array{
+     *     errors: array<string>,
+     *     errors_detailed: array<string>,
+     *     mime_type: string,
+     *     safe_ext: string,
+     *     image_info: mixed
+     * }
+     */
+    private static function validateUploadFile(array $file, array $config): array
+    {
+        $errors = [];
+        $errorsDetailed = [];
+
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK)
+        {
+            $uploadErrors = [
+                UPLOAD_ERR_INI_SIZE   => 'The uploaded file exceeds the server upload_max_filesize limit.',
+                UPLOAD_ERR_FORM_SIZE  => 'The uploaded file exceeds the form MAX_FILE_SIZE limit.',
+                UPLOAD_ERR_PARTIAL    => 'The uploaded file was only partially uploaded.',
+                UPLOAD_ERR_NO_FILE    => 'No file was uploaded.',
+                UPLOAD_ERR_NO_TMP_DIR => 'Missing a temporary folder on the server.',
+                UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk.',
+                UPLOAD_ERR_EXTENSION  => 'A PHP extension stopped the file upload.',
+            ];
+
+            $uploadErrorsUser = [
+                UPLOAD_ERR_INI_SIZE   => 'This file is too large. Please choose a smaller image.',
+                UPLOAD_ERR_FORM_SIZE  => 'This file is too large. Please choose a smaller image.',
+                UPLOAD_ERR_PARTIAL    => 'The upload did not complete. Please try again.',
+                UPLOAD_ERR_NO_FILE    => 'No file was uploaded. Please choose an image.',
+                UPLOAD_ERR_NO_TMP_DIR => 'Upload is temporarily unavailable. Please try again later.',
+                UPLOAD_ERR_CANT_WRITE => 'Upload is temporarily unavailable. Please try again later.',
+                UPLOAD_ERR_EXTENSION  => 'Upload is temporarily unavailable. Please try again later.',
+            ];
+
+            $errors[] = $uploadErrorsUser[$file['error']] ?? 'Upload failed. Try again later!';
+            $errorsDetailed[] = $uploadErrors[$file['error']] ?? 'Unknown upload error.';
+
+            return [
+                'errors' => $errors,
+                'errors_detailed' => $errorsDetailed,
+                'mime_type' => '',
+                'safe_ext' => '',
+                'image_info' => null,
+            ];
+        }
+
+        $maxSizeMb = (int)($config['gallery']['upload_max_image_size'] ?? 0);
+        $maxSizeBytes = $maxSizeMb * 1024 * 1024;
+        if (($file['size'] ?? 0) > $maxSizeBytes)
+        {
+            $errors[] = "File exceeds maximum allowed size of {$maxSizeMb} mb.";
+        }
+
+        if (!StorageHelper::canStoreFile((int)($file['size'] ?? 0)))
+        {
+            $errors[] = 'Upload failed. Not enough storage available.';
+        }
+
+        $detection = self::detectUploadedImagePayload($file);
+        $mimeType = $detection['mime_type'];
+        $imgInfo = $detection['image_info'];
+
+        $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        $mimeToExt = [
+            'image/jpeg' => 'jpg',
+            'image/png'  => 'png',
+            'image/gif'  => 'gif',
+            'image/webp' => 'webp',
+        ];
+
+        if (!in_array($mimeType, $allowedTypes, true))
+        {
+            $errors[] = 'Invalid file type.';
+        }
+
+        $ext = strtolower(pathinfo($file['name'] ?? '', PATHINFO_EXTENSION));
+        if (in_array($ext, self::$blockedExtensions, true))
+        {
+            $errors[] = "File extension .{$ext} is not allowed.";
+        }
+
+        $safeExt = $mimeToExt[$mimeType] ?? $ext;
+        if (!in_array($safeExt, array_values($mimeToExt), true))
+        {
+            $errors[] = "File extension .{$safeExt} is not allowed.";
+        }
+
+        if (empty($errors) && !self::hasValidImageSignature($file['tmp_name'], $mimeType))
+        {
+            $errors[] = 'The file is not a valid image.';
+        }
+
+        if (empty($errors))
+        {
+            if (!$imgInfo)
+            {
+                $errors[] = 'The file is not a valid image.';
+            }
+            else
+            {
+                $dimensionError = self::validateUploadedImageDimensions($imgInfo, $config);
+                if ($dimensionError !== null)
+                {
+                    $errors[] = $dimensionError;
+                }
+            }
+        }
+
+        return [
+            'errors' => $errors,
+            'errors_detailed' => !empty($errorsDetailed) ? $errorsDetailed : $errors,
+            'mime_type' => $mimeType,
+            'safe_ext' => $safeExt,
+            'image_info' => $imgInfo,
+        ];
+    }
+
+    /**
+     * Move a validated upload into temporary storage and generate its final
+     * resized board image file.
+     *
+     * @param array $file Uploaded file payload from $_FILES.
+     * @param string $safeExt Normalized extension derived from validated MIME.
+     * @return array{errors: array<string>, original_path: string, final_path: string}
+     */
+    private static function storeValidatedUpload(array $file, string $safeExt): array
+    {
+        $errors = [];
+        $basename = 'img_' . bin2hex(random_bytes(16));
+        $originalPath = 'images/original/' . $basename . '.' . $safeExt;
+        $tmpPath = self::$uploadDir . 'tmp_' . $basename . '.' . $safeExt;
+        $finalPath = self::$uploadDir . str_replace('images/', '', $originalPath);
+
+        if (!is_dir(self::$uploadDir) || !is_writable(self::$uploadDir))
+        {
+            $errors[] = 'Upload failed. Upload directory is not writable.';
+        }
+
+        $finalDir = dirname($finalPath);
+        if (empty($errors) && !is_dir($finalDir))
+        {
+            if (!@mkdir($finalDir, 0755, true) && !is_dir($finalDir))
+            {
+                $errors[] = 'Upload failed. Could not create destination directory.';
+            }
+        }
+
+        if (empty($errors) && !move_uploaded_file($file['tmp_name'], $tmpPath))
+        {
+            $errors[] = 'Upload failed. Could not move uploaded file.';
+        }
+
+        if (empty($errors))
+        {
+            self::makeResized($tmpPath, $originalPath, 1280, 1280);
+            if (!file_exists($finalPath) || filesize($finalPath) <= 0)
+            {
+                $errors[] = 'Upload failed. Image processing failed.';
+            }
+        }
+
+        if (file_exists($tmpPath))
+        {
+            @unlink($tmpPath);
+        }
+
+        return [
+            'errors' => $errors,
+            'original_path' => $originalPath,
+            'final_path' => $finalPath,
+        ];
+    }
+
+    /**
+     * Persist hashes and metadata for one stored upload.
+     *
+     * Separating this from the HTTP/form workflow keeps the controller easier
+     * to reason about and makes the storage pipeline much easier to debug.
+     *
+     * @param int $userId Authenticated uploader id.
+     * @param string $description User-supplied image description.
+     * @param string $originalPath Stored public/original path.
+     * @param string $finalPath Stored filesystem path.
+     * @param array $config Application configuration.
+     * @return void
+     */
+    private static function persistStoredUpload(int $userId, string $description, string $originalPath, string $finalPath, array $config): void
+    {
+        $fileData = file_get_contents($finalPath);
+        $md5 = md5($fileData);
+        $sha1 = sha1($fileData);
+        $sha256 = hash('sha256', $fileData);
+        $sha512 = hash('sha512', $fileData);
+
+        [$width, $height] = getimagesize($finalPath);
+        $sizeBytes = filesize($finalPath);
+        $mimeType = mime_content_type($finalPath);
+        $imageHash = self::generateImageHashFormatted();
+
+        $phash = HashingHelper::pHash($finalPath, 32, 16);
+        $ahash = HashingHelper::aHash($finalPath);
+        $dhash = HashingHelper::dHash($finalPath);
+
+        $phashBlocks = [];
+        for ($i = 0; $i < 16; $i++)
+        {
+            $phashBlocks[$i] = substr($phash, $i * 4, 4);
+        }
+
+        ImageModel::createUploadedImage([
+            ':image_hash'   => $imageHash,
+            ':user_id'      => $userId,
+            ':description'  => $description,
+            ':status'       => $config['debugging']['allow_approve_uploads'] ? 'approved' : 'pending',
+            ':original_path'=> $originalPath,
+            ':mime_type'    => $mimeType,
+            ':width'        => $width,
+            ':height'       => $height,
+            ':size_bytes'   => $sizeBytes,
+            ':md5'          => $md5,
+            ':sha1'         => $sha1,
+            ':sha256'       => $sha256,
+            ':sha512'       => $sha512,
+        ], (bool)$config['debugging']['allow_approve_uploads']);
+
+        ImageModel::createImageHashes(array_merge([
+            ':image_hash' => $imageHash,
+            ':phash'      => $phash,
+            ':ahash'      => $ahash,
+            ':dhash'      => $dhash,
+        ], array_combine(array_map(fn($i) => ":phash_block_$i", range(0, 15)), $phashBlocks)));
+    }
+
     /**
      * Handle image upload request.
      * - Validates file type and size
@@ -245,282 +527,65 @@ class UploadController extends BaseController
     {
         $errors = [];
         $success = '';
-
         $config = self::getConfig();
 
-        // Require login
         RoleHelper::requireLogin();
         GroupPermissionHelper::requirePermission('upload_images');
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && RequestGuard::isInteractiveActionRateLimited('upload'))
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && RequestGuard::isInteractiveActionRateLimited('upload'))
         {
             http_response_code(429);
             $errors[] = 'Too many upload attempts. Please wait and try again.';
         }
 
-        // Initialize template engine with caching support
         $template = self::initTemplate();
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image']))
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_FILES['image']))
         {
             $file = $_FILES['image'];
             $description = Security::sanitizeString($_POST['description'] ?? '');
-            $userId = TypeHelper::toInt(SessionManager::get('user_id'));
+            $userId = self::requireAuthenticatedUserId();
 
-            // Verify CSRF token to prevent cross-site request forgery
             $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
             if (!Security::verifyCsrfToken($csrfToken))
             {
-                $errors[] = "Invalid request.";
-            }
-
-            if ($file['error'] !== UPLOAD_ERR_OK)
-            {
-                $uploadErrors = [
-                    UPLOAD_ERR_INI_SIZE   => 'The uploaded file exceeds the server upload_max_filesize limit.',
-                    UPLOAD_ERR_FORM_SIZE  => 'The uploaded file exceeds the form MAX_FILE_SIZE limit.',
-                    UPLOAD_ERR_PARTIAL    => 'The uploaded file was only partially uploaded.',
-                    UPLOAD_ERR_NO_FILE    => 'No file was uploaded.',
-                    UPLOAD_ERR_NO_TMP_DIR => 'Missing a temporary folder on the server.',
-                    UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk.',
-                    UPLOAD_ERR_EXTENSION  => 'A PHP extension stopped the file upload.'
-                ];
-
-                $uploadErrorsUser = [
-                    UPLOAD_ERR_INI_SIZE   => 'This file is too large. Please choose a smaller image.',
-                    UPLOAD_ERR_FORM_SIZE  => 'This file is too large. Please choose a smaller image.',
-                    UPLOAD_ERR_PARTIAL    => 'The upload did not complete. Please try again.',
-                    UPLOAD_ERR_NO_FILE    => 'No file was uploaded. Please choose an image.',
-                    UPLOAD_ERR_NO_TMP_DIR => 'Upload is temporarily unavailable. Please try again later.',
-                    UPLOAD_ERR_CANT_WRITE => 'Upload is temporarily unavailable. Please try again later.',
-                    UPLOAD_ERR_EXTENSION  => 'Upload is temporarily unavailable. Please try again later.'
-                ];
-
-                $errors[] = $uploadErrorsUser[$file['error']] ?? "Upload failed. Try again later!";
-
-                // Keep the detailed reason for the database log, without exposing it to the user
-                $errorsDetailed = [$uploadErrors[$file['error']] ?? 'Unknown upload error.'];
+                $errors[] = 'Invalid request.';
             }
             else
             {
-                // Maximum allowed image size for upload
-                $maxSizeMb = $config['gallery']['upload_max_image_size'];
-                $maxSizeBytes = $maxSizeMb * 1024 * 1024;
-
-                if ($file['size'] > $maxSizeBytes)
-                {
-                    $errors[] = "File exceeds maximum allowed size of {$maxSizeMb} mb.";
-                }
-
-                if (!StorageHelper::canStoreFile($file['size']))
-                {
-                    $errors[] = "Upload failed. Not enough storage available.";
-                }
-
-                $mimeType = false;
-
-                $finfo = finfo_open(FILEINFO_MIME_TYPE);
-                if ($finfo)
-                {
-                    $mimeType = finfo_file($finfo, $file['tmp_name']);
-                    finfo_close($finfo);
-                }
-
-                // Some modified/optimized images may be detected as octet-stream or fail finfo detection.
-                // Fall back to getimagesize() (image parser) which usually returns a reliable image MIME.
-                $imgInfo = @getimagesize($file['tmp_name']);
-
-                if (empty($mimeType) || $mimeType === 'application/octet-stream')
-                {
-                    if (!empty($imgInfo['mime']))
-                    {
-                        $mimeType = $imgInfo['mime'];
-                    }
-                }
-
-                // Last resort fallback (less strict), keeps behavior predictable if the server lacks proper magic DB.
-                if (empty($mimeType) || $mimeType === 'application/octet-stream')
-                {
-                    $mimeType = @mime_content_type($file['tmp_name']) ?: ($file['type'] ?? 'unknown');
-                }
-
-                $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-                $mimeToExt = [
-                    'image/jpeg' => 'jpg',
-                    'image/png'  => 'png',
-                    'image/gif'  => 'gif',
-                    'image/webp' => 'webp'
-                ];
-
-                if (!in_array($mimeType, $allowedTypes, true))
-                {
-                    $errors[] = "Invalid file type.";
-                }
-
-                // Block dangerous/exec extensions regardless of MIME (defense-in-depth)
-                $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-                if (in_array($ext, self::$blockedExtensions))
-                {
-                    $errors[] = "File extension .$ext is not allowed.";
-                }
-
-                // Prefer extension derived from detected MIME to avoid spoofed filenames
-                $safeExt = $mimeToExt[$mimeType] ?? $ext;
-
-                // Ensure the final extension is one of the allowed types
-                if (!in_array($safeExt, array_values($mimeToExt), true))
-                {
-                    $errors[] = "File extension .$safeExt is not allowed.";
-                }
-
-                // Verify the file signature matches the detected image type (blocks common spoofing/polyglots)
-                if (empty($errors) && !self::hasValidImageSignature($file['tmp_name'], $mimeType))
-                {
-                    $errors[] = "The file is not a valid image.";
-                }
-
-                // Validate image dimensions and processing cost before moving or hashing the file
-                if (empty($errors))
-                {
-                    if (!$imgInfo)
-                    {
-                        $errors[] = "The file is not a valid image.";
-                    }
-                    else
-                    {
-                        $dimensionError = self::validateUploadedImageDimensions($imgInfo, $config);
-                        if ($dimensionError !== null)
-                        {
-                            $errors[] = $dimensionError;
-                        }
-                    }
-                }
-            }
-
-            if (!empty($errors))
-            {
-                // Record failed attempts for auditing/troubleshooting
-                self::logUploadAttempt($userId, $file, 'failed', $errorsDetailed ?? $errors);
-            }
-
-            if (empty($errors))
-            {
-                // Persist the upload using a randomized basename to avoid collisions and predictability
-                $ext = $safeExt;
-                $basename = 'img_' . bin2hex(random_bytes(16));
-                $originalPath = "images/original/" . $basename . "." . $ext;
-
-                // Move to a temporary location first (safer lifecycle before final resize/store)
-                $tmpPath = self::$uploadDir . "tmp_" . $basename . "." . $ext;
-
-                // Ensure base upload directory exists and is writable
-                if (!is_dir(self::$uploadDir) || !is_writable(self::$uploadDir))
-                {
-                    $errors[] = "Upload failed. Upload directory is not writable.";
-                }
-
-                // Ensure destination directory exists (images/original/)
-                $finalPath = self::$uploadDir . str_replace("images/", "", $originalPath);
-                $finalDir = dirname($finalPath);
-                if (empty($errors) && (!is_dir($finalDir)))
-                {
-                    if (!@mkdir($finalDir, 0755, true) && !is_dir($finalDir))
-                    {
-                        $errors[] = "Upload failed. Could not create destination directory.";
-                    }
-                }
-
-                if (empty($errors) && !move_uploaded_file($file['tmp_name'], $tmpPath))
-                {
-                    $errors[] = "Upload failed. Could not move uploaded file.";
-                }
-
-                // Create final resized copy and store in uploads path
-                if (empty($errors))
-                {
-                    self::makeResized($tmpPath, $originalPath, 1280, 1280);
-
-                    // Ensure the resize actually produced the destination file
-                    if (!file_exists($finalPath) || filesize($finalPath) <= 0)
-                    {
-                        $errors[] = "Upload failed. Image processing failed.";
-                    }
-                }
-
-                // Remove temporary file after resize attempt
-                if (file_exists($tmpPath))
-                {
-                    unlink($tmpPath);
-                }
+                $validation = self::validateUploadFile($file, $config);
+                $errors = $validation['errors'];
 
                 if (!empty($errors))
                 {
-                    // Record failed attempts for auditing/troubleshooting
-                    self::logUploadAttempt($userId, $file, 'failed', $errors);
+                    self::logUploadAttempt($userId, $file, 'failed', $validation['errors_detailed']);
                 }
                 else
                 {
-                    // Read stored file contents for integrity hashes
-                    $fileData = file_get_contents($finalPath);
-                    $md5 = md5($fileData);
-                    $sha1 = sha1($fileData);
-                    $sha256 = hash("sha256", $fileData);
-                    $sha512 = hash("sha512", $fileData);
+                    $storedUpload = self::storeValidatedUpload($file, $validation['safe_ext']);
+                    $errors = $storedUpload['errors'];
 
-                    // Extract image metadata from the stored file
-                    [$width, $height] = getimagesize($finalPath);
-                    $sizeBytes = filesize($finalPath);
-                    $mimeType = mime_content_type($finalPath);
-
-                    // Generate a unique, user-facing image identifier
-                    $imageHash = self::generateImageHashFormatted();
-
-
-                    // Use updated safe hash functions
-                    $fullPath = $finalPath;
-                    $phash = HashingHelper::pHash($fullPath, 32, 16);
-                    $ahash = HashingHelper::aHash($fullPath);
-                    $dhash = HashingHelper::dHash($fullPath);
-
-                    // Split phash into 16 blocks of 4 chars each (supports faster similarity querying)
-                    $phashBlocks = [];
-                    for ($i = 0; $i < 16; $i++)
+                    if (!empty($errors))
                     {
-                        $phashBlocks[$i] = substr($phash, $i * 4, 4);
+                        self::logUploadAttempt($userId, $file, 'failed', $errors);
                     }
+                    else
+                    {
+                        self::persistStoredUpload(
+                            $userId,
+                            $description,
+                            $storedUpload['original_path'],
+                            $storedUpload['final_path'],
+                            $config
+                        );
 
-                    // Insert MD5/SHA hashes into app_images
-                    ImageModel::createUploadedImage([
-                        ':image_hash'   => $imageHash,
-                        ':user_id'      => $userId,
-                        ':description'  => $description,
-                        ':status'       => $config['debugging']['allow_approve_uploads'] ? 'approved' : 'pending',
-                        ':original_path'=> $originalPath,
-                        ':mime_type'    => $mimeType,
-                        ':width'        => $width,
-                        ':height'       => $height,
-                        ':size_bytes'   => $sizeBytes,
-                        ':md5'          => $md5,
-                        ':sha1'         => $sha1,
-                        ':sha256'       => $sha256,
-                        ':sha512'       => $sha512,
-                    ], (bool)$config['debugging']['allow_approve_uploads']);
-
-                    // Insert into app_image_hashes
-                    ImageModel::createImageHashes(array_merge([
-                        ':image_hash' => $imageHash,
-                        ':phash'      => $phash,
-                        ':ahash'      => $ahash,
-                        ':dhash'      => $dhash,
-                    ], array_combine(array_map(fn($i) => ":phash_block_$i", range(0, 15)), $phashBlocks)));
-
-                    $success = "Uploaded successfully! Image pending approval!";
-                    self::logUploadAttempt($userId, $file, 'success');
+                        $success = 'Uploaded successfully! Image pending approval!';
+                        self::logUploadAttempt($userId, $file, 'success');
+                    }
                 }
             }
         }
 
-        // Provide page state to the view (errors, success text, and upload limits)
         $template->assign('error', $errors);
         $template->assign('success', $success);
         $template->assign('max_image_size', $config['gallery']['upload_max_image_size']);

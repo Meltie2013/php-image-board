@@ -47,51 +47,69 @@ class RulesController extends BaseController
     }
 
     /**
-     * Render the public rules page.
+     * Build one normalized public rules row list.
      *
-     * @return void
+     * @param array<int, array<string, mixed>> $rules
+     * @return array<int, array{0: int, 1: string, 2: string, 3: string, 4: int}>
      */
-    public static function index(): void
+    private static function buildPublicRuleRows(array $rules): array
     {
-        $template = self::initTemplate();
-        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        $state = RulesHelper::getCurrentStateForUser($userId);
-        if ($userId > 0)
+        $ruleRows = [];
+        $rulePosition = 0;
+
+        foreach ($rules as $rule)
         {
-            RoleHelper::requireLogin();
-            $state = RulesHelper::getCurrentStateForUser($userId);
+            $rulePosition++;
+            $body = TypeHelper::toString($rule['body'] ?? '', allowEmpty: true) ?? '';
+            $ruleRows[] = [
+                TypeHelper::toInt($rule['id'] ?? 0) ?? 0,
+                TypeHelper::toString($rule['title'] ?? ''),
+                TypeHelper::toString($rule['slug'] ?? ''),
+                nl2br(htmlspecialchars($body, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')),
+                $rulePosition,
+            ];
         }
 
+        return $ruleRows;
+    }
+
+    /**
+     * Build the normalized public rules category rows for the template.
+     *
+     * @return array<int, array{0: int, 1: string, 2: string, 3: string, 4: string, 5: array<int, array{0: int, 1: string, 2: string, 3: string, 4: int}>}>
+     */
+    private static function buildPublicRulesCategoryRows(): array
+    {
         $categoryRows = [];
         $categoryPosition = 0;
+
         foreach (RulesModel::listPublicCategoriesWithRules() as $category)
         {
             $categoryPosition++;
-            $ruleRows = [];
-            $rulePosition = 0;
-            foreach (($category['rules'] ?? []) as $rule)
-            {
-                $rulePosition++;
-                $body = TypeHelper::toString($rule['body'] ?? '', allowEmpty: true) ?? '';
-                $ruleRows[] = [
-                    TypeHelper::toInt($rule['id'] ?? 0) ?? 0,
-                    TypeHelper::toString($rule['title'] ?? ''),
-                    TypeHelper::toString($rule['slug'] ?? ''),
-                    nl2br(htmlspecialchars($body, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')),
-                    $rulePosition,
-                ];
-            }
-
             $categoryRows[] = [
                 TypeHelper::toInt($category['id'] ?? 0) ?? 0,
                 TypeHelper::toString($category['title'] ?? ''),
                 TypeHelper::toString($category['slug'] ?? ''),
                 TypeHelper::toString($category['description'] ?? ''),
                 self::buildCategoryMarker($categoryPosition),
-                $ruleRows,
+                self::buildPublicRuleRows($category['rules'] ?? []),
             ];
         }
 
+        return $categoryRows;
+    }
+
+    /**
+     * Assign the public rules page template state.
+     *
+     * @param TemplateEngine $template Active template engine instance.
+     * @param array<int, array{0: int, 1: string, 2: string, 3: string, 4: string, 5: array<int, array{0: int, 1: string, 2: string, 3: string, 4: int}>}> $categoryRows
+     * @param array<string, mixed> $state Current rules release state.
+     * @param int $userId Current authenticated user id, or 0.
+     * @return void
+     */
+    private static function assignRulesPage(TemplateEngine $template, array $categoryRows, array $state, int $userId): void
+    {
         $template->assign('rules_page_title', 'Community Rules');
         $template->assign('rules_page_description', 'Review the latest community rules and the expectations for account use, uploads, and member conduct across the site.');
         $template->assign('rules_categories', $categoryRows);
@@ -107,6 +125,37 @@ class RulesController extends BaseController
         $template->assign('rules_notice_title', TypeHelper::toString($state['notice_title'] ?? ''));
         $template->assign('rules_notice_message', TypeHelper::toString($state['notice_message'] ?? ''));
         $template->assign('rules_accept_return_to', RedirectHelper::getRememberedLoginDestination());
+    }
+
+    /**
+     * Validate the public rules acceptance request.
+     *
+     * @return bool
+     */
+    private static function validateRulesAcceptRequest(): bool
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            return false;
+        }
+
+        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
+        return Security::verifyCsrfToken($csrfToken);
+    }
+
+    /**
+     * Render the public rules page.
+     *
+     * @return void
+     */
+    public static function index(): void
+    {
+        $userId = self::getCurrentUserId();
+        $state = RulesHelper::getCurrentStateForUser($userId);
+        $categoryRows = self::buildPublicRulesCategoryRows();
+
+        $template = self::initTemplate();
+        self::assignRulesPage($template, $categoryRows, $state, $userId);
         $template->render('rules/rules_index.html');
     }
 
@@ -117,22 +166,14 @@ class RulesController extends BaseController
      */
     public static function accept(): void
     {
-        RoleHelper::requireLogin();
+        $userId = self::requireAuthenticatedUserId();
 
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        if (!self::validateRulesAcceptRequest())
         {
             self::renderInvalidRequest();
             return;
         }
 
-        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
-        if (!Security::verifyCsrfToken($csrfToken))
-        {
-            self::renderInvalidRequest();
-            return;
-        }
-
-        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
         if (!RulesModel::acceptCurrentReleaseForUser($userId))
         {
             self::renderErrorPage(409, 'Unable To Accept Rules', 'The latest rules release could not be accepted. Please try again.');

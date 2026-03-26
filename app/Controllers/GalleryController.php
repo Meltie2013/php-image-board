@@ -247,57 +247,22 @@ class GalleryController extends BaseController
     public static function index($page = 1): void
     {
         $config = self::getConfig();
-        $imagesPerPage = $config['gallery']['images_displayed'];
+        $template = self::initTemplate();
 
         RedirectHelper::rememberGalleryPage(RedirectHelper::getCurrentRequestUri());
 
-        // Route param parsing should be tolerant (never throw)
-        $page = TypeHelper::toInt($page) ?? 1;
-        if ($page < 1)
-        {
-            $page = 1;
-        }
-
-        // Config values should be tolerant as well (never throw in production)
-        $limit = TypeHelper::toInt($imagesPerPage) ?? 1;
-        if ($limit < 1)
-        {
-            $limit = 1;
-        }
-
-        // Session values are frequently strings; parse safely
-        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        $currentUser = null;
-
-        // Fetch logged-in user's DOB and verification status if available
-        if ($userId > 0)
-        {
-            RoleHelper::requireLogin();
-            if (!GroupPermissionHelper::hasPermission('view_gallery'))
-            {
-                $template = self::initTemplate();
-                http_response_code(403);
-                $template->assign('title', 'Access Denied');
-                $template->assign('message', 'Your account group cannot view the gallery.');
-                $template->render('errors/error_page.html');
-                return;
-            }
-
-            $currentUser = UserModel::findAgeVerificationById($userId);
-        }
-
-        $viewerContentAccessLevel = AgeGateHelper::getViewerContentAccessLevel($currentUser, $config);
+        $page = self::normalizeGalleryPageNumber($page);
+        $limit = self::resolveGalleryImagesPerPage($config);
+        $userId = self::getCurrentUserId();
+        $currentUser = self::resolveGalleryViewer($template, $userId, 'Your account group cannot view the gallery.');
 
         if (RequestGuard::isGalleryPageRateLimited())
         {
-            $template = self::initTemplate();
-            http_response_code(429);
-            $template->assign('title', 'Too Many Requests');
-            $template->assign('message', 'Too many gallery page requests. Please wait and try again.');
-            $template->render('errors/error_page.html');
+            self::renderErrorPage(429, 'Too Many Requests', 'Too many gallery page requests. Please wait and try again.', $template);
             return;
         }
 
+        $viewerContentAccessLevel = AgeGateHelper::getViewerContentAccessLevel($currentUser, $config);
         $totalImages = ImageModel::countGalleryImages($viewerContentAccessLevel);
         $totalPages = max(1, (int)ceil($totalImages / $limit));
         if ($page > $totalPages)
@@ -306,9 +271,7 @@ class GalleryController extends BaseController
         }
 
         $offset = ($page - 1) * $limit;
-
         $pageImages = ImageModel::fetchGalleryPage($viewerContentAccessLevel, $limit, $offset);
-
         $galleryPageToken = GalleryPageTokenStore::issue(
             $pageImages,
             $userId,
@@ -317,14 +280,118 @@ class GalleryController extends BaseController
         );
 
         $galleryBackUrl = self::resolveGalleryBackUrl(RedirectHelper::getCurrentRequestUri());
+        $templateState = self::buildGalleryIndexTemplateState($config, $pageImages, $galleryPageToken, $galleryBackUrl, $page, $totalPages);
 
+        foreach ($templateState as $key => $value)
+        {
+            $template->assign($key, $value);
+        }
+
+        $template->render('gallery/gallery_index.html');
+    }
+
+    /**
+     * Normalize one gallery page value from routing into a usable page number.
+     *
+     * @param mixed $page Incoming route/page value.
+     * @return int Positive gallery page number.
+     */
+    private static function normalizeGalleryPageNumber($page): int
+    {
+        $page = TypeHelper::toInt($page) ?? 1;
+        if ($page < 1)
+        {
+            return 1;
+        }
+
+        return $page;
+    }
+
+    /**
+     * Resolve the configured gallery page size safely for production use.
+     *
+     * @param array $config Runtime configuration array.
+     * @return int Positive gallery page size.
+     */
+    private static function resolveGalleryImagesPerPage(array $config): int
+    {
+        $limit = TypeHelper::toInt($config['gallery']['images_displayed'] ?? null) ?? 1;
+        if ($limit < 1)
+        {
+            return 1;
+        }
+
+        return $limit;
+    }
+
+    /**
+     * Load the current gallery viewer record when one authenticated user exists.
+     *
+     * Guests may still view public-safe gallery content, so this only looks up a
+     * profile record for authenticated requests. Group permissions are enforced
+     * before the user record is returned.
+     *
+     * @param TemplateEngine $template Prepared template instance.
+     * @param int $userId Current authenticated user id, or 0 for guests.
+     * @param string $deniedMessage User-facing denial copy.
+     * @return array|null Age-verification user row, or null for guests.
+     */
+    private static function resolveGalleryViewer(TemplateEngine $template, int $userId, string $deniedMessage): ?array
+    {
+        if ($userId < 1)
+        {
+            return null;
+        }
+
+        RoleHelper::requireLogin();
+        if (!GroupPermissionHelper::hasPermission('view_gallery'))
+        {
+            self::renderErrorPage(403, 'Access Denied', $deniedMessage, $template);
+            exit;
+        }
+
+        return UserModel::findAgeVerificationById($userId);
+    }
+
+    /**
+     * Build the gallery-index template payload.
+     *
+     * @param array $config Runtime configuration array.
+     * @param array $pageImages Gallery rows for the current page.
+     * @param string $galleryPageToken Page token used for fast image delivery.
+     * @param string $galleryBackUrl Current gallery page URL.
+     * @param int $page Current page number.
+     * @param int $totalPages Total number of pages.
+     * @return array<string, mixed> Template assignment payload.
+     */
+    private static function buildGalleryIndexTemplateState(array $config, array $pageImages, string $galleryPageToken, string $galleryBackUrl, int $page, int $totalPages): array
+    {
+        $pagination = self::buildGalleryPaginationState($config, $page, $totalPages);
+
+        return [
+            'images' => self::buildGalleryIndexImageRows($pageImages, $galleryPageToken, $galleryBackUrl),
+            'pagination_prev' => $pagination['pagination_prev'],
+            'pagination_next' => $pagination['pagination_next'],
+            'pagination_pages' => $pagination['pagination_pages'],
+        ];
+    }
+
+    /**
+     * Build the gallery-index image rows expected by the existing template.
+     *
+     * @param array $pageImages Gallery rows fetched for the current page.
+     * @param string $galleryPageToken Page token for fast image delivery.
+     * @param string $galleryBackUrl Current gallery page URL.
+     * @return array<int, array{0: string, 1: string, 2: int}>
+     */
+    private static function buildGalleryIndexImageRows(array $pageImages, string $galleryPageToken, string $galleryBackUrl): array
+    {
         $loopImages = [];
         foreach ($pageImages as $img)
         {
             $imageHash = TypeHelper::toString($img['image_hash'] ?? null, allowEmpty: false) ?? '';
             if ($imageHash === '')
             {
-                // Skip malformed rows rather than throwing
                 continue;
             }
 
@@ -336,9 +403,21 @@ class GalleryController extends BaseController
             ];
         }
 
-        // Pagination navigation links
-        $pagination_prev = $page > 1 ? ($page - 1 === 1 ? '/gallery' : '/gallery/page/' . ($page - 1)) : null;
-        $pagination_next = $page < $totalPages ? '/gallery/page/' . ($page + 1) : null;
+        return $loopImages;
+    }
+
+    /**
+     * Build pagination assignments for the gallery-index template.
+     *
+     * @param array $config Runtime configuration array.
+     * @param int $page Current page number.
+     * @param int $totalPages Total number of available pages.
+     * @return array{pagination_prev: string|null, pagination_next: string|null, pagination_pages: array<int, array{0: string|null, 1: int|string, 2: bool}>}
+     */
+    private static function buildGalleryPaginationState(array $config, int $page, int $totalPages): array
+    {
+        $paginationPrev = $page > 1 ? ($page - 1 === 1 ? '/gallery' : '/gallery/page/' . ($page - 1)) : null;
+        $paginationNext = $page < $totalPages ? '/gallery/page/' . ($page + 1) : null;
 
         $range = TypeHelper::toInt($config['gallery']['pagination_range'] ?? null) ?? 2;
         if ($range < 0)
@@ -348,23 +427,23 @@ class GalleryController extends BaseController
 
         $start = max(1, $page - $range);
         $end = min($totalPages, $page + $range);
+        $paginationPages = [];
 
-        $pagination_pages = [];
         if ($start > 1)
         {
-            $pagination_pages[] = ['/gallery/page/1', 1, false];
+            $paginationPages[] = ['/gallery/page/1', 1, false];
             if ($start > 2)
             {
-                $pagination_pages[] = [null, '...', false];
+                $paginationPages[] = [null, '...', false];
             }
         }
 
         for ($i = $start; $i <= $end; $i++)
         {
-            $pagination_pages[] = [
+            $paginationPages[] = [
                 $i === 1 ? '/gallery/page/1' : '/gallery/page/' . $i,
                 $i,
-                $i === $page
+                $i === $page,
             ];
         }
 
@@ -372,19 +451,17 @@ class GalleryController extends BaseController
         {
             if ($end < $totalPages - 1)
             {
-                $pagination_pages[] = [null, '...', false];
+                $paginationPages[] = [null, '...', false];
             }
 
-            $pagination_pages[] = ['/gallery/page/' . $totalPages, $totalPages, false];
+            $paginationPages[] = ['/gallery/page/' . $totalPages, $totalPages, false];
         }
 
-        $template = self::initTemplate();
-        $template->assign('images', $loopImages);
-        $template->assign('pagination_prev', $pagination_prev);
-        $template->assign('pagination_next', $pagination_next);
-        $template->assign('pagination_pages', $pagination_pages);
-
-        $template->render('gallery/gallery_index.html');
+        return [
+            'pagination_prev' => $paginationPrev,
+            'pagination_next' => $paginationNext,
+            'pagination_pages' => $paginationPages,
+        ];
     }
 
     /**
@@ -408,11 +485,8 @@ class GalleryController extends BaseController
     {
         $config = self::getConfig();
         $template = self::initTemplate();
+        $userId = self::getCurrentUserId();
 
-        // Session values are frequently strings; parse safely
-        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-
-        // Hash is a route param; never throw here
         $hash = TypeHelper::toString($hash);
         if ($hash === '')
         {
@@ -420,52 +494,14 @@ class GalleryController extends BaseController
             return;
         }
 
-        $currentUser = null;
-
-        $requestedGalleryBackUrl = RedirectHelper::sanitizeInternalPath($_GET['back_to'] ?? null);
-        if ($requestedGalleryBackUrl !== null)
-        {
-            RedirectHelper::rememberGalleryPage($requestedGalleryBackUrl);
-
-            $cleanViewUrl = RedirectHelper::removeQueryParameter(RedirectHelper::getCurrentRequestUri(), 'back_to', true);
-            if ($cleanViewUrl !== null && $cleanViewUrl !== RedirectHelper::getCurrentRequestUri())
-            {
-                header('Location: ' . $cleanViewUrl);
-                exit;
-            }
-        }
+        self::captureRequestedGalleryBackUrl();
 
         $galleryBackUrl = self::resolveGalleryBackUrl();
-
-        $commentsPerPage = TypeHelper::toInt($config['gallery']['comments_per_page']) ?? 5;
-        if ($commentsPerPage < 1)
-        {
-            $commentsPerPage = 10;
-        }
-
-        $commentsPage = TypeHelper::toInt($_GET['cpage'] ?? 1);
-        if ($commentsPage < 1)
-        {
-            $commentsPage = 1;
-        }
-
-        if ($userId > 0)
-        {
-            RoleHelper::requireLogin();
-            if (!GroupPermissionHelper::hasPermission('view_gallery'))
-            {
-                http_response_code(403);
-                $template->assign('title', 'Access Denied');
-                $template->assign('message', 'Your account group cannot view this gallery content.');
-                $template->render('errors/error_page.html');
-                return;
-            }
-
-            $currentUser = UserModel::findAgeVerificationById($userId);
-        }
+        $commentsPerPage = self::resolveGalleryCommentsPerPage($config);
+        $commentsPage = self::normalizeGalleryPageNumber($_GET['cpage'] ?? 1);
+        $currentUser = self::resolveGalleryViewer($template, $userId, 'Your account group cannot view this gallery content.');
 
         $img = ImageModel::findApprovedGalleryImageByHash($hash);
-
         if (!$img)
         {
             self::renderImageNotFound($template);
@@ -483,14 +519,99 @@ class GalleryController extends BaseController
             return;
         }
 
-        $imageId = TypeHelper::toInt($img['id']) ?? null;
+        $imageId = TypeHelper::toInt($img['id']) ?? 0;
         if ($imageId < 1)
         {
             self::renderImageNotFound($template);
             return;
         }
 
-        // Track views per session (guest and logged-in users) to prevent inflating view count
+        self::trackViewedGalleryImage($img, $imageId, $config);
+
+        $ownerUserId = TypeHelper::toInt($img['user_id'] ?? null);
+        $username = self::getUsernameById($ownerUserId);
+        $uploaderHasBirthdayBadge = AgeGateHelper::shouldShowBirthdayBadge($img['date_of_birth'] ?? null, $config) ? 1 : 0;
+        $hasVoted = $userId > 0 ? ImageModel::hasUserVote($userId, $imageId) : false;
+        $hasFavorited = $userId > 0 ? ImageModel::hasUserFavorite($userId, $imageId) : false;
+        $commentState = self::resolveGalleryCommentState($imageId, $commentsPerPage, $commentsPage, $config);
+        $permissionState = self::resolveGalleryActionPermissions($img, $userId);
+        $templateState = self::buildGalleryViewTemplateState(
+            $config,
+            $img,
+            $userId,
+            $galleryBackUrl,
+            $contentRating,
+            $username,
+            $uploaderHasBirthdayBadge,
+            $hasVoted,
+            $hasFavorited,
+            $commentState,
+            $permissionState
+        );
+
+        foreach ($templateState as $key => $value)
+        {
+            $template->assign($key, $value);
+        }
+
+        $template->render('gallery/gallery_view.html');
+    }
+
+    /**
+     * Capture one explicit gallery return URL and clean it out of the request.
+     *
+     * Image view routes support a one-time back_to query value so actions can
+     * return to the caller's exact gallery page. The value is stored in the
+     * session and then stripped from the visible URL.
+     *
+     * @return void
+     */
+    private static function captureRequestedGalleryBackUrl(): void
+    {
+        $requestedGalleryBackUrl = RedirectHelper::sanitizeInternalPath($_GET['back_to'] ?? null);
+        if ($requestedGalleryBackUrl === null)
+        {
+            return;
+        }
+
+        RedirectHelper::rememberGalleryPage($requestedGalleryBackUrl);
+
+        $currentRequestUri = RedirectHelper::getCurrentRequestUri();
+        $cleanViewUrl = RedirectHelper::removeQueryParameter($currentRequestUri, 'back_to', true);
+        if ($cleanViewUrl !== null && $cleanViewUrl !== $currentRequestUri)
+        {
+            header('Location: ' . $cleanViewUrl);
+            exit;
+        }
+    }
+
+    /**
+     * Resolve the configured per-image comment page size safely.
+     *
+     * @param array $config Runtime configuration array.
+     * @return int Positive comment page size.
+     */
+    private static function resolveGalleryCommentsPerPage(array $config): int
+    {
+        $commentsPerPage = TypeHelper::toInt($config['gallery']['comments_per_page'] ?? null) ?? 5;
+        if ($commentsPerPage < 1)
+        {
+            return 10;
+        }
+
+        return $commentsPerPage;
+    }
+
+    /**
+     * Track one image view inside the current session to avoid repeat inflation.
+     *
+     * @param array $img Image metadata row, updated in-place when views increase.
+     * @param int $imageId Database image ID.
+     * @param array $config Runtime configuration array.
+     * @return void
+     */
+    private static function trackViewedGalleryImage(array &$img, int $imageId, array $config): void
+    {
         $viewedImages = SessionManager::get('viewed_images', []);
         if (!is_array($viewedImages))
         {
@@ -498,37 +619,32 @@ class GalleryController extends BaseController
         }
 
         $imgHash = TypeHelper::toString($img['image_hash'] ?? null, allowEmpty: false) ?? '';
-        if ($imgHash !== '' && !in_array($imgHash, $viewedImages, true))
+        if ($imgHash === '' || in_array($imgHash, $viewedImages, true))
         {
-            ImageModel::incrementViews($imageId);
-            ControlServer::bumpImageLiveTick($config, $imgHash);
-
-            $viewedImages[] = $imgHash;
-            SessionManager::set('viewed_images', $viewedImages);
-
-            $img['views'] = (TypeHelper::toInt($img['views']) ?? 0) + 1;
+            return;
         }
 
-        $ownerUserId = TypeHelper::toInt($img['user_id'] ?? null);
-        $username = self::getUsernameById($ownerUserId);
-        $uploaderHasBirthdayBadge = AgeGateHelper::shouldShowBirthdayBadge($img['date_of_birth'] ?? null, $config) ? 1 : 0;
+        ImageModel::incrementViews($imageId);
+        ControlServer::bumpImageLiveTick($config, $imgHash);
 
-        $hasVoted = false;
-        if ($userId > 0)
-        {
-            $hasVoted = ImageModel::hasUserVote($userId, $imageId);
-        }
+        $viewedImages[] = $imgHash;
+        SessionManager::set('viewed_images', $viewedImages);
+        $img['views'] = (TypeHelper::toInt($img['views']) ?? 0) + 1;
+    }
 
-        $hasFavorited = false;
-        if ($userId > 0)
-        {
-            $hasFavorited = ImageModel::hasUserFavorite($userId, $imageId);
-        }
-
-        // Fetch comments count (pagination)
+    /**
+     * Resolve paginated comment data for one gallery image.
+     *
+     * @param int $imageId Database image ID.
+     * @param int $commentsPerPage Configured comments per page.
+     * @param int $commentsPage Requested comment page.
+     * @param array $config Runtime configuration array.
+     * @return array<string, mixed> Template-ready comment pagination state.
+     */
+    private static function resolveGalleryCommentState(int $imageId, int $commentsPerPage, int $commentsPage, array $config): array
+    {
         $commentCount = ImageModel::countVisibleComments($imageId);
         $commentsTotalPages = (int)ceil($commentCount / $commentsPerPage);
-
         if ($commentsTotalPages < 1)
         {
             $commentsTotalPages = 1;
@@ -540,9 +656,29 @@ class GalleryController extends BaseController
         }
 
         $commentsOffset = ($commentsPage - 1) * $commentsPerPage;
-
         $comments = ImageModel::fetchVisibleCommentsPage($imageId, $commentsPerPage, $commentsOffset);
 
+        return [
+            'img_comment_count' => $commentCount,
+            'comment_rows' => self::buildGalleryCommentRows($comments, $config),
+            'comments_page' => $commentsPage,
+            'comments_total_pages' => $commentsTotalPages,
+            'comments_has_prev' => $commentsPage > 1,
+            'comments_has_next' => $commentsPage < $commentsTotalPages,
+            'comments_prev_page' => $commentsPage - 1,
+            'comments_next_page' => $commentsPage + 1,
+        ];
+    }
+
+    /**
+     * Normalize comment rows for the gallery view template.
+     *
+     * @param array $comments Raw comment rows from the model.
+     * @param array $config Runtime configuration array.
+     * @return array<int, array{0: string, 1: string, 2: mixed, 3: int}>
+     */
+    private static function buildGalleryCommentRows(array $comments, array $config): array
+    {
         $commentRows = [];
         foreach ($comments as $row)
         {
@@ -554,7 +690,18 @@ class GalleryController extends BaseController
             ];
         }
 
-        // Determine interactive action permissions for the UI.
+        return $commentRows;
+    }
+
+    /**
+     * Resolve interactive action availability and denial copy for one image view.
+     *
+     * @param array $img Gallery image row.
+     * @param int $userId Current authenticated user id, or 0 for guests.
+     * @return array<string, mixed> Template-ready permission state.
+     */
+    private static function resolveGalleryActionPermissions(array $img, int $userId): array
+    {
         $canEditImage = false;
         $canCommentImage = false;
         $canFavoriteImage = false;
@@ -567,11 +714,10 @@ class GalleryController extends BaseController
         $votePermissionMessage = 'You do not have permission to like images.';
         $reportPermissionMessage = 'You do not have permission to report images.';
 
-        $appUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        if ($appUserId > 0)
+        if ($userId > 0)
         {
-            $imgUserId = TypeHelper::toInt($img['user_id']) ?? 0;
-            $isOwner = ($imgUserId === $appUserId);
+            $imgUserId = TypeHelper::toInt($img['user_id'] ?? null) ?? 0;
+            $isOwner = ($imgUserId === $userId);
             $canEditOwn = GroupPermissionHelper::hasPermission('edit_own_image');
             $canEditAny = GroupPermissionHelper::hasPermission('edit_any_image');
 
@@ -597,102 +743,141 @@ class GalleryController extends BaseController
             $reportPermissionMessage = '';
         }
 
-        $permissionNoticeMessage = '';
-        if ($appUserId > 0)
+        return [
+            'can_edit_image' => $canEditImage,
+            'can_comment_image' => $canCommentImage ? 1 : 0,
+            'can_favorite_image' => $canFavoriteImage ? 1 : 0,
+            'can_vote_image' => $canVoteImage ? 1 : 0,
+            'can_report_image' => $canReportImage ? 1 : 0,
+            'edit_permission_message' => $editPermissionMessage,
+            'comment_permission_message' => $commentPermissionMessage,
+            'favorite_permission_message' => $favoritePermissionMessage,
+            'vote_permission_message' => $votePermissionMessage,
+            'report_permission_message' => $reportPermissionMessage,
+            'permission_notice_message' => self::resolveGalleryPermissionNotice($userId, $canEditImage, $canCommentImage, $canReportImage, $canFavoriteImage, $canVoteImage),
+        ];
+    }
+
+    /**
+     * Build one summary notice for disabled gallery actions on the current image.
+     *
+     * @param int $userId Current authenticated user id, or 0 for guests.
+     * @param bool $canEditImage Whether editing is allowed.
+     * @param bool $canCommentImage Whether commenting is allowed.
+     * @param bool $canReportImage Whether reporting is allowed.
+     * @param bool $canFavoriteImage Whether favoriting is allowed.
+     * @param bool $canVoteImage Whether voting is allowed.
+     * @return string User-facing notice copy.
+     */
+    private static function resolveGalleryPermissionNotice(int $userId, bool $canEditImage, bool $canCommentImage, bool $canReportImage, bool $canFavoriteImage, bool $canVoteImage): string
+    {
+        if ($userId < 1)
         {
-            $disabledActions = [];
-
-            if (!$canEditImage)
-            {
-                $disabledActions[] = 'edit';
-            }
-
-            if (!$canCommentImage)
-            {
-                $disabledActions[] = 'comment';
-            }
-
-            if (!$canReportImage)
-            {
-                $disabledActions[] = 'report';
-            }
-
-            if (!$canFavoriteImage)
-            {
-                $disabledActions[] = 'favorite';
-            }
-
-            if (!$canVoteImage)
-            {
-                $disabledActions[] = 'like';
-            }
-
-            if (!empty($disabledActions))
-            {
-                $permissionNoticeMessage = 'Some actions are disabled for your current account group: ' . implode(', ', $disabledActions) . '.';
-            }
+            return '';
         }
 
-        // Image has tags (todo: not implemented)
-        $image_tags = false;
+        $disabledActions = [];
+        if (!$canEditImage)
+        {
+            $disabledActions[] = 'edit';
+        }
 
-        $template->assign('img_comment_count', $commentCount);
-        $template->assign('comment_rows', $commentRows);
-        $template->assign('comments_page', $commentsPage);
-        $template->assign('comments_total_pages', $commentsTotalPages);
-        $template->assign('comments_has_prev', $commentsPage > 1);
-        $template->assign('comments_has_next', $commentsPage < $commentsTotalPages);
-        $template->assign('comments_prev_page', $commentsPage - 1);
-        $template->assign('comments_next_page', $commentsPage + 1);
+        if (!$canCommentImage)
+        {
+            $disabledActions[] = 'comment';
+        }
 
-        $template->assign('img_hash', $img['image_hash']);
-        $template->assign('img_username', ucfirst($username));
-        $template->assign('img_description', $img['description']);
-        $template->assign('img_mime_type', $img['mime_type']);
-        $template->assign('img_width', $img['width']);
-        $template->assign('img_height', $img['height']);
-        $template->assign('img_size', StorageHelper::formatFileSize($img['size_bytes']));
-        $template->assign('img_md5', $img['md5']);
-        $template->assign('img_sha1', $img['sha1']);
-        $template->assign('img_sha256', $img['sha256']);
-        $template->assign('img_sha512', $img['sha512']);
-        $template->assign('img_reject_reason', $img['reject_reason']);
-        $template->assign('img_approved_status', ucfirst($img['status']));
-        $template->assign('img_created_at', DateHelper::format($img['created_at']));
-        $template->assign('img_age_sensitive', $img['age_sensitive']);
-        $template->assign('img_content_rating', $contentRating);
-        $template->assign('img_content_rating_label', AgeGateHelper::getContentRatingLabel($contentRating));
-        $template->assign('img_content_rating_pill_class', AgeGateHelper::getContentRatingPillClass($contentRating));
-        $template->assign('img_uploader_has_birthday_badge', $uploaderHasBirthdayBadge);
-        $template->assign('img_votes', NumericalHelper::formatCount($img['votes']));
-        $template->assign('img_has_voted', $hasVoted);
-        $template->assign('img_favorites', NumericalHelper::formatCount($img['favorites']));
-        $template->assign('img_views', NumericalHelper::formatCount($img['views']));
-        $template->assign('img_has_favorited', $hasFavorited);
-        $template->assign('can_edit_image', $canEditImage);
-        $template->assign('can_comment_image', $canCommentImage ? 1 : 0);
-        $template->assign('can_favorite_image', $canFavoriteImage ? 1 : 0);
-        $template->assign('can_vote_image', $canVoteImage ? 1 : 0);
-        $template->assign('can_report_image', $canReportImage ? 1 : 0);
-        $template->assign('edit_permission_message', $editPermissionMessage);
-        $template->assign('comment_permission_message', $commentPermissionMessage);
-        $template->assign('favorite_permission_message', $favoritePermissionMessage);
-        $template->assign('vote_permission_message', $votePermissionMessage);
-        $template->assign('report_permission_message', $reportPermissionMessage);
-        $template->assign('img_has_tag', $image_tags);
-        $template->assign('gallery_back_url', $galleryBackUrl);
-        $template->assign('gallery_back_url_encoded', rawurlencode($galleryBackUrl));
+        if (!$canReportImage)
+        {
+            $disabledActions[] = 'report';
+        }
 
+        if (!$canFavoriteImage)
+        {
+            $disabledActions[] = 'favorite';
+        }
+
+        if (!$canVoteImage)
+        {
+            $disabledActions[] = 'like';
+        }
+
+        if (empty($disabledActions))
+        {
+            return '';
+        }
+
+        return 'Some actions are disabled for your current account group: ' . implode(', ', $disabledActions) . '.';
+    }
+
+    /**
+     * Build the gallery-view template payload.
+     *
+     * @param array $config Runtime configuration array.
+     * @param array $img Approved gallery image row.
+     * @param int $userId Current authenticated user id, or 0 for guests.
+     * @param string $galleryBackUrl Resolved gallery return path.
+     * @param string $contentRating Normalized content rating value.
+     * @param string $username Image owner username.
+     * @param int $uploaderHasBirthdayBadge Whether the uploader should show a birthday badge.
+     * @param bool $hasVoted Whether the current user already voted.
+     * @param bool $hasFavorited Whether the current user already favorited.
+     * @param array $commentState Comment pagination/template state.
+     * @param array $permissionState Interactive permission/template state.
+     * @return array<string, mixed> Template assignment payload.
+     */
+    private static function buildGalleryViewTemplateState(array $config, array $img, int $userId, string $galleryBackUrl, string $contentRating, string $username, int $uploaderHasBirthdayBadge, bool $hasVoted, bool $hasFavorited, array $commentState, array $permissionState): array
+    {
         $openReportCount = TypeHelper::toInt($img['open_reports'] ?? 0) ?? 0;
         $reportNotice = self::resolveReportNoticeFromQuery();
-        $template->assign('img_has_open_reports', $openReportCount > 0 ? 1 : 0);
-        $template->assign('img_open_report_count', $openReportCount);
-        $template->assign('report_notice_class', $reportNotice['alert_class']);
-        $template->assign('report_notice_message', $reportNotice['alert_message']);
-        $template->assign('permission_notice_message', $permissionNoticeMessage);
-        $template->assign('report_modal_auto_open', (int)$reportNotice['auto_open']);
 
-        // todo: clean this code up, so it looks cleaner
+        return $commentState + $permissionState + self::resolveGalleryLiveViewState($config, $img, $userId) + [
+            'img_hash' => $img['image_hash'],
+            'img_username' => ucfirst($username),
+            'img_description' => $img['description'],
+            'img_mime_type' => $img['mime_type'],
+            'img_width' => $img['width'],
+            'img_height' => $img['height'],
+            'img_size' => StorageHelper::formatFileSize($img['size_bytes']),
+            'img_md5' => $img['md5'],
+            'img_sha1' => $img['sha1'],
+            'img_sha256' => $img['sha256'],
+            'img_sha512' => $img['sha512'],
+            'img_reject_reason' => $img['reject_reason'],
+            'img_approved_status' => ucfirst($img['status']),
+            'img_created_at' => DateHelper::format($img['created_at']),
+            'img_age_sensitive' => $img['age_sensitive'],
+            'img_content_rating' => $contentRating,
+            'img_content_rating_label' => AgeGateHelper::getContentRatingLabel($contentRating),
+            'img_content_rating_pill_class' => AgeGateHelper::getContentRatingPillClass($contentRating),
+            'img_uploader_has_birthday_badge' => $uploaderHasBirthdayBadge,
+            'img_votes' => NumericalHelper::formatCount($img['votes']),
+            'img_has_voted' => $hasVoted,
+            'img_favorites' => NumericalHelper::formatCount($img['favorites']),
+            'img_views' => NumericalHelper::formatCount($img['views']),
+            'img_has_favorited' => $hasFavorited,
+            'img_has_tag' => false,
+            'gallery_back_url' => $galleryBackUrl,
+            'gallery_back_url_encoded' => rawurlencode($galleryBackUrl),
+            'img_has_open_reports' => $openReportCount > 0 ? 1 : 0,
+            'img_open_report_count' => $openReportCount,
+            'report_notice_class' => $reportNotice['alert_class'],
+            'report_notice_message' => $reportNotice['alert_message'],
+            'report_modal_auto_open' => (int)$reportNotice['auto_open'],
+        ];
+    }
+
+    /**
+     * Resolve gallery live-view transport values and tokenized image URLs.
+     *
+     * @param array $config Runtime configuration array.
+     * @param array $img Approved gallery image row.
+     * @param int $userId Current authenticated user id, or 0 for guests.
+     * @return array<string, mixed> Live-view template state.
+     */
+    private static function resolveGalleryLiveViewState(array $config, array $img, int $userId): array
+    {
+        $imageHash = TypeHelper::toString($img['image_hash'] ?? null, allowEmpty: false) ?? '';
         $controlBlock = $config['control_server'] ?? ($config['maintenance_server'] ?? []);
         $webSocketConfig = is_array($controlBlock['websocket'] ?? null) ? $controlBlock['websocket'] : [];
         $webSocketPort = max(1, min(65535, TypeHelper::toInt($webSocketConfig['port'] ?? null) ?? (ControlServer::controlPort($config) + 1)));
@@ -722,13 +907,14 @@ class GalleryController extends BaseController
         }
 
         $viewImageToken = GalleryPageTokenStore::issue([$img], $userId, session_id(), GalleryPageTokenStore::getCurrentDeviceId($config));
-        $template->assign('img_image_url', self::buildTokenizedImageUrl($img['image_hash'], $viewImageToken));
-        $template->assign('img_original_url', '/gallery/original/' . $img['image_hash']);
-        $template->assign('img_live_poll_url', '/gallery/' . $img['image_hash'] . '/live');
-        $template->assign('img_live_websocket_url', $webSocketScheme . '://' . $webSocketHost . ':' . $webSocketPort . $publicPath);
-        $template->assign('img_live_tick', ControlServer::imageLiveTick($config, $img['image_hash']));
 
-        $template->render('gallery/gallery_view.html');
+        return [
+            'img_image_url' => self::buildTokenizedImageUrl($imageHash, $viewImageToken),
+            'img_original_url' => '/gallery/original/' . $imageHash,
+            'img_live_poll_url' => '/gallery/' . $imageHash . '/live',
+            'img_live_websocket_url' => $webSocketScheme . '://' . $webSocketHost . ':' . $webSocketPort . $publicPath,
+            'img_live_tick' => ControlServer::imageLiveTick($config, $imageHash),
+        ];
     }
 
     /**
@@ -867,6 +1053,173 @@ class GalleryController extends BaseController
         ], $payload), JSON_UNESCAPED_SLASHES);
     }
 
+
+    /**
+     * Render one shared method-not-allowed page for gallery actions.
+     *
+     * @param TemplateEngine $template Template engine instance.
+     * @return void
+     */
+    private static function renderMethodNotAllowed(TemplateEngine $template): void
+    {
+        http_response_code(405);
+        $template->assign('title', 'Method Not Allowed');
+        $template->assign('message', 'Invalid request.');
+        $template->render('errors/error_page.html');
+    }
+
+    /**
+     * Validate the shared POST / rate-limit / CSRF requirements for gallery actions.
+     *
+     * @param TemplateEngine $template Template engine instance.
+     * @param string $rateLimitAction RequestGuard action bucket.
+     * @param bool $json Whether the caller expects JSON responses.
+     * @return bool True when the request may continue.
+     */
+    private static function validateGalleryPostActionRequest(TemplateEngine $template, string $rateLimitAction, bool $json = false): bool
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            self::renderMethodNotAllowed($template);
+            return false;
+        }
+
+        if (RequestGuard::isInteractiveActionRateLimited($rateLimitAction))
+        {
+            self::renderInteractiveActionRateLimited($template, $json);
+            return false;
+        }
+
+        if (!self::hasValidGalleryPostCsrfToken())
+        {
+            self::renderInvalidRequest($template);
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Verify the POSTed CSRF token used by gallery action forms.
+     *
+     * @return bool True when the token is valid.
+     */
+    private static function hasValidGalleryPostCsrfToken(): bool
+    {
+        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
+        return Security::verifyCsrfToken($csrfToken);
+    }
+
+    /**
+     * Require an authenticated user for one gallery action and return its user id.
+     *
+     * @param string $permission Permission slug required for the action.
+     * @return int Authenticated user id.
+     */
+    private static function requireGalleryActionUser(string $permission): int
+    {
+        RoleHelper::requireLogin();
+        GroupPermissionHelper::requirePermission($permission);
+
+        return self::requireAuthenticatedUserId();
+    }
+
+    /**
+     * Normalize one gallery image hash route value for action handlers.
+     *
+     * @param string $hash Route-provided image hash.
+     * @param TemplateEngine $template Template engine instance.
+     * @return string|null Normalized hash or null when invalid.
+     */
+    private static function normalizeGalleryActionHash(string $hash, TemplateEngine $template): ?string
+    {
+        $hash = TypeHelper::toString($hash);
+        if ($hash !== '')
+        {
+            return $hash;
+        }
+
+        self::renderImageNotFound($template);
+        return null;
+    }
+
+    /**
+     * Redirect back to the image view while preserving the remembered gallery page.
+     *
+     * @param string $hash Image hash identifier.
+     * @param array $query Additional query string values.
+     * @return void
+     */
+    private static function redirectToGalleryImageView(string $hash, array $query = []): void
+    {
+        header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null, $query));
+        exit;
+    }
+
+    /**
+     * Render one lightweight error page when an interaction target image is missing.
+     *
+     * @param TemplateEngine $template Template engine instance.
+     * @param string $title Error page title.
+     * @param string $message User-facing error message.
+     * @return void
+     */
+    private static function renderMissingInteractionImagePage(TemplateEngine $template, string $title, string $message): void
+    {
+        $template->assign('title', $title);
+        $template->assign('message', $message);
+        $template->assign('link', null);
+        $template->render('errors/error_page.html');
+    }
+
+    /**
+     * Finish one successful image interaction with JSON or redirect output.
+     *
+     * @param string $hash Image hash identifier.
+     * @param int $imageId Database image id.
+     * @param int $userId Current user id.
+     * @param bool $json Whether JSON output is expected.
+     * @param string $message Success message.
+     * @return void
+     */
+    private static function completeInteractiveImageAction(string $hash, int $imageId, int $userId, bool $json, string $message): void
+    {
+        ControlServer::bumpImageLiveTick(self::getConfig(), $hash);
+
+        if ($json)
+        {
+            self::sendJsonResponse(true, $message, [
+                'state' => self::getLiveInteractionState($imageId, $userId),
+            ]);
+            return;
+        }
+
+        self::redirectToGalleryImageView($hash);
+    }
+
+    /**
+     * Respond to one duplicate vote/favorite interaction without re-inserting it.
+     *
+     * @param string $hash Image hash identifier.
+     * @param int $imageId Database image id.
+     * @param int $userId Current user id.
+     * @param bool $json Whether JSON output is expected.
+     * @param string $message Duplicate-state message.
+     * @return void
+     */
+    private static function handleDuplicateInteractiveImageAction(string $hash, int $imageId, int $userId, bool $json, string $message): void
+    {
+        if ($json)
+        {
+            self::sendJsonResponse(false, $message, [
+                'state' => self::getLiveInteractionState($imageId, $userId),
+            ], 409);
+            return;
+        }
+
+        self::redirectToGalleryImageView($hash);
+    }
+
     /**
      * Return the current live gallery state for one image.
      *
@@ -889,7 +1242,7 @@ class GalleryController extends BaseController
             return;
         }
 
-        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        $userId = self::getCurrentUserId();
         $currentTick = ControlServer::imageLiveTick(self::getConfig(), $hash);
         $sinceTick = max(0, TypeHelper::toInt($_GET['since'] ?? null) ?? 0);
 
@@ -930,29 +1283,11 @@ class GalleryController extends BaseController
     {
         $template = self::initTemplate();
 
-        // Require login
         RoleHelper::requireLogin();
+        $currentUserId = self::requireAuthenticatedUserId();
 
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        if (!self::validateGalleryPostActionRequest($template, 'edit'))
         {
-            http_response_code(405);
-            $template->assign('title', 'Method Not Allowed');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
-            return;
-        }
-
-        if (RequestGuard::isInteractiveActionRateLimited('edit'))
-        {
-            self::renderInteractiveActionRateLimited($template);
-            return;
-        }
-
-        // Verify CSRF token to prevent cross-site request forgery
-        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
-        if (!Security::verifyCsrfToken($csrfToken))
-        {
-            self::renderInvalidRequest($template);
             return;
         }
 
@@ -965,16 +1300,14 @@ class GalleryController extends BaseController
         }
 
         $img = ImageModel::findEditableImageByHash($hash);
-
         if (!$img)
         {
             self::renderImageNotFound($template);
             return;
         }
 
-        $currentUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
         $ownerUserId = TypeHelper::toInt($img['user_id'] ?? 0) ?? 0;
-        $isOwner = $currentUserId > 0 && $ownerUserId === $currentUserId;
+        $isOwner = $ownerUserId === $currentUserId;
         $canEditOwn = GroupPermissionHelper::hasPermission('edit_own_image');
         $canEditAny = GroupPermissionHelper::hasPermission('edit_any_image');
 
@@ -987,14 +1320,11 @@ class GalleryController extends BaseController
         // Description should be tolerant (user input)
         $image = TypeHelper::requireString($img['image_hash'] ?? null, allowEmpty: false);
         $description = TypeHelper::toString($_POST['description'] ?? null, allowEmpty: true) ?? '';
-        $description = TypeHelper::toString($description); // todo: this line might not be needed
 
         ImageModel::updateDescriptionByHash($image, $description);
-
         ControlServer::bumpImageLiveTick(self::getConfig(), $hash);
 
-        header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null));
-        exit;
+        self::redirectToGalleryImageView($hash);
     }
 
     /**
@@ -1013,87 +1343,38 @@ class GalleryController extends BaseController
     public static function favorite(string $hash): void
     {
         $template = self::initTemplate();
+        $expectsJson = self::wantsJsonResponse();
+        $userId = self::requireGalleryActionUser('favorite_images');
 
-        // Require login
-        RoleHelper::requireLogin();
-        GroupPermissionHelper::requirePermission('favorite_images');
-
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        if (!self::validateGalleryPostActionRequest($template, 'favorite', $expectsJson))
         {
-            http_response_code(405);
-            $template->assign('title', 'Method Not Allowed');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
             return;
         }
 
-        if (RequestGuard::isInteractiveActionRateLimited('favorite'))
+        $hash = self::normalizeGalleryActionHash($hash, $template);
+        if ($hash === null)
         {
-            self::renderInteractiveActionRateLimited($template, self::wantsJsonResponse());
-            return;
-        }
-
-        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        if ($userId < 1)
-        {
-            self::renderInvalidRequest($template);
-            return;
-        }
-
-        // Verify CSRF token to prevent cross-site request forgery
-        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
-        if (!Security::verifyCsrfToken($csrfToken))
-        {
-            self::renderInvalidRequest($template);
-            return;
-        }
-
-        $hash = TypeHelper::toString($hash);
-        if ($hash === '')
-        {
-            self::renderImageNotFound($template);
             return;
         }
 
         // Find the image by hash
         $imageId = ImageModel::findImageIdByHash($hash);
-
         if ($imageId < 1)
         {
-            $template->assign('title', "Favorite Failed");
-            $template->assign('message', "The image you attempted to favorite does not exist.");
-            $template->assign('link', null);
-            $template->render('errors/error_page.html');
+            self::renderMissingInteractionImagePage($template, 'Favorite Failed', 'The image you attempted to favorite does not exist.');
             return;
         }
 
         // Check if user already favorited
         if (ImageModel::hasUserFavorite($userId, $imageId))
         {
-            if (self::wantsJsonResponse())
-            {
-                self::sendJsonResponse(false, 'You have already marked this image as a favorite.', [
-                    'state' => self::getLiveInteractionState($imageId, $userId),
-                ], 409);
-                return;
-            }
+            self::handleDuplicateInteractiveImageAction($hash, $imageId, $userId, $expectsJson, 'You have already marked this image as a favorite.');
+            return;
         }
 
         // Insert favorite
         ImageModel::insertFavorite($userId, $imageId);
-
-        ControlServer::bumpImageLiveTick(self::getConfig(), $hash);
-
-        if (self::wantsJsonResponse())
-        {
-            self::sendJsonResponse(true, 'You have successfully marked this image as a favorite.', [
-                'state' => self::getLiveInteractionState($imageId, $userId),
-            ]);
-            return;
-        }
-
-        header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null));
-        exit;
+        self::completeInteractiveImageAction($hash, $imageId, $userId, $expectsJson, 'You have successfully marked this image as a favorite.');
     }
 
     /**
@@ -1112,87 +1393,97 @@ class GalleryController extends BaseController
     public static function upvote(string $hash): void
     {
         $template = self::initTemplate();
+        $expectsJson = self::wantsJsonResponse();
+        $userId = self::requireGalleryActionUser('vote_images');
 
-        // Require login
-        RoleHelper::requireLogin();
-        GroupPermissionHelper::requirePermission('vote_images');
-
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        if (!self::validateGalleryPostActionRequest($template, 'upvote', $expectsJson))
         {
-            http_response_code(405);
-            $template->assign('title', 'Method Not Allowed');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
             return;
         }
 
-        if (RequestGuard::isInteractiveActionRateLimited('upvote'))
+        $hash = self::normalizeGalleryActionHash($hash, $template);
+        if ($hash === null)
         {
-            self::renderInteractiveActionRateLimited($template, self::wantsJsonResponse());
-            return;
-        }
-
-        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        if ($userId < 1)
-        {
-            self::renderInvalidRequest($template);
-            return;
-        }
-
-        // Verify CSRF token to prevent cross-site request forgery
-        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
-        if (!Security::verifyCsrfToken($csrfToken))
-        {
-            self::renderInvalidRequest($template);
-            return;
-        }
-
-        $hash = TypeHelper::toString($hash);
-        if ($hash === '')
-        {
-            self::renderImageNotFound($template);
             return;
         }
 
         // Find the image by hash
         $imageId = ImageModel::findImageIdByHash($hash);
-
         if ($imageId < 1)
         {
-            $template->assign('title', "Upvote Failed");
-            $template->assign('message', "The image you attempted to upvote does not exist.");
-            $template->assign('link', null);
-            $template->render('errors/error_page.html');
+            self::renderMissingInteractionImagePage($template, 'Upvote Failed', 'The image you attempted to upvote does not exist.');
             return;
         }
 
         // Check if user already voted
         if (ImageModel::hasUserVote($userId, $imageId))
         {
-            if (self::wantsJsonResponse())
-            {
-                self::sendJsonResponse(false, 'You have already upvoted this image.', [
-                    'state' => self::getLiveInteractionState($imageId, $userId),
-                ], 409);
-                return;
-            }
+            self::handleDuplicateInteractiveImageAction($hash, $imageId, $userId, $expectsJson, 'You have already upvoted this image.');
+            return;
         }
 
         // Insert vote
         ImageModel::insertVote($userId, $imageId);
+        self::completeInteractiveImageAction($hash, $imageId, $userId, $expectsJson, 'You have successfully upvoted this image.');
+    }
 
-        ControlServer::bumpImageLiveTick(self::getConfig(), $hash);
-
-        if (self::wantsJsonResponse())
+    /**
+     * Enforce the public gallery image-report permission for signed-in users.
+     *
+     * Guests are still allowed to report images, so permission checks only run
+     * when a valid account is attached to the current request.
+     *
+     * @param int $userId Current authenticated user id, or 0 for guests.
+     * @return void
+     */
+    private static function enforceGalleryReportPermission(int $userId): void
+    {
+        if ($userId < 1)
         {
-            self::sendJsonResponse(true, 'You have successfully upvoted this image.', [
-                'state' => self::getLiveInteractionState($imageId, $userId),
-            ]);
             return;
         }
 
-        header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null));
-        exit;
+        RoleHelper::requireLogin();
+        GroupPermissionHelper::requirePermission('report_images');
+    }
+
+    /**
+     * Read and sanitize the public gallery image-report submission payload.
+     *
+     * @return array{category: string, subject: string, message: string}
+     */
+    private static function readGalleryReportPayload(): array
+    {
+        return [
+            'category' => ImageReportHelper::normalizeCategory(Security::sanitizeString($_POST['report_category'] ?? '')),
+            'subject' => Security::sanitizeString($_POST['report_subject'] ?? ''),
+            'message' => Security::sanitizeString($_POST['report_message'] ?? ''),
+        ];
+    }
+
+    /**
+     * Build one image-report creation payload from the current request state.
+     *
+     * @param int $imageId Target image id.
+     * @param int $userId Current authenticated user id, or 0.
+     * @param array{category: string, subject: string, message: string} $payload
+     * @return array<string, mixed>
+     */
+    private static function buildGalleryImageReportCreatePayload(int $imageId, int $userId, array $payload): array
+    {
+        $sessionId = TypeHelper::toString(session_id(), allowEmpty: true) ?? '';
+        $userAgent = TypeHelper::toString($_SERVER['HTTP_USER_AGENT'] ?? '', allowEmpty: true) ?? '';
+
+        return [
+            ':image_id' => $imageId,
+            ':reporter_user_id' => $userId > 0 ? $userId : null,
+            ':report_category' => $payload['category'],
+            ':report_subject' => $payload['subject'] !== '' ? $payload['subject'] : ImageReportHelper::categoryLabel($payload['category']),
+            ':report_message' => $payload['message'],
+            ':session_id' => $sessionId !== '' ? $sessionId : null,
+            ':ip' => inet_pton($_SERVER['REMOTE_ADDR'] ?? '') ?: null,
+            ':ua' => $userAgent !== '' ? $userAgent : null,
+        ];
     }
 
     /**
@@ -1209,50 +1500,24 @@ class GalleryController extends BaseController
     {
         $template = self::initTemplate();
 
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        if (!self::validateGalleryPostActionRequest($template, 'report'))
         {
-            http_response_code(405);
-            $template->assign('title', 'Method Not Allowed');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
             return;
         }
 
-        if (RequestGuard::isInteractiveActionRateLimited('report'))
+        $hash = self::normalizeGalleryActionHash($hash, $template);
+        if ($hash === null)
         {
-            self::renderInteractiveActionRateLimited($template);
             return;
         }
 
-        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
-        if (!Security::verifyCsrfToken($csrfToken))
-        {
-            self::renderInvalidRequest($template);
-            return;
-        }
+        $userId = self::getCurrentUserId();
+        self::enforceGalleryReportPermission($userId);
 
-        $hash = TypeHelper::toString($hash);
-        if ($hash === '')
+        $payload = self::readGalleryReportPayload();
+        if ($payload['message'] === '')
         {
-            self::renderImageNotFound($template);
-            return;
-        }
-
-        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        if ($userId > 0)
-        {
-            RoleHelper::requireLogin();
-            GroupPermissionHelper::requirePermission('report_images');
-        }
-
-        $category = ImageReportHelper::normalizeCategory(Security::sanitizeString($_POST['report_category'] ?? ''));
-        $subject = Security::sanitizeString($_POST['report_subject'] ?? '');
-        $message = Security::sanitizeString($_POST['report_message'] ?? '');
-
-        if ($message === '')
-        {
-            header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null, ['report' => 'invalid']));
-            exit;
+            self::redirectToGalleryImageView($hash, ['report' => 'invalid']);
         }
 
         $imageId = ImageModel::findApprovedImageIdByHash($hash);
@@ -1263,33 +1528,13 @@ class GalleryController extends BaseController
         }
 
         $sessionId = TypeHelper::toString(session_id(), allowEmpty: true) ?? '';
-        $ip = inet_pton($_SERVER['REMOTE_ADDR'] ?? '') ?: null;
-        $userAgent = TypeHelper::toString($_SERVER['HTTP_USER_AGENT'] ?? '', allowEmpty: true) ?? '';
-
         if (ImageReportModel::hasOpenDuplicate($imageId, $userId > 0 ? $userId : null, $sessionId))
         {
-            header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null, ['report' => 'exists']));
-            exit;
+            self::redirectToGalleryImageView($hash, ['report' => 'exists']);
         }
 
-        if ($subject === '')
-        {
-            $subject = ImageReportHelper::categoryLabel($category);
-        }
-
-        ImageReportModel::create([
-            ':image_id' => $imageId,
-            ':reporter_user_id' => $userId > 0 ? $userId : null,
-            ':report_category' => $category,
-            ':report_subject' => $subject,
-            ':report_message' => $message,
-            ':session_id' => $sessionId !== '' ? $sessionId : null,
-            ':ip' => $ip,
-            ':ua' => $userAgent !== '' ? $userAgent : null,
-        ]);
-
-        header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null, ['report' => 'submitted']));
-        exit;
+        ImageReportModel::create(self::buildGalleryImageReportCreatePayload($imageId, $userId, $payload));
+        self::redirectToGalleryImageView($hash, ['report' => 'submitted']);
     }
 
     /**
@@ -1309,53 +1554,24 @@ class GalleryController extends BaseController
     public static function comment(string $hash): void
     {
         $template = self::initTemplate();
+        $expectsJson = self::wantsJsonResponse();
+        $userId = self::requireGalleryActionUser('comment_images');
 
-        // Require login
-        RoleHelper::requireLogin();
-        GroupPermissionHelper::requirePermission('comment_images');
-
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        if (!self::validateGalleryPostActionRequest($template, 'comment', $expectsJson))
         {
-            http_response_code(405);
-            $template->assign('title', 'Method Not Allowed');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
             return;
         }
 
-        if (RequestGuard::isInteractiveActionRateLimited('comment'))
+        $hash = self::normalizeGalleryActionHash($hash, $template);
+        if ($hash === null)
         {
-            self::renderInteractiveActionRateLimited($template, self::wantsJsonResponse());
-            return;
-        }
-
-        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        if ($userId < 1)
-        {
-            self::renderInvalidRequest($template);
-            return;
-        }
-
-        // Verify CSRF token to prevent cross-site request forgery
-        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
-        if (!Security::verifyCsrfToken($csrfToken))
-        {
-            self::renderInvalidRequest($template);
-            return;
-        }
-
-        $hash = TypeHelper::toString($hash);
-        if ($hash === '')
-        {
-            self::renderImageNotFound($template);
             return;
         }
 
         $commentBody = Security::sanitizeString($_POST['comment_body'] ?? '');
         if ($commentBody === '')
         {
-            header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null));
-            exit;
+            self::redirectToGalleryImageView($hash);
         }
 
         // Find the approved image by hash
@@ -1368,11 +1584,7 @@ class GalleryController extends BaseController
 
         // Insert comment
         ImageModel::insertComment($imageId, $userId, $commentBody);
-
-        ControlServer::bumpImageLiveTick(self::getConfig(), $hash);
-
-        header('Location: ' . self::buildGalleryViewUrl($hash, $_POST['back_to'] ?? null));
-        exit;
+        self::completeInteractiveImageAction($hash, $imageId, $userId, $expectsJson, 'Your comment has been posted.');
     }
 
     /**
@@ -1503,7 +1715,7 @@ class GalleryController extends BaseController
     public static function serveImage(string $hash): void
     {
         $template = self::initTemplate();
-        $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        $userId = self::getCurrentUserId();
         $currentUser = null;
 
         $hash = TypeHelper::toString($hash);

@@ -61,6 +61,52 @@ abstract class BaseController
         return $template;
     }
 
+
+    /**
+     * Retrieve the currently authenticated application user id from session.
+     *
+     * Normalizes missing, empty, or malformed session values to 0 so
+     * controller code can avoid passing null into strictly typed model calls.
+     *
+     * @return int Current user id when present, otherwise 0.
+     */
+    protected static function getCurrentUserId(): int
+    {
+        return TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+    }
+
+    /**
+     * Require a valid authenticated user id for the current request.
+     *
+     * This builds on RoleHelper::requireLogin() by also validating that the
+     * current session still contains a usable numeric user id. When the
+     * session is stale or partially cleared, the request is redirected back to
+     * the login page instead of letting null values reach typed model methods.
+     *
+     * @param bool $rememberDestination Whether the current request should be stored for post-login redirect.
+     * @param string $loginPath Login route used when the session is invalid.
+     * @return int Authenticated user id.
+     */
+    protected static function requireAuthenticatedUserId(bool $rememberDestination = false, string $loginPath = '/user/login'): int
+    {
+        RoleHelper::requireLogin();
+
+        $userId = static::getCurrentUserId();
+        if ($userId > 0)
+        {
+            return $userId;
+        }
+
+        SessionManager::destroy();
+        if ($rememberDestination)
+        {
+            RedirectHelper::rememberLoginDestination();
+        }
+
+        header('Location: ' . $loginPath);
+        exit();
+    }
+
     /**
      * Retrieve a username by user ID.
      *

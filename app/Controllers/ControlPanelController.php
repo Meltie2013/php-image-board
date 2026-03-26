@@ -777,7 +777,6 @@ class ControlPanelController extends BaseController
         $template->render('panel/control_panel_user_edit.html');
     }
 
-
     /**
      * Render the group management overview for Site Administrator users.
      *
@@ -1556,204 +1555,13 @@ class ControlPanelController extends BaseController
 
         $template = self::initTemplate();
         $selectedCategory = self::normalizeSettingsCategorySlug($selectedCategory);
+        [$notice, $noticeType] = self::resolveSettingsPanelNotice();
 
-        $notice = '';
-        $noticeType = '';
-        $settingsError = Security::sanitizeString($_GET['error'] ?? '');
-        $settingsNotice = Security::sanitizeString($_GET['notice'] ?? '');
-
-        if ($settingsNotice === 'saved' || isset($_GET['success']))
-        {
-            $notice = 'Setting saved successfully.';
-            $noticeType = 'success';
-        }
-        else if ($settingsNotice === 'reset')
-        {
-            $notice = 'Setting reset to its default value successfully.';
-            $noticeType = 'success';
-        }
-        else if ($settingsNotice === 'deleted')
-        {
-            $notice = 'Registry entry removed successfully.';
-            $noticeType = 'success';
-        }
-        else if ($settingsNotice === 'category_saved')
-        {
-            $notice = 'Category details saved successfully.';
-            $noticeType = 'success';
-        }
-        else if ($settingsNotice === 'category_reset')
-        {
-            $notice = 'Category display details reset to their default values.';
-            $noticeType = 'success';
-        }
-        else if ($settingsNotice === 'category_deleted')
-        {
-            $notice = 'Custom category removed successfully.';
-            $noticeType = 'success';
-        }
-        else if ($settingsError === 'csrf')
-        {
-            $notice = 'The request could not be verified. Please try again.';
-            $noticeType = 'error';
-        }
-        else if ($settingsError === 'key')
-        {
-            $notice = 'A valid registry key is required before saving.';
-            $noticeType = 'error';
-        }
-        else if ($settingsError === 'reserved')
-        {
-            $notice = 'That key belongs to protected runtime configuration and cannot be managed from this settings area.';
-            $noticeType = 'error';
-        }
-        else if ($settingsError === 'value')
-        {
-            $notice = 'The setting value is not valid for that field type.';
-            $noticeType = 'error';
-        }
-        else if ($settingsError === 'length')
-        {
-            $notice = 'That value is too large to store.';
-            $noticeType = 'error';
-        }
-        else if ($settingsError === 'category')
-        {
-            $notice = 'A valid category slug is required before saving category details.';
-            $noticeType = 'error';
-        }
-        else if ($settingsError === 'category_not_empty')
-        {
-            $notice = 'That category still contains settings entries. Remove or move those entries before deleting the category.';
-            $noticeType = 'error';
-        }
-
-        $builtInDefinitionCatalog = self::getSettingsDefinitionCatalog();
-        $definitionCatalog = $builtInDefinitionCatalog;
-        $builtInDefinitionKeys = array_fill_keys(array_keys($builtInDefinitionCatalog), true);
-
-        $baseCategoryCatalog = self::getSettingsCategoryCatalog();
-        $categoryCatalog = [];
-        foreach ($baseCategoryCatalog as $slug => $meta)
-        {
-            $categoryCatalog[$slug] = [
-                'title' => self::normalizeSettingsCategoryDisplayTitle(TypeHelper::toString($meta['title'] ?? self::humanizeSettingsToken($slug))),
-                'description' => TypeHelper::toString($meta['description'] ?? ''),
-                'icon' => TypeHelper::toString($meta['icon'] ?? 'fa-sliders'),
-                'sort_order' => TypeHelper::toInt($meta['sort_order'] ?? 0) ?? 0,
-                'is_system' => !empty($meta['is_system']) ? 1 : 0,
-                'is_custom' => 0,
-                'has_meta' => 0,
-            ];
-        }
-
-        $categoryRows = SettingsModel::listCategories();
-
-        $categoryIdMap = [];
-        foreach ($categoryRows as $row)
-        {
-            $slug = self::normalizeSettingsCategorySlug(TypeHelper::toString($row['slug'] ?? ''));
-            if ($slug === '')
-            {
-                continue;
-            }
-
-            $categoryIdMap[$slug] = TypeHelper::toInt($row['id'] ?? 0) ?? 0;
-            $categoryCatalog[$slug] = [
-                'title' => self::normalizeSettingsCategoryDisplayTitle(TypeHelper::toString($row['title'] ?? ($categoryCatalog[$slug]['title'] ?? self::humanizeSettingsToken($slug)))),
-                'description' => TypeHelper::toString($row['description'] ?? ($categoryCatalog[$slug]['description'] ?? '')),
-                'icon' => TypeHelper::toString($row['icon'] ?? ($categoryCatalog[$slug]['icon'] ?? 'fa-sliders')),
-                'sort_order' => TypeHelper::toInt($row['sort_order'] ?? ($categoryCatalog[$slug]['sort_order'] ?? 9999)) ?? 9999,
-                'is_system' => !empty($row['is_system']) ? 1 : 0,
-                'is_custom' => empty($row['is_system']) ? 1 : 0,
-                'has_meta' => 1,
-                'updated_at' => TypeHelper::toString($row['updated_at'] ?? ''),
-            ];
-        }
-
-        $settingsRows = SettingsModel::listSettingRows();
-
-        $rowMap = [];
-        foreach ($settingsRows as $row)
-        {
-            $key = self::normalizeSettingsKey(TypeHelper::toString($row['key'] ?? ''));
-            if ($key === '')
-            {
-                continue;
-            }
-
-            $categorySlug = self::normalizeSettingsCategorySlug(TypeHelper::toString($row['category_slug'] ?? ''));
-            if ($categorySlug === '')
-            {
-                $categorySlug = class_exists('SettingsRegistry') ? SettingsRegistry::inferCategoryFromKey($key) : self::normalizeSettingsCategorySlug(explode('.', $key, 2)[0] ?? 'custom');
-            }
-
-            if ($categorySlug === '')
-            {
-                $categorySlug = 'custom';
-            }
-
-            if (!isset($categoryCatalog[$categorySlug]))
-            {
-                $categoryCatalog[$categorySlug] = [
-                    'title' => self::humanizeSettingsToken($categorySlug),
-                    'description' => 'Additional registry entries stored for this settings group.',
-                    'icon' => 'fa-sliders',
-                    'sort_order' => 9999,
-                    'is_system' => 0,
-                    'is_custom' => 1,
-                    'has_meta' => 0,
-                ];
-            }
-
-            $row['category_slug'] = $categorySlug;
-            $rowMap[$key] = $row;
-
-            if (!isset($builtInDefinitionKeys[$key]))
-            {
-                $generated = class_exists('SettingsRegistry')
-                    ? SettingsRegistry::buildGeneratedDefinition($key, TypeHelper::toString($row['type'] ?? 'string'), $row)
-                    : [
-                        'category' => $categorySlug,
-                        'title' => TypeHelper::toString($row['title'] ?? self::humanizeSettingsToken($key)),
-                        'description' => TypeHelper::toString($row['description'] ?? ''),
-                        'type' => self::normalizeSettingsType(TypeHelper::toString($row['type'] ?? 'string')),
-                        'input' => TypeHelper::toString($row['input_type'] ?? 'text'),
-                        'help' => 'This setting is not part of the built-in catalog, so generic editing rules are being used.',
-                        'default' => '',
-                        'sort_order' => TypeHelper::toInt($row['sort_order'] ?? 9999) ?? 9999,
-                        'is_system' => 0,
-                    ];
-
-                $definitionCatalog[$key] = [
-                    'category' => $categorySlug,
-                    'label' => TypeHelper::toString($generated['title'] ?? self::humanizeSettingsToken($key)),
-                    'description' => TypeHelper::toString($generated['description'] ?? ''),
-                    'type' => self::normalizeSettingsType(TypeHelper::toString($row['type'] ?? ($generated['type'] ?? 'string'))),
-                    'input' => TypeHelper::toString($row['input_type'] ?? ($generated['input'] ?? 'text')),
-                    'help' => TypeHelper::toString($generated['help'] ?? ''),
-                    'placeholder' => TypeHelper::toString($generated['placeholder'] ?? ''),
-                    'min' => isset($generated['min']) ? (string) $generated['min'] : '',
-                    'max' => isset($generated['max']) ? (string) $generated['max'] : '',
-                    'options' => $generated['options'] ?? [],
-                    'sort_order' => TypeHelper::toInt($row['sort_order'] ?? ($generated['sort_order'] ?? 9999)) ?? 9999,
-                    'default' => $generated['default'] ?? '',
-                    'is_system' => !empty($row['is_system']) ? 1 : 0,
-                ];
-            }
-        }
-
-        uasort($categoryCatalog, static function (array $left, array $right): int
-        {
-            $leftOrder = TypeHelper::toInt($left['sort_order'] ?? 9999) ?? 9999;
-            $rightOrder = TypeHelper::toInt($right['sort_order'] ?? 9999) ?? 9999;
-            if ($leftOrder === $rightOrder)
-            {
-                return strcasecmp((string) ($left['title'] ?? ''), (string) ($right['title'] ?? ''));
-            }
-
-            return $leftOrder <=> $rightOrder;
-        });
+        $catalogState = self::buildSettingsPageCatalogState();
+        $categoryCatalog = $catalogState['category_catalog'];
+        $definitionCatalog = $catalogState['definition_catalog'];
+        $builtInDefinitionKeys = $catalogState['built_in_definition_keys'];
+        $rowMap = $catalogState['row_map'];
 
         if ($selectedCategory !== '' && !isset($categoryCatalog[$selectedCategory]))
         {
@@ -1765,236 +1573,25 @@ class ControlPanelController extends BaseController
             }
         }
 
-        $groupedSettingsRaw = [];
-        foreach ($definitionCatalog as $key => $definition)
-        {
-            $categorySlug = self::normalizeSettingsCategorySlug(TypeHelper::toString($definition['category'] ?? ''));
-            if ($categorySlug === '')
-            {
-                $categorySlug = class_exists('SettingsRegistry') ? SettingsRegistry::inferCategoryFromKey($key) : 'custom';
-            }
-
-            if (!isset($categoryCatalog[$categorySlug]))
-            {
-                $categoryCatalog[$categorySlug] = [
-                    'title' => self::humanizeSettingsToken($categorySlug),
-                    'description' => 'Additional registry entries stored for this settings group.',
-                    'icon' => 'fa-sliders',
-                    'sort_order' => 9999,
-                    'is_system' => 0,
-                    'is_custom' => 1,
-                    'has_meta' => 0,
-                ];
-            }
-
-            $row = $rowMap[$key] ?? null;
-            $type = self::normalizeSettingsType(TypeHelper::toString($row['type'] ?? ($definition['type'] ?? 'string')));
-            $input = TypeHelper::toString($row['input_type'] ?? ($definition['input'] ?? 'text'));
-
-            if ($row !== null)
-            {
-                $valueForDisplay = self::formatSettingsValueForDisplay($row['value'] ?? '', $type, true);
-                $statusLabel = TypeHelper::toString(DateHelper::date_only_format(TypeHelper::toString($row['updated_at'] ?? '')) ?? 'Stored in database');
-                $statusClass = 'stored';
-                $hasStoredRow = 1;
-            }
-            else
-            {
-                $defaultValue = $definition['default'] ?? '';
-                $valueForDisplay = self::formatSettingsValueForDisplay($defaultValue, $type, false);
-                $statusLabel = 'Using registry default';
-                $statusClass = 'fallback';
-                $hasStoredRow = 0;
-            }
-
-            $valueAttribute = self::formatSettingsValueForAttribute($valueForDisplay, $type);
-            $valueTextArea = $type === 'json' ? $valueForDisplay : TypeHelper::toString($valueForDisplay);
-            $options = [];
-
-            if ($input === 'bool')
-            {
-                $currentBool = self::normalizeBoolStorageValue($valueForDisplay);
-                $options = [
-                    ['1', 'Enable', $currentBool === '1' ? 1 : 0],
-                    ['0', 'Disable', $currentBool === '0' ? 1 : 0],
-                ];
-            }
-            else if ($input === 'select')
-            {
-                $currentValue = TypeHelper::toString($valueAttribute);
-                foreach (($definition['options'] ?? []) as $option)
-                {
-                    $optionValue = TypeHelper::toString($option[0] ?? '');
-                    $optionLabel = TypeHelper::toString($option[1] ?? $optionValue);
-                    $options[] = [$optionValue, $optionLabel, $optionValue === $currentValue ? 1 : 0];
-                }
-            }
-
-            $groupedSettingsRaw[$categorySlug][] = [
-                'label' => TypeHelper::toString($row['title'] ?? ($definition['label'] ?? self::humanizeSettingsToken($key))),
-                'description' => TypeHelper::toString($row['description'] ?? ($definition['description'] ?? '')),
-                'key' => $key,
-                'type' => $type,
-                'status' => $statusLabel,
-                'input' => $input,
-                'value_attr' => TypeHelper::toString($valueAttribute),
-                'value_text' => TypeHelper::toString($valueTextArea),
-                'placeholder' => TypeHelper::toString($definition['placeholder'] ?? ''),
-                'min' => TypeHelper::toString($definition['min'] ?? ''),
-                'max' => TypeHelper::toString($definition['max'] ?? ''),
-                'help' => TypeHelper::toString($definition['help'] ?? ''),
-                'options' => $options,
-                'category' => $categorySlug,
-                'status_class' => $statusClass,
-                'has_stored_row' => $hasStoredRow,
-                'is_custom_entry' => isset($builtInDefinitionKeys[$key]) ? 0 : 1,
-                'sort_order' => TypeHelper::toInt($row['sort_order'] ?? ($definition['sort_order'] ?? 9999)) ?? 9999,
-            ];
-        }
-
-        $groupedSettings = [];
-        foreach ($groupedSettingsRaw as $categorySlug => $settingsGroup)
-        {
-            usort($settingsGroup, static function (array $left, array $right): int
-            {
-                $leftOrder = TypeHelper::toInt($left['sort_order'] ?? 9999) ?? 9999;
-                $rightOrder = TypeHelper::toInt($right['sort_order'] ?? 9999) ?? 9999;
-                if ($leftOrder === $rightOrder)
-                {
-                    return strcasecmp((string) ($left['label'] ?? ''), (string) ($right['label'] ?? ''));
-                }
-
-                return $leftOrder <=> $rightOrder;
-            });
-
-            foreach ($settingsGroup as $setting)
-            {
-                $groupedSettings[$categorySlug][] = [
-                    $setting['label'],
-                    $setting['description'],
-                    $setting['key'],
-                    $setting['type'],
-                    $setting['status'],
-                    $setting['input'],
-                    $setting['value_attr'],
-                    $setting['value_text'],
-                    $setting['placeholder'],
-                    $setting['min'],
-                    $setting['max'],
-                    $setting['help'],
-                    $setting['options'],
-                    $setting['category'],
-                    $setting['status_class'],
-                    $setting['has_stored_row'],
-                    $setting['is_custom_entry'],
-                ];
-            }
-        }
-
-        $categoryCards = [];
-        $managedCategories = [];
-        foreach ($categoryCatalog as $categorySlug => $categoryMeta)
-        {
-            $count = count($groupedSettings[$categorySlug] ?? []);
-            $countLabel = $count === 1 ? '1 setting' : $count . ' settings';
-            $title = TypeHelper::toString($categoryMeta['title'] ?? self::humanizeSettingsToken($categorySlug));
-            $description = TypeHelper::toString($categoryMeta['description'] ?? '');
-            $icon = TypeHelper::toString($categoryMeta['icon'] ?? 'fa-sliders');
-            $isSystem = !empty($categoryMeta['is_system']) ? 1 : 0;
-            $hasMeta = !empty($categoryMeta['has_meta']) ? 1 : 0;
-            $deleteAllowed = $isSystem ? 1 : ($count === 0 ? 1 : 0);
-            $deleteLabel = $isSystem ? 'Reset Defaults' : 'Delete Category';
-            $helperText = $isSystem
-                ? 'Built-in category. Any changes here update the stored category record without touching the built-in registry defaults.'
-                : ($count > 0
-                    ? 'Custom category. Delete or move the settings inside this category before removing the category itself.'
-                    : 'Custom category. This category is empty and can be removed safely.');
-
-            $categoryCards[] = [
-                $categorySlug,
-                $title,
-                $description,
-                $countLabel,
-                self::buildSettingsCategoryUrl($categorySlug),
-                $selectedCategory === $categorySlug ? 1 : 0,
-                $icon,
-            ];
-
-            $managedCategories[] = [
-                $categorySlug,
-                $title,
-                $description,
-                $icon,
-                $countLabel,
-                $isSystem,
-                $hasMeta,
-                $deleteAllowed,
-                $deleteLabel,
-                $helperText,
-            ];
-        }
-
-        $totalSettingsCount = 0;
-        foreach ($groupedSettings as $settingsGroup)
-        {
-            $totalSettingsCount += count($settingsGroup);
-        }
-
-        $storedSettingsCount = count($rowMap);
-        $fallbackSettingsCount = max(0, $totalSettingsCount - $storedSettingsCount);
-        $builtInCategoryCount = 0;
-        $customCategoryCount = 0;
-        foreach ($categoryCatalog as $categoryMeta)
-        {
-            if (!empty($categoryMeta['is_system']))
-            {
-                $builtInCategoryCount++;
-            }
-            else
-            {
-                $customCategoryCount++;
-            }
-        }
-
-        $pageTitle = 'Application Settings';
-        $pageDescription = 'Choose a settings category to manage board behavior with cleaner labels, safer inputs, and clearer descriptions.';
-        $selectedCategoryTitle = 'Settings Overview';
-        $selectedCategoryDescription = 'Select a category below to manage those settings on a dedicated page.';
-        $selectedCategoryIcon = 'fa-sliders';
-        $selectedSettings = [];
-        $currentNav = 'settings';
-
-        if ($selectedCategory !== '')
-        {
-            $categoryMeta = $categoryCatalog[$selectedCategory];
-            $selectedCategoryTitle = TypeHelper::toString($categoryMeta['title'] ?? self::humanizeSettingsToken($selectedCategory));
-            $selectedCategoryDescription = TypeHelper::toString($categoryMeta['description'] ?? '');
-            $selectedCategoryIcon = TypeHelper::toString($categoryMeta['icon'] ?? 'fa-sliders');
-            $selectedSettings = $groupedSettings[$selectedCategory] ?? [];
-            $pageTitle = preg_match('/settings$/i', $selectedCategoryTitle) ? $selectedCategoryTitle : ($selectedCategoryTitle . ' Settings');
-            $pageDescription = $selectedCategoryDescription;
-        }
-        else if ($manageCategories)
-        {
-            $pageTitle = 'Category Settings';
-            $pageDescription = 'Manage settings category names, descriptions, icons, and custom category groups from one dedicated page.';
-            $selectedCategoryTitle = 'Category Settings';
-            $selectedCategoryDescription = 'Update category presentation details or create a new custom settings group for advanced registry keys.';
-            $currentNav = 'settings-categories';
-        }
+        $groupedSettings = self::buildSettingsGroupedRows($definitionCatalog, $rowMap, $categoryCatalog, $builtInDefinitionKeys);
+        [$categoryCards, $managedCategories] = self::buildSettingsCategoryCollections($categoryCatalog, $groupedSettings, $selectedCategory);
+        $summary = self::buildSettingsSummaryCounts($groupedSettings, $rowMap, $categoryCatalog);
+        $pageState = self::buildSettingsPageState($categoryCatalog, $groupedSettings, $selectedCategory, $manageCategories);
 
         self::assignPanelPage(
             $template,
-            $currentNav,
-            $pageTitle,
-            $pageDescription,
+            TypeHelper::toString($pageState['current_nav'] ?? 'settings'),
+            TypeHelper::toString($pageState['page_title'] ?? 'Application Settings'),
+            TypeHelper::toString($pageState['page_description'] ?? ''),
             'configuration'
         );
 
+        $selectedSettings = $groupedSettings[$selectedCategory] ?? [];
+
         $template->assign('settings_categories', $categoryCards);
         $template->assign('settings_selected_category', $selectedCategory);
-        $template->assign('settings_selected_category_title', $selectedCategoryTitle);
-        $template->assign('settings_selected_category_description', $selectedCategoryDescription);
+        $template->assign('settings_selected_category_title', TypeHelper::toString($pageState['selected_category_title'] ?? 'Settings Overview'));
+        $template->assign('settings_selected_category_description', TypeHelper::toString($pageState['selected_category_description'] ?? ''));
         $template->assign('settings_selected_rows', $selectedSettings);
         $template->assign('settings_manage_categories', $managedCategories);
         $template->assign('settings_manage_mode', $manageCategories ? 1 : 0);
@@ -2002,18 +1599,19 @@ class ControlPanelController extends BaseController
         $template->assign('settings_overview_url', self::buildSettingsCategoryUrl(''));
         $template->assign('settings_category_manager_url', self::buildSettingsCategoryManagerUrl());
         $template->assign('settings_total_categories', $manageCategories ? count($managedCategories) : count($categoryCards));
-        $template->assign('settings_total_settings', $totalSettingsCount);
-        $template->assign('settings_total_stored', $storedSettingsCount);
-        $template->assign('settings_total_fallback', $fallbackSettingsCount);
-        $template->assign('settings_total_built_in_categories', $builtInCategoryCount);
-        $template->assign('settings_total_custom_categories', $customCategoryCount);
-        $template->assign('settings_selected_icon', $selectedCategoryIcon);
+        $template->assign('settings_total_settings', TypeHelper::toInt($summary['total_settings_count'] ?? 0) ?? 0);
+        $template->assign('settings_total_stored', TypeHelper::toInt($summary['stored_settings_count'] ?? 0) ?? 0);
+        $template->assign('settings_total_fallback', TypeHelper::toInt($summary['fallback_settings_count'] ?? 0) ?? 0);
+        $template->assign('settings_total_built_in_categories', TypeHelper::toInt($summary['built_in_category_count'] ?? 0) ?? 0);
+        $template->assign('settings_total_custom_categories', TypeHelper::toInt($summary['custom_category_count'] ?? 0) ?? 0);
+        $template->assign('settings_selected_icon', TypeHelper::toString($pageState['selected_category_icon'] ?? 'fa-sliders'));
         $template->assign('settings_selected_count', count($selectedSettings));
         $template->assign('csrf_token', Security::generateCsrfToken());
         $template->assign('control_panel_notice', $notice);
         $template->assign('control_panel_notice_type', $noticeType);
         $template->render('panel/control_panel_settings.html');
     }
+
 
     /**
      * Save an application setting (admin action).
@@ -2026,52 +1624,20 @@ class ControlPanelController extends BaseController
     {
         self::requirePanelPermission('manage_settings');
 
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
-        {
-            header('Location: ' . self::buildSettingsCategoryUrl(''));
-            exit();
-        }
+        $redirectBase = self::buildSettingsCategoryUrl('');
+        self::requireSettingsPostRequest($redirectBase);
 
-        $category = self::normalizeSettingsCategorySlug(Security::sanitizeString($_POST['category'] ?? ''));
-        $redirectBase = self::buildSettingsCategoryUrl($category);
+        $request = self::readSettingsSaveRequest();
+        $redirectBase = $request['redirect_base'];
+        self::verifySettingsCsrfOrRedirect(TypeHelper::toString($request['csrf'] ?? ''), $redirectBase);
+        self::guardSettingsSaveKeyOrRedirect(TypeHelper::toString($request['key'] ?? ''), $redirectBase);
 
-        $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
-        if (!Security::verifyCsrfToken($csrf))
-        {
-            header('Location: ' . $redirectBase . '?error=csrf');
-            exit();
-        }
+        $normalized = self::normalizeSettingsValueForStorage(
+            TypeHelper::toString($request['key'] ?? ''),
+            TypeHelper::toString($request['value'] ?? ''),
+            TypeHelper::toString($request['type'] ?? 'string')
+        );
 
-        $key = self::normalizeSettingsKey(Security::sanitizeString($_POST['key'] ?? ''));
-        $type = self::normalizeSettingsType(Security::sanitizeString($_POST['type'] ?? 'string'));
-        $value = trim((string) ($_POST['value'] ?? ''));
-
-        if ($key === '')
-        {
-            header('Location: ' . $redirectBase . '?error=key');
-            exit();
-        }
-
-        if (self::isSettingsReservedKey($key))
-        {
-            header('Location: ' . $redirectBase . '?error=reserved');
-            exit();
-        }
-
-        $siteAdministratorOnlyKeys = [
-            'profile.age_gate_enabled',
-            'profile.self_serve_age_gate',
-            'profile.explicit_years',
-            'profile.birthday_badge_enabled',
-        ];
-
-        if (in_array($key, $siteAdministratorOnlyKeys, true) && !GroupPermissionHelper::hasGroupSlug(['site-administrator']))
-        {
-            header('Location: ' . $redirectBase . '?error=reserved');
-            exit();
-        }
-
-        $normalized = self::normalizeSettingsValueForStorage($key, $value, $type);
         if (!$normalized['valid'])
         {
             $errorCode = $normalized['error'] === 'length' ? 'length' : 'value';
@@ -2079,36 +1645,15 @@ class ControlPanelController extends BaseController
             exit();
         }
 
-        $definitionCatalog = self::getSettingsDefinitionCatalog();
-        $builtInDefinition = $definitionCatalog[$key] ?? null;
-        $existing = SettingsModel::findSettingByKey($key);
+        $metadata = self::buildSettingsSaveMetadata(
+            TypeHelper::toString($request['key'] ?? ''),
+            TypeHelper::toString($request['type'] ?? 'string'),
+            TypeHelper::toString($request['category'] ?? ''),
+            SettingsModel::findSettingByKey(TypeHelper::toString($request['key'] ?? ''))
+        );
 
-        if ($builtInDefinition !== null)
-        {
-            $category = self::normalizeSettingsCategorySlug(TypeHelper::toString($builtInDefinition['category'] ?? ''));
-            $title = TypeHelper::toString($builtInDefinition['label'] ?? self::humanizeSettingsToken($key));
-            $description = TypeHelper::toString($builtInDefinition['description'] ?? '');
-            $inputType = TypeHelper::toString($builtInDefinition['input'] ?? 'text');
-            $sortOrder = TypeHelper::toInt($builtInDefinition['sort_order'] ?? 0) ?? 0;
-            $isSystem = !empty($builtInDefinition['is_system']) ? 1 : 0;
-        }
-        else
-        {
-            $category = $category !== '' ? $category : (class_exists('SettingsRegistry') ? SettingsRegistry::inferCategoryFromKey($key) : self::normalizeSettingsCategorySlug(explode('.', $key, 2)[0] ?? 'custom'));
-            $generated = class_exists('SettingsRegistry') ? SettingsRegistry::buildGeneratedDefinition($key, $type, is_array($existing) ? $existing : null) : [];
-            $title = trim(TypeHelper::toString($existing['title'] ?? ($generated['title'] ?? self::humanizeSettingsToken($key))));
-            $description = trim(TypeHelper::toString($existing['description'] ?? ($generated['description'] ?? '')));
-            $inputType = TypeHelper::toString($existing['input_type'] ?? ($generated['input'] ?? (class_exists('SettingsRegistry') ? SettingsRegistry::defaultInputForType($type) : 'text')));
-            $sortOrder = TypeHelper::toInt($existing['sort_order'] ?? ($generated['sort_order'] ?? 9999)) ?? 9999;
-            $isSystem = !empty($existing['is_system']) ? 1 : 0;
-        }
-
-        if ($category === '')
-        {
-            $category = 'custom';
-        }
-
-        $categoryId = self::ensureSettingsCategoryExists($category, $builtInDefinition !== null ? 1 : 0);
+        $category = TypeHelper::toString($metadata['category'] ?? 'custom');
+        $categoryId = self::ensureSettingsCategoryExists($category, !empty($metadata['is_built_in']) ? 1 : 0);
         if ($categoryId <= 0)
         {
             header('Location: ' . $redirectBase . '?error=category');
@@ -2117,19 +1662,20 @@ class ControlPanelController extends BaseController
 
         SettingsModel::upsertSetting([
             'category_id' => $categoryId,
-            'key_name' => $key,
-            'title' => $title,
-            'description' => $description,
-            'value_data' => $normalized['value'],
-            'type_name' => $type,
-            'input_type' => $inputType,
-            'sort_order' => $sortOrder,
-            'is_system' => $isSystem,
+            'key_name' => TypeHelper::toString($request['key'] ?? ''),
+            'title' => TypeHelper::toString($metadata['title'] ?? self::humanizeSettingsToken(TypeHelper::toString($request['key'] ?? ''))),
+            'description' => TypeHelper::toString($metadata['description'] ?? ''),
+            'value_data' => TypeHelper::toString($normalized['value'] ?? ''),
+            'type_name' => TypeHelper::toString($request['type'] ?? 'string'),
+            'input_type' => TypeHelper::toString($metadata['input_type'] ?? 'text'),
+            'sort_order' => TypeHelper::toInt($metadata['sort_order'] ?? 0) ?? 0,
+            'is_system' => !empty($metadata['is_system']) ? 1 : 0,
         ]);
 
         header('Location: ' . self::buildSettingsCategoryUrl($category) . '?notice=saved');
         exit();
     }
+
 
 
     /**
@@ -2141,19 +1687,9 @@ class ControlPanelController extends BaseController
     {
         self::requirePanelPermission('manage_settings');
 
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
-        {
-            header('Location: ' . self::buildSettingsCategoryUrl(''));
-            exit();
-        }
-
         $redirectBase = self::buildSettingsCategoryManagerUrl();
-        $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
-        if (!Security::verifyCsrfToken($csrf))
-        {
-            header('Location: ' . $redirectBase . '?error=csrf');
-            exit();
-        }
+        self::requireSettingsPostRequest($redirectBase);
+        self::verifySettingsCsrfOrRedirect(Security::sanitizeString($_POST['csrf_token'] ?? ''), $redirectBase);
 
         $baseCategoryCatalog = self::getSettingsCategoryCatalog();
         $category = self::normalizeSettingsCategorySlug(TypeHelper::toString($_POST['category_slug'] ?? ''));
@@ -2220,6 +1756,7 @@ class ControlPanelController extends BaseController
         exit();
     }
 
+
     /**
      * Delete category metadata or remove a custom category when it is empty.
      *
@@ -2229,19 +1766,9 @@ class ControlPanelController extends BaseController
     {
         self::requirePanelPermission('manage_settings');
 
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
-        {
-            header('Location: ' . self::buildSettingsCategoryUrl(''));
-            exit();
-        }
-
         $redirectBase = self::buildSettingsCategoryManagerUrl();
-        $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
-        if (!Security::verifyCsrfToken($csrf))
-        {
-            header('Location: ' . $redirectBase . '?error=csrf');
-            exit();
-        }
+        self::requireSettingsPostRequest($redirectBase);
+        self::verifySettingsCsrfOrRedirect(Security::sanitizeString($_POST['csrf_token'] ?? ''), $redirectBase);
 
         $category = self::normalizeSettingsCategorySlug(TypeHelper::toString($_POST['category_slug'] ?? ''));
         if ($category === '')
@@ -2281,6 +1808,7 @@ class ControlPanelController extends BaseController
         exit();
     }
 
+
     /**
      * Delete a stored registry entry.
      *
@@ -2293,21 +1821,12 @@ class ControlPanelController extends BaseController
     {
         self::requirePanelPermission('manage_settings');
 
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
-        {
-            header('Location: ' . self::buildSettingsCategoryUrl(''));
-            exit();
-        }
+        $redirectBase = self::buildSettingsCategoryUrl('');
+        self::requireSettingsPostRequest($redirectBase);
 
         $category = self::normalizeSettingsCategorySlug(Security::sanitizeString($_POST['category'] ?? ''));
         $redirectBase = self::buildSettingsCategoryUrl($category);
-
-        $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
-        if (!Security::verifyCsrfToken($csrf))
-        {
-            header('Location: ' . $redirectBase . '?error=csrf');
-            exit();
-        }
+        self::verifySettingsCsrfOrRedirect(Security::sanitizeString($_POST['csrf_token'] ?? ''), $redirectBase);
 
         $key = self::normalizeSettingsKey(Security::sanitizeString($_POST['key'] ?? ''));
         if ($key === '')
@@ -2352,6 +1871,717 @@ class ControlPanelController extends BaseController
         SettingsModel::deleteSettingByKey($key);
         header('Location: ' . $redirectBase . '?notice=deleted');
         exit();
+    }
+
+
+
+
+    /**
+     * Resolve the current settings page notice banner.
+     *
+     * @return array{0:string,1:string}
+     */
+    private static function resolveSettingsPanelNotice(): array
+    {
+        $settingsError = Security::sanitizeString($_GET['error'] ?? '');
+        $settingsNotice = Security::sanitizeString($_GET['notice'] ?? '');
+
+        if ($settingsNotice === 'saved' || isset($_GET['success']))
+        {
+            return ['Setting saved successfully.', 'success'];
+        }
+
+        $noticeMap = [
+            'reset' => ['Setting reset to its default value successfully.', 'success'],
+            'deleted' => ['Registry entry removed successfully.', 'success'],
+            'category_saved' => ['Category details saved successfully.', 'success'],
+            'category_reset' => ['Category display details reset to their default values.', 'success'],
+            'category_deleted' => ['Custom category removed successfully.', 'success'],
+        ];
+
+        if (isset($noticeMap[$settingsNotice]))
+        {
+            return $noticeMap[$settingsNotice];
+        }
+
+        $errorMap = [
+            'csrf' => ['The request could not be verified. Please try again.', 'error'],
+            'key' => ['A valid registry key is required before saving.', 'error'],
+            'reserved' => ['That key belongs to protected runtime configuration and cannot be managed from this settings area.', 'error'],
+            'value' => ['The setting value is not valid for that field type.', 'error'],
+            'length' => ['That value is too large to store.', 'error'],
+            'category' => ['A valid category slug is required before saving category details.', 'error'],
+            'category_not_empty' => ['That category still contains settings entries. Remove or move those entries before deleting the category.', 'error'],
+        ];
+
+        return $errorMap[$settingsError] ?? ['', ''];
+    }
+
+    /**
+     * Build the settings page catalogs used by the renderer.
+     *
+     * @return array<string, mixed>
+     */
+    private static function buildSettingsPageCatalogState(): array
+    {
+        $builtInDefinitionCatalog = self::getSettingsDefinitionCatalog();
+        $definitionCatalog = $builtInDefinitionCatalog;
+        $builtInDefinitionKeys = array_fill_keys(array_keys($builtInDefinitionCatalog), true);
+        $categoryCatalog = self::createBaseSettingsCategoryCatalog(self::getSettingsCategoryCatalog());
+
+        self::mergeStoredSettingsCategoriesIntoCatalog($categoryCatalog, SettingsModel::listCategories());
+        $rowMap = self::mergeStoredSettingsRowsIntoCatalog($definitionCatalog, $builtInDefinitionKeys, $categoryCatalog, SettingsModel::listSettingRows());
+        self::sortSettingsCategoryCatalog($categoryCatalog);
+
+        return [
+            'built_in_definition_catalog' => $builtInDefinitionCatalog,
+            'definition_catalog' => $definitionCatalog,
+            'built_in_definition_keys' => $builtInDefinitionKeys,
+            'category_catalog' => $categoryCatalog,
+            'row_map' => $rowMap,
+        ];
+    }
+
+    /**
+     * Create the base category catalog from the built-in settings registry.
+     *
+     * @param array $baseCategoryCatalog
+     * @return array<string, array<string, mixed>>
+     */
+    private static function createBaseSettingsCategoryCatalog(array $baseCategoryCatalog): array
+    {
+        $categoryCatalog = [];
+        foreach ($baseCategoryCatalog as $slug => $meta)
+        {
+            $categoryCatalog[$slug] = [
+                'title' => self::normalizeSettingsCategoryDisplayTitle(TypeHelper::toString($meta['title'] ?? self::humanizeSettingsToken($slug))),
+                'description' => TypeHelper::toString($meta['description'] ?? ''),
+                'icon' => TypeHelper::toString($meta['icon'] ?? 'fa-sliders'),
+                'sort_order' => TypeHelper::toInt($meta['sort_order'] ?? 0) ?? 0,
+                'is_system' => !empty($meta['is_system']) ? 1 : 0,
+                'is_custom' => 0,
+                'has_meta' => 0,
+            ];
+        }
+
+        return $categoryCatalog;
+    }
+
+    /**
+     * Merge stored category rows into the normalized settings category catalog.
+     *
+     * @param array $categoryCatalog
+     * @param array $categoryRows
+     * @return void
+     */
+    private static function mergeStoredSettingsCategoriesIntoCatalog(array &$categoryCatalog, array $categoryRows): void
+    {
+        foreach ($categoryRows as $row)
+        {
+            $slug = self::normalizeSettingsCategorySlug(TypeHelper::toString($row['slug'] ?? ''));
+            if ($slug === '')
+            {
+                continue;
+            }
+
+            $categoryCatalog[$slug] = [
+                'title' => self::normalizeSettingsCategoryDisplayTitle(TypeHelper::toString($row['title'] ?? ($categoryCatalog[$slug]['title'] ?? self::humanizeSettingsToken($slug)))),
+                'description' => TypeHelper::toString($row['description'] ?? ($categoryCatalog[$slug]['description'] ?? '')),
+                'icon' => TypeHelper::toString($row['icon'] ?? ($categoryCatalog[$slug]['icon'] ?? 'fa-sliders')),
+                'sort_order' => TypeHelper::toInt($row['sort_order'] ?? ($categoryCatalog[$slug]['sort_order'] ?? 9999)) ?? 9999,
+                'is_system' => !empty($row['is_system']) ? 1 : 0,
+                'is_custom' => empty($row['is_system']) ? 1 : 0,
+                'has_meta' => 1,
+                'updated_at' => TypeHelper::toString($row['updated_at'] ?? ''),
+            ];
+        }
+    }
+
+    /**
+     * Merge stored setting rows into the settings catalogs used by the UI.
+     *
+     * @param array $definitionCatalog
+     * @param array $builtInDefinitionKeys
+     * @param array $categoryCatalog
+     * @param array $settingsRows
+     * @return array<string, array<string, mixed>>
+     */
+    private static function mergeStoredSettingsRowsIntoCatalog(array &$definitionCatalog, array $builtInDefinitionKeys, array &$categoryCatalog, array $settingsRows): array
+    {
+        $rowMap = [];
+        foreach ($settingsRows as $row)
+        {
+            $key = self::normalizeSettingsKey(TypeHelper::toString($row['key'] ?? ''));
+            if ($key === '')
+            {
+                continue;
+            }
+
+            $categorySlug = self::normalizeSettingsCategorySlug(TypeHelper::toString($row['category_slug'] ?? ''));
+            if ($categorySlug === '')
+            {
+                $categorySlug = self::inferSettingsCategoryFromKey($key);
+            }
+
+            self::ensureSettingsCatalogCategory($categoryCatalog, $categorySlug);
+            $row['category_slug'] = $categorySlug;
+            $rowMap[$key] = $row;
+
+            if (!isset($builtInDefinitionKeys[$key]))
+            {
+                $definitionCatalog[$key] = self::buildGeneratedStoredSettingsDefinition($key, $row, $categorySlug);
+            }
+        }
+
+        return $rowMap;
+    }
+
+    /**
+     * Ensure a settings category exists in the in-memory catalog.
+     *
+     * @param array $categoryCatalog
+     * @param string $categorySlug
+     * @return void
+     */
+    private static function ensureSettingsCatalogCategory(array &$categoryCatalog, string $categorySlug): void
+    {
+        if ($categorySlug === '')
+        {
+            $categorySlug = 'custom';
+        }
+
+        if (!isset($categoryCatalog[$categorySlug]))
+        {
+            $categoryCatalog[$categorySlug] = [
+                'title' => self::humanizeSettingsToken($categorySlug),
+                'description' => 'Additional registry entries stored for this settings group.',
+                'icon' => 'fa-sliders',
+                'sort_order' => 9999,
+                'is_system' => 0,
+                'is_custom' => 1,
+                'has_meta' => 0,
+            ];
+        }
+    }
+
+    /**
+     * Build a generic settings definition for stored registry entries.
+     *
+     * @param string $key
+     * @param array $row
+     * @param string $categorySlug
+     * @return array<string, mixed>
+     */
+    private static function buildGeneratedStoredSettingsDefinition(string $key, array $row, string $categorySlug): array
+    {
+        $generated = class_exists('SettingsRegistry')
+            ? SettingsRegistry::buildGeneratedDefinition($key, TypeHelper::toString($row['type'] ?? 'string'), $row)
+            : [
+                'category' => $categorySlug,
+                'title' => TypeHelper::toString($row['title'] ?? self::humanizeSettingsToken($key)),
+                'description' => TypeHelper::toString($row['description'] ?? ''),
+                'type' => self::normalizeSettingsType(TypeHelper::toString($row['type'] ?? 'string')),
+                'input' => TypeHelper::toString($row['input_type'] ?? 'text'),
+                'help' => 'This setting is not part of the built-in catalog, so generic editing rules are being used.',
+                'default' => '',
+                'sort_order' => TypeHelper::toInt($row['sort_order'] ?? 9999) ?? 9999,
+                'is_system' => 0,
+            ];
+
+        return [
+            'category' => $categorySlug,
+            'label' => TypeHelper::toString($generated['title'] ?? self::humanizeSettingsToken($key)),
+            'description' => TypeHelper::toString($generated['description'] ?? ''),
+            'type' => self::normalizeSettingsType(TypeHelper::toString($row['type'] ?? ($generated['type'] ?? 'string'))),
+            'input' => TypeHelper::toString($row['input_type'] ?? ($generated['input'] ?? 'text')),
+            'help' => TypeHelper::toString($generated['help'] ?? ''),
+            'placeholder' => TypeHelper::toString($generated['placeholder'] ?? ''),
+            'min' => isset($generated['min']) ? (string) $generated['min'] : '',
+            'max' => isset($generated['max']) ? (string) $generated['max'] : '',
+            'options' => $generated['options'] ?? [],
+            'sort_order' => TypeHelper::toInt($row['sort_order'] ?? ($generated['sort_order'] ?? 9999)) ?? 9999,
+            'default' => $generated['default'] ?? '',
+            'is_system' => !empty($row['is_system']) ? 1 : 0,
+        ];
+    }
+
+    /**
+     * Sort the settings category catalog into display order.
+     *
+     * @param array $categoryCatalog
+     * @return void
+     */
+    private static function sortSettingsCategoryCatalog(array &$categoryCatalog): void
+    {
+        uasort($categoryCatalog, static function (array $left, array $right): int
+        {
+            $leftOrder = TypeHelper::toInt($left['sort_order'] ?? 9999) ?? 9999;
+            $rightOrder = TypeHelper::toInt($right['sort_order'] ?? 9999) ?? 9999;
+            if ($leftOrder === $rightOrder)
+            {
+                return strcasecmp((string) ($left['title'] ?? ''), (string) ($right['title'] ?? ''));
+            }
+
+            return $leftOrder <=> $rightOrder;
+        });
+    }
+
+    /**
+     * Build grouped settings rows for the settings template.
+     *
+     * @param array $definitionCatalog
+     * @param array $rowMap
+     * @param array $categoryCatalog
+     * @param array $builtInDefinitionKeys
+     * @return array<string, array<int, array<int, mixed>>>
+     */
+    private static function buildSettingsGroupedRows(array $definitionCatalog, array $rowMap, array &$categoryCatalog, array $builtInDefinitionKeys): array
+    {
+        $groupedSettingsRaw = [];
+        foreach ($definitionCatalog as $key => $definition)
+        {
+            $categorySlug = self::normalizeSettingsCategorySlug(TypeHelper::toString($definition['category'] ?? ''));
+            if ($categorySlug === '')
+            {
+                $categorySlug = self::inferSettingsCategoryFromKey($key);
+            }
+
+            self::ensureSettingsCatalogCategory($categoryCatalog, $categorySlug);
+            $groupedSettingsRaw[$categorySlug][] = self::buildSettingsDisplayRow($key, $definition, $rowMap[$key] ?? null, $categorySlug, $builtInDefinitionKeys);
+        }
+
+        return self::normalizeGroupedSettingsForTemplate($groupedSettingsRaw);
+    }
+
+    /**
+     * Build one settings row for the category settings template.
+     *
+     * @param string $key
+     * @param array $definition
+     * @param array|null $row
+     * @param string $categorySlug
+     * @param array $builtInDefinitionKeys
+     * @return array<string, mixed>
+     */
+    private static function buildSettingsDisplayRow(string $key, array $definition, ?array $row, string $categorySlug, array $builtInDefinitionKeys): array
+    {
+        $type = self::normalizeSettingsType(TypeHelper::toString($row['type'] ?? ($definition['type'] ?? 'string')));
+        $input = TypeHelper::toString($row['input_type'] ?? ($definition['input'] ?? 'text'));
+
+        if ($row !== null)
+        {
+            $valueForDisplay = self::formatSettingsValueForDisplay($row['value'] ?? '', $type, true);
+            $statusLabel = TypeHelper::toString(DateHelper::date_only_format(TypeHelper::toString($row['updated_at'] ?? '')) ?? 'Stored in database');
+            $statusClass = 'stored';
+            $hasStoredRow = 1;
+        }
+        else
+        {
+            $defaultValue = $definition['default'] ?? '';
+            $valueForDisplay = self::formatSettingsValueForDisplay($defaultValue, $type, false);
+            $statusLabel = 'Using registry default';
+            $statusClass = 'fallback';
+            $hasStoredRow = 0;
+        }
+
+        $valueAttribute = self::formatSettingsValueForAttribute($valueForDisplay, $type);
+        $valueTextArea = $type === 'json' ? $valueForDisplay : TypeHelper::toString($valueForDisplay);
+
+        return [
+            'label' => TypeHelper::toString($row['title'] ?? ($definition['label'] ?? self::humanizeSettingsToken($key))),
+            'description' => TypeHelper::toString($row['description'] ?? ($definition['description'] ?? '')),
+            'key' => $key,
+            'type' => $type,
+            'status' => $statusLabel,
+            'input' => $input,
+            'value_attr' => TypeHelper::toString($valueAttribute),
+            'value_text' => TypeHelper::toString($valueTextArea),
+            'placeholder' => TypeHelper::toString($definition['placeholder'] ?? ''),
+            'min' => TypeHelper::toString($definition['min'] ?? ''),
+            'max' => TypeHelper::toString($definition['max'] ?? ''),
+            'help' => TypeHelper::toString($definition['help'] ?? ''),
+            'options' => self::buildSettingsInputOptions($input, $valueAttribute, $valueForDisplay, $definition),
+            'category' => $categorySlug,
+            'status_class' => $statusClass,
+            'has_stored_row' => $hasStoredRow,
+            'is_custom_entry' => isset($builtInDefinitionKeys[$key]) ? 0 : 1,
+            'sort_order' => TypeHelper::toInt($row['sort_order'] ?? ($definition['sort_order'] ?? 9999)) ?? 9999,
+        ];
+    }
+
+    /**
+     * Build settings form input options for boolean/select inputs.
+     *
+     * @param string $input
+     * @param string $valueAttribute
+     * @param mixed $valueForDisplay
+     * @param array $definition
+     * @return array<int, array<int, mixed>>
+     */
+    private static function buildSettingsInputOptions(string $input, string $valueAttribute, $valueForDisplay, array $definition): array
+    {
+        $options = [];
+
+        if ($input === 'bool')
+        {
+            $currentBool = self::normalizeBoolStorageValue($valueForDisplay);
+            return [
+                ['1', 'Enable', $currentBool === '1' ? 1 : 0],
+                ['0', 'Disable', $currentBool === '0' ? 1 : 0],
+            ];
+        }
+
+        if ($input === 'select')
+        {
+            $currentValue = TypeHelper::toString($valueAttribute);
+            foreach (($definition['options'] ?? []) as $option)
+            {
+                $optionValue = TypeHelper::toString($option[0] ?? '');
+                $optionLabel = TypeHelper::toString($option[1] ?? $optionValue);
+                $options[] = [$optionValue, $optionLabel, $optionValue === $currentValue ? 1 : 0];
+            }
+        }
+
+        return $options;
+    }
+
+    /**
+     * Normalize grouped settings rows into the compact template array format.
+     *
+     * @param array $groupedSettingsRaw
+     * @return array<string, array<int, array<int, mixed>>>
+     */
+    private static function normalizeGroupedSettingsForTemplate(array $groupedSettingsRaw): array
+    {
+        $groupedSettings = [];
+        foreach ($groupedSettingsRaw as $categorySlug => $settingsGroup)
+        {
+            usort($settingsGroup, static function (array $left, array $right): int
+            {
+                $leftOrder = TypeHelper::toInt($left['sort_order'] ?? 9999) ?? 9999;
+                $rightOrder = TypeHelper::toInt($right['sort_order'] ?? 9999) ?? 9999;
+                if ($leftOrder === $rightOrder)
+                {
+                    return strcasecmp((string) ($left['label'] ?? ''), (string) ($right['label'] ?? ''));
+                }
+
+                return $leftOrder <=> $rightOrder;
+            });
+
+            foreach ($settingsGroup as $setting)
+            {
+                $groupedSettings[$categorySlug][] = [
+                    $setting['label'],
+                    $setting['description'],
+                    $setting['key'],
+                    $setting['type'],
+                    $setting['status'],
+                    $setting['input'],
+                    $setting['value_attr'],
+                    $setting['value_text'],
+                    $setting['placeholder'],
+                    $setting['min'],
+                    $setting['max'],
+                    $setting['help'],
+                    $setting['options'],
+                    $setting['category'],
+                    $setting['status_class'],
+                    $setting['has_stored_row'],
+                    $setting['is_custom_entry'],
+                ];
+            }
+        }
+
+        return $groupedSettings;
+    }
+
+    /**
+     * Build the category card and category manager collections.
+     *
+     * @param array $categoryCatalog
+     * @param array $groupedSettings
+     * @param string $selectedCategory
+     * @return array{0: array<int, array<int, mixed>>, 1: array<int, array<int, mixed>>}
+     */
+    private static function buildSettingsCategoryCollections(array $categoryCatalog, array $groupedSettings, string $selectedCategory): array
+    {
+        $categoryCards = [];
+        $managedCategories = [];
+
+        foreach ($categoryCatalog as $categorySlug => $categoryMeta)
+        {
+            $count = count($groupedSettings[$categorySlug] ?? []);
+            $countLabel = $count === 1 ? '1 setting' : $count . ' settings';
+            $title = TypeHelper::toString($categoryMeta['title'] ?? self::humanizeSettingsToken($categorySlug));
+            $description = TypeHelper::toString($categoryMeta['description'] ?? '');
+            $icon = TypeHelper::toString($categoryMeta['icon'] ?? 'fa-sliders');
+            $isSystem = !empty($categoryMeta['is_system']) ? 1 : 0;
+            $hasMeta = !empty($categoryMeta['has_meta']) ? 1 : 0;
+            $deleteAllowed = $isSystem ? 1 : ($count === 0 ? 1 : 0);
+            $deleteLabel = $isSystem ? 'Reset Defaults' : 'Delete Category';
+            $helperText = $isSystem
+                ? 'Built-in category. Any changes here update the stored category record without touching the built-in registry defaults.'
+                : ($count > 0
+                    ? 'Custom category. Delete or move the settings inside this category before removing the category itself.'
+                    : 'Custom category. This category is empty and can be removed safely.');
+
+            $categoryCards[] = [
+                $categorySlug,
+                $title,
+                $description,
+                $countLabel,
+                self::buildSettingsCategoryUrl($categorySlug),
+                $selectedCategory === $categorySlug ? 1 : 0,
+                $icon,
+            ];
+
+            $managedCategories[] = [
+                $categorySlug,
+                $title,
+                $description,
+                $icon,
+                $countLabel,
+                $isSystem,
+                $hasMeta,
+                $deleteAllowed,
+                $deleteLabel,
+                $helperText,
+            ];
+        }
+
+        return [$categoryCards, $managedCategories];
+    }
+
+    /**
+     * Build summary counters for the settings overview page.
+     *
+     * @param array $groupedSettings
+     * @param array $rowMap
+     * @param array $categoryCatalog
+     * @return array<string, int>
+     */
+    private static function buildSettingsSummaryCounts(array $groupedSettings, array $rowMap, array $categoryCatalog): array
+    {
+        $totalSettingsCount = 0;
+        foreach ($groupedSettings as $settingsGroup)
+        {
+            $totalSettingsCount += count($settingsGroup);
+        }
+
+        $storedSettingsCount = count($rowMap);
+        $fallbackSettingsCount = max(0, $totalSettingsCount - $storedSettingsCount);
+        $builtInCategoryCount = 0;
+        $customCategoryCount = 0;
+        foreach ($categoryCatalog as $categoryMeta)
+        {
+            if (!empty($categoryMeta['is_system']))
+            {
+                $builtInCategoryCount++;
+            }
+            else
+            {
+                $customCategoryCount++;
+            }
+        }
+
+        return [
+            'total_settings_count' => $totalSettingsCount,
+            'stored_settings_count' => $storedSettingsCount,
+            'fallback_settings_count' => $fallbackSettingsCount,
+            'built_in_category_count' => $builtInCategoryCount,
+            'custom_category_count' => $customCategoryCount,
+        ];
+    }
+
+    /**
+     * Build the current settings page heading and navigation state.
+     *
+     * @param array $categoryCatalog
+     * @param array $groupedSettings
+     * @param string $selectedCategory
+     * @param bool $manageCategories
+     * @return array<string, string>
+     */
+    private static function buildSettingsPageState(array $categoryCatalog, array $groupedSettings, string $selectedCategory, bool $manageCategories): array
+    {
+        $pageTitle = 'Application Settings';
+        $pageDescription = 'Choose a settings category to manage board behavior with cleaner labels, safer inputs, and clearer descriptions.';
+        $selectedCategoryTitle = 'Settings Overview';
+        $selectedCategoryDescription = 'Select a category below to manage those settings on a dedicated page.';
+        $selectedCategoryIcon = 'fa-sliders';
+        $currentNav = 'settings';
+
+        if ($selectedCategory !== '')
+        {
+            $categoryMeta = $categoryCatalog[$selectedCategory] ?? [];
+            $selectedCategoryTitle = TypeHelper::toString($categoryMeta['title'] ?? self::humanizeSettingsToken($selectedCategory));
+            $selectedCategoryDescription = TypeHelper::toString($categoryMeta['description'] ?? '');
+            $selectedCategoryIcon = TypeHelper::toString($categoryMeta['icon'] ?? 'fa-sliders');
+            $pageTitle = preg_match('/settings$/i', $selectedCategoryTitle) ? $selectedCategoryTitle : ($selectedCategoryTitle . ' Settings');
+            $pageDescription = $selectedCategoryDescription;
+        }
+        else if ($manageCategories)
+        {
+            $pageTitle = 'Category Settings';
+            $pageDescription = 'Manage settings category names, descriptions, icons, and custom category groups from one dedicated page.';
+            $selectedCategoryTitle = 'Category Settings';
+            $selectedCategoryDescription = 'Update category presentation details or create a new custom settings group for advanced registry keys.';
+            $currentNav = 'settings-categories';
+        }
+
+        return [
+            'page_title' => $pageTitle,
+            'page_description' => $pageDescription,
+            'selected_category_title' => $selectedCategoryTitle,
+            'selected_category_description' => $selectedCategoryDescription,
+            'selected_category_icon' => $selectedCategoryIcon,
+            'current_nav' => $currentNav,
+        ];
+    }
+
+    /**
+     * Require a POST request for a settings action or redirect back.
+     *
+     * @param string $redirectUrl
+     * @return void
+     */
+    private static function requireSettingsPostRequest(string $redirectUrl): void
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
+        {
+            header('Location: ' . $redirectUrl);
+            exit();
+        }
+    }
+
+    /**
+     * Verify a settings form CSRF token or redirect back with an error.
+     *
+     * @param string $csrf
+     * @param string $redirectUrl
+     * @return void
+     */
+    private static function verifySettingsCsrfOrRedirect(string $csrf, string $redirectUrl): void
+    {
+        if (!Security::verifyCsrfToken($csrf))
+        {
+            header('Location: ' . $redirectUrl . '?error=csrf');
+            exit();
+        }
+    }
+
+    /**
+     * Read the normalized settings save request payload.
+     *
+     * @return array<string, string>
+     */
+    private static function readSettingsSaveRequest(): array
+    {
+        $category = self::normalizeSettingsCategorySlug(Security::sanitizeString($_POST['category'] ?? ''));
+
+        return [
+            'category' => $category,
+            'redirect_base' => self::buildSettingsCategoryUrl($category),
+            'csrf' => Security::sanitizeString($_POST['csrf_token'] ?? ''),
+            'key' => self::normalizeSettingsKey(Security::sanitizeString($_POST['key'] ?? '')),
+            'type' => self::normalizeSettingsType(Security::sanitizeString($_POST['type'] ?? 'string')),
+            'value' => trim((string) ($_POST['value'] ?? '')),
+        ];
+    }
+
+    /**
+     * Guard settings save key access before storing data.
+     *
+     * @param string $key
+     * @param string $redirectUrl
+     * @return void
+     */
+    private static function guardSettingsSaveKeyOrRedirect(string $key, string $redirectUrl): void
+    {
+        if ($key === '')
+        {
+            header('Location: ' . $redirectUrl . '?error=key');
+            exit();
+        }
+
+        if (self::isSettingsReservedKey($key) || self::isSiteAdministratorOnlySettingsKey($key))
+        {
+            header('Location: ' . $redirectUrl . '?error=reserved');
+            exit();
+        }
+    }
+
+    /**
+     * Determine whether a settings key is restricted to the site administrator role.
+     *
+     * @param string $key
+     * @return bool
+     */
+    private static function isSiteAdministratorOnlySettingsKey(string $key): bool
+    {
+        $siteAdministratorOnlyKeys = [
+            'profile.age_gate_enabled',
+            'profile.self_serve_age_gate',
+            'profile.explicit_years',
+            'profile.birthday_badge_enabled',
+        ];
+
+        return in_array($key, $siteAdministratorOnlyKeys, true)
+            && !GroupPermissionHelper::hasGroupSlug(['site-administrator']);
+    }
+
+    /**
+     * Resolve the metadata used when saving a settings row.
+     *
+     * @param string $key
+     * @param string $type
+     * @param string $requestedCategory
+     * @param array|false|null $existing
+     * @return array<string, mixed>
+     */
+    private static function buildSettingsSaveMetadata(string $key, string $type, string $requestedCategory, $existing): array
+    {
+        $definitionCatalog = self::getSettingsDefinitionCatalog();
+        $builtInDefinition = $definitionCatalog[$key] ?? null;
+
+        if ($builtInDefinition !== null)
+        {
+            return [
+                'category' => self::normalizeSettingsCategorySlug(TypeHelper::toString($builtInDefinition['category'] ?? '')),
+                'title' => TypeHelper::toString($builtInDefinition['label'] ?? self::humanizeSettingsToken($key)),
+                'description' => TypeHelper::toString($builtInDefinition['description'] ?? ''),
+                'input_type' => TypeHelper::toString($builtInDefinition['input'] ?? 'text'),
+                'sort_order' => TypeHelper::toInt($builtInDefinition['sort_order'] ?? 0) ?? 0,
+                'is_system' => !empty($builtInDefinition['is_system']) ? 1 : 0,
+                'is_built_in' => 1,
+            ];
+        }
+
+        $resolvedCategory = $requestedCategory !== '' ? $requestedCategory : self::inferSettingsCategoryFromKey($key);
+        $generated = class_exists('SettingsRegistry') ? SettingsRegistry::buildGeneratedDefinition($key, $type, is_array($existing) ? $existing : null) : [];
+
+        return [
+            'category' => $resolvedCategory !== '' ? $resolvedCategory : 'custom',
+            'title' => trim(TypeHelper::toString($existing['title'] ?? ($generated['title'] ?? self::humanizeSettingsToken($key)))),
+            'description' => trim(TypeHelper::toString($existing['description'] ?? ($generated['description'] ?? ''))),
+            'input_type' => TypeHelper::toString($existing['input_type'] ?? ($generated['input'] ?? (class_exists('SettingsRegistry') ? SettingsRegistry::defaultInputForType($type) : 'text'))),
+            'sort_order' => TypeHelper::toInt($existing['sort_order'] ?? ($generated['sort_order'] ?? 9999)) ?? 9999,
+            'is_system' => !empty($existing['is_system']) ? 1 : 0,
+            'is_built_in' => 0,
+        ];
+    }
+
+    /**
+     * Infer the most likely settings category slug for a registry key.
+     *
+     * @param string $key
+     * @return string
+     */
+    private static function inferSettingsCategoryFromKey(string $key): string
+    {
+        $category = self::inferSettingsCategoryFromKey($key);
+
+        return $category !== '' ? $category : 'custom';
     }
 
     /**
@@ -2590,7 +2820,7 @@ class ControlPanelController extends BaseController
             return;
         }
 
-        $category = class_exists('SettingsRegistry') ? SettingsRegistry::inferCategoryFromKey($key) : self::normalizeSettingsCategorySlug(explode('.', $key, 2)[0] ?? 'custom');
+        $category = self::inferSettingsCategoryFromKey($key);
         $categoryId = self::ensureSettingsCategoryExists($category, 0);
 
         SettingsModel::upsertSetting([
@@ -2874,13 +3104,15 @@ class ControlPanelController extends BaseController
      *
      * @return void
      */
-    public static function securityLogs(): void
+
+    /**
+     * Read and normalize the active security log filter values from the request.
+     *
+     * @return array<string, int|string>
+     */
+    private static function getSecurityLogFilters(): array
     {
-        self::requirePanelPermission('view_security');
-
-        $template = self::initTemplate();
-
-        $filters = [
+        return [
             'ip' => Security::sanitizeString($_GET['ip'] ?? ''),
             'fingerprint' => Security::sanitizeString($_GET['fingerprint'] ?? ''),
             'device_fingerprint' => Security::sanitizeString($_GET['device_fingerprint'] ?? ''),
@@ -2890,24 +3122,25 @@ class ControlPanelController extends BaseController
             'category' => Security::sanitizeString($_GET['category'] ?? ''),
             'q' => Security::sanitizeString($_GET['q'] ?? ''),
         ];
+    }
 
-        // Current page for pagination. Defaults to page 1.
-        $page = TypeHelper::toInt($_GET['page'] ?? 1) ?? 1;
-        if ($page < 1)
-        {
-            $page = 1;
-        }
-
-        // Pagination sizing. Keep in sync with template expectations.
-        $perPage = 15;
-        $offset = ($page - 1) * $perPage;
-
+    /**
+     * Build the SQL where clause and bound parameters for security log filters.
+     *
+     * Invalid IP filters intentionally force an empty result set rather than
+     * broadening the query unexpectedly.
+     *
+     * @param array<string, int|string> $filters
+     * @return array{0: string, 1: array<string, mixed>}
+     */
+    private static function buildSecurityLogFilterQuery(array $filters): array
+    {
         $where = [];
         $params = [];
 
-        if ($filters['ip'] !== '')
+        if (($filters['ip'] ?? '') !== '')
         {
-            $packedIp = self::packIpFilter($filters['ip']);
+            $packedIp = self::packIpFilter(TypeHelper::toString($filters['ip'] ?? ''));
             if ($packedIp !== null)
             {
                 $where[] = 'l.ip = :ip';
@@ -2919,99 +3152,73 @@ class ControlPanelController extends BaseController
             }
         }
 
-        if ($filters['fingerprint'] !== '')
+        if (($filters['fingerprint'] ?? '') !== '')
         {
             $where[] = 'l.fingerprint LIKE :fp';
-            $params['fp'] = $filters['fingerprint'] . '%';
+            $params['fp'] = TypeHelper::toString($filters['fingerprint'] ?? '') . '%';
         }
 
-        if ($filters['device_fingerprint'] !== '')
+        if (($filters['device_fingerprint'] ?? '') !== '')
         {
             $where[] = 'l.device_fingerprint LIKE :dfp';
-            $params['dfp'] = $filters['device_fingerprint'] . '%';
+            $params['dfp'] = TypeHelper::toString($filters['device_fingerprint'] ?? '') . '%';
         }
 
-        if ($filters['browser_fingerprint'] !== '')
+        if (($filters['browser_fingerprint'] ?? '') !== '')
         {
             $where[] = 'l.browser_fingerprint LIKE :bfp';
-            $params['bfp'] = $filters['browser_fingerprint'] . '%';
+            $params['bfp'] = TypeHelper::toString($filters['browser_fingerprint'] ?? '') . '%';
         }
 
-        if ($filters['session_id'] !== '')
+        if (($filters['session_id'] ?? '') !== '')
         {
             $where[] = 'l.session_id LIKE :sid';
-            $params['sid'] = $filters['session_id'] . '%';
+            $params['sid'] = TypeHelper::toString($filters['session_id'] ?? '') . '%';
         }
 
-        if ($filters['user_id'] > 0)
+        if ((TypeHelper::toInt($filters['user_id'] ?? 0) ?? 0) > 0)
         {
             $where[] = 'l.user_id = :uid';
-            $params['uid'] = $filters['user_id'];
+            $params['uid'] = TypeHelper::toInt($filters['user_id'] ?? 0) ?? 0;
         }
 
-        if ($filters['category'] !== '')
+        if (($filters['category'] ?? '') !== '')
         {
             $where[] = 'l.category = :cat';
-            $params['cat'] = $filters['category'];
+            $params['cat'] = TypeHelper::toString($filters['category'] ?? '');
         }
 
-        if ($filters['q'] !== '')
+        if (($filters['q'] ?? '') !== '')
         {
             $where[] = '(l.message LIKE :q OR l.ua LIKE :q OR l.session_id LIKE :q)';
-            $params['q'] = '%' . $filters['q'] . '%';
+            $params['q'] = '%' . TypeHelper::toString($filters['q'] ?? '') . '%';
         }
 
-        $sqlWhere = '';
-        if (!empty($where))
+        if (empty($where))
         {
-            $sqlWhere = 'WHERE ' . implode(' AND ', $where);
+            return ['', $params];
         }
 
-        $total = 0;
+        return ['WHERE ' . implode(' AND ', $where), $params];
+    }
+
+    /**
+     * Convert one page of security log rows into the compact template format.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<int, mixed>>
+     */
+    private static function buildSecurityLogRows(array $rows): array
+    {
         $logs = [];
-        $categories = [];
-
-        // Total matching rows for pagination.
-        try
+        foreach ($rows as $row)
         {
-            $total = SecurityLogModel::countMatching($sqlWhere, $params);
-        }
-        catch (Throwable $e)
-        {
-            $total = 0;
-        }
-
-        // Fetch the current page of results.
-        try
-        {
-            $logs = SecurityLogModel::fetchPage($sqlWhere, $params, $perPage, $offset);
-        }
-        catch (Throwable $e)
-        {
-            $logs = [];
-        }
-
-        // Fetch category options for filter dropdown.
-        try
-        {
-            $categories = SecurityLogModel::listCategories();
-        }
-        catch (Throwable $e)
-        {
-            $categories = [];
-        }
-
-        // Normalize rows into template-friendly arrays.
-        $logRows = $logs;
-        $logs = [];
-        foreach ($logRows as $l)
-        {
-            $id = TypeHelper::toInt($l['id'] ?? 0) ?? 0;
-            $createdAt = TypeHelper::toString(DateHelper::date_only_format($l['created_at']) ?? '', allowEmpty: true) ?? '';
-            $deviceFingerprint = TypeHelper::toString($l['device_fingerprint'] ?? '', allowEmpty: true) ?? '';
-            $browserFingerprint = TypeHelper::toString($l['browser_fingerprint'] ?? '', allowEmpty: true) ?? '';
-            $requestFingerprint = TypeHelper::toString($l['fingerprint'] ?? '', allowEmpty: true) ?? '';
-            $sessionId = TypeHelper::toString($l['session_id'] ?? '', allowEmpty: true) ?? '';
+            $id = TypeHelper::toInt($row['id'] ?? 0) ?? 0;
+            $createdAt = TypeHelper::toString(DateHelper::date_only_format($row['created_at']) ?? '', allowEmpty: true) ?? '';
+            $deviceFingerprint = TypeHelper::toString($row['device_fingerprint'] ?? '', allowEmpty: true) ?? '';
+            $browserFingerprint = TypeHelper::toString($row['browser_fingerprint'] ?? '', allowEmpty: true) ?? '';
+            $requestFingerprint = TypeHelper::toString($row['fingerprint'] ?? '', allowEmpty: true) ?? '';
+            $sessionId = TypeHelper::toString($row['session_id'] ?? '', allowEmpty: true) ?? '';
             $signalSummary = [];
 
             if ($deviceFingerprint !== '')
@@ -3035,22 +3242,595 @@ class ControlPanelController extends BaseController
 
             $logs[] = [
                 $createdAt,
-                TypeHelper::toString($l['category'] ?? ''),
-                TypeHelper::toString(ucfirst(self::getUsernameById($l['user_id'])) ?? ''),
-                self::formatStoredIp($l['ip'] ?? null),
+                TypeHelper::toString($row['category'] ?? ''),
+                TypeHelper::toString(ucfirst(self::getUsernameById(TypeHelper::toInt($row['user_id'] ?? 0) ?? 0)) ?? ''),
+                self::formatStoredIp($row['ip'] ?? null),
                 implode(' | ', $signalSummary),
                 '/panel/security/logs/view?id=' . $id,
             ];
         }
 
-        $catRows = $categories;
+        return $logs;
+    }
+
+    /**
+     * Convert the available security log categories into filter option rows.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<int, string>>
+     */
+    private static function buildSecurityLogCategoryRows(array $rows): array
+    {
         $categories = [];
-        foreach ($catRows as $c)
+        foreach ($rows as $row)
         {
             $categories[] = [
-                TypeHelper::toString($c['category'] ?? ''),
+                TypeHelper::toString($row['category'] ?? ''),
             ];
         }
+
+        return $categories;
+    }
+
+    /**
+     * Build pagination links for list views that preserve active query params.
+     *
+     * @param string $baseUrl
+     * @param int $page
+     * @param int $totalPages
+     * @param array<string, int|string> $queryParams
+     * @return array{prev: ?string, next: ?string, pages: array<int, array<int, bool|int|string|null>>}
+     */
+    private static function buildFilteredPaginationState(string $baseUrl, int $page, int $totalPages, array $queryParams = []): array
+    {
+        $buildUrl = static function (int $targetPage) use ($baseUrl, $queryParams): string
+        {
+            $params = $queryParams;
+            if ($targetPage > 1)
+            {
+                $params['page'] = $targetPage;
+            }
+
+            $qs = http_build_query($params);
+            return $qs !== '' ? $baseUrl . '?' . $qs : $baseUrl;
+        };
+
+        $paginationPrev = $page > 1 ? $buildUrl($page - 1) : null;
+        $paginationNext = $page < $totalPages ? $buildUrl($page + 1) : null;
+
+        $range = 2;
+        $start = max(1, $page - $range);
+        $end = min($totalPages, $page + $range);
+        $paginationPages = [];
+
+        if ($start > 1)
+        {
+            $paginationPages[] = [$buildUrl(1), 1, false];
+            if ($start > 2)
+            {
+                $paginationPages[] = [null, '...', false];
+            }
+        }
+
+        for ($i = $start; $i <= $end; $i++)
+        {
+            $paginationPages[] = [
+                $buildUrl($i),
+                $i,
+                $i === $page,
+            ];
+        }
+
+        if ($end < $totalPages)
+        {
+            if ($end < $totalPages - 1)
+            {
+                $paginationPages[] = [null, '...', false];
+            }
+
+            $paginationPages[] = [$buildUrl($totalPages), $totalPages, false];
+        }
+
+        return [
+            'prev' => $paginationPrev,
+            'next' => $paginationNext,
+            'pages' => $paginationPages,
+        ];
+    }
+
+    /**
+     * Remove empty values from the security log filter state for URL building.
+     *
+     * @param array<string, int|string> $filters
+     * @return array<string, int|string>
+     */
+    private static function buildSecurityLogQueryParams(array $filters): array
+    {
+        $params = [];
+
+        foreach (['ip', 'fingerprint', 'device_fingerprint', 'browser_fingerprint', 'session_id', 'category', 'q'] as $key)
+        {
+            if (($filters[$key] ?? '') !== '')
+            {
+                $params[$key] = TypeHelper::toString($filters[$key] ?? '');
+            }
+        }
+
+        if ((TypeHelper::toInt($filters['user_id'] ?? 0) ?? 0) > 0)
+        {
+            $params['user_id'] = TypeHelper::toInt($filters['user_id'] ?? 0) ?? 0;
+        }
+
+        return $params;
+    }
+
+    /**
+     * Resolve the current block list page notice state from the request.
+     *
+     * @return array{notice: string, type: string}
+     */
+    private static function resolveBlockListNotice(): array
+    {
+        $blockError = Security::sanitizeString($_GET['error'] ?? '');
+
+        if (isset($_GET['created']))
+        {
+            return ['notice' => 'Block entry saved successfully.', 'type' => 'success'];
+        }
+
+        if (isset($_GET['removed']))
+        {
+            return ['notice' => 'Matching block entry records were removed.', 'type' => 'success'];
+        }
+
+        if ($blockError === 'csrf')
+        {
+            return ['notice' => 'The request could not be verified. Please try again.', 'type' => 'error'];
+        }
+
+        if ($blockError === 'scope')
+        {
+            return ['notice' => 'Choose a supported scope and provide a matching value before creating a block entry.', 'type' => 'error'];
+        }
+
+        if ($blockError === 'match')
+        {
+            return ['notice' => 'Provide at least one exact match value before removing entries.', 'type' => 'error'];
+        }
+
+        return ['notice' => '', 'type' => ''];
+    }
+
+    /**
+     * Read and normalize the active block list filter values.
+     *
+     * @return array<string, int|string>
+     */
+    private static function getBlockListFilters(): array
+    {
+        return [
+            'scope' => Security::sanitizeString($_GET['scope'] ?? ''),
+            'ip' => Security::sanitizeString($_GET['ip'] ?? ''),
+            'fingerprint' => Security::sanitizeString($_GET['fingerprint'] ?? ''),
+            'device_fingerprint' => Security::sanitizeString($_GET['device_fingerprint'] ?? ''),
+            'browser_fingerprint' => Security::sanitizeString($_GET['browser_fingerprint'] ?? ''),
+            'user_id' => TypeHelper::toInt($_GET['user_id'] ?? 0) ?? 0,
+            'status' => Security::sanitizeString($_GET['status'] ?? ''),
+        ];
+    }
+
+    /**
+     * Build the SQL where clause and parameters for block list filtering.
+     *
+     * @param array<string, int|string> $filters
+     * @return array{0: string, 1: array<string, mixed>}
+     */
+    private static function buildBlockListFilterQuery(array $filters): array
+    {
+        $where = [];
+        $params = [];
+
+        if (($filters['scope'] ?? '') !== '')
+        {
+            $where[] = 'scope = :scope';
+            $params['scope'] = TypeHelper::toString($filters['scope'] ?? '');
+        }
+
+        if (($filters['ip'] ?? '') !== '')
+        {
+            $packedIp = self::packIpFilter(TypeHelper::toString($filters['ip'] ?? ''));
+            if ($packedIp !== null)
+            {
+                $where[] = 'ip = :ip';
+                $params['ip'] = $packedIp;
+            }
+            else
+            {
+                $where[] = '1 = 0';
+            }
+        }
+
+        if (($filters['fingerprint'] ?? '') !== '')
+        {
+            $where[] = 'fingerprint LIKE :fp';
+            $params['fp'] = TypeHelper::toString($filters['fingerprint'] ?? '') . '%';
+        }
+
+        if (($filters['device_fingerprint'] ?? '') !== '')
+        {
+            $where[] = 'device_fingerprint LIKE :dfp';
+            $params['dfp'] = TypeHelper::toString($filters['device_fingerprint'] ?? '') . '%';
+        }
+
+        if (($filters['browser_fingerprint'] ?? '') !== '')
+        {
+            $where[] = 'browser_fingerprint LIKE :bfp';
+            $params['bfp'] = TypeHelper::toString($filters['browser_fingerprint'] ?? '') . '%';
+        }
+
+        if ((TypeHelper::toInt($filters['user_id'] ?? 0) ?? 0) > 0)
+        {
+            $where[] = 'user_id = :uid';
+            $params['uid'] = TypeHelper::toInt($filters['user_id'] ?? 0) ?? 0;
+        }
+
+        if (($filters['status'] ?? '') !== '')
+        {
+            $where[] = 'status = :st';
+            $params['st'] = TypeHelper::toString($filters['status'] ?? '');
+        }
+
+        if (empty($where))
+        {
+            return ['', $params];
+        }
+
+        return ['WHERE ' . implode(' AND ', $where), $params];
+    }
+
+    /**
+     * Convert block list rows into the compact table shape used by the panel.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<int, mixed>>
+     */
+    private static function buildBlockListRows(array $rows): array
+    {
+        $blocks = [];
+        foreach ($rows as $row)
+        {
+            $scope = TypeHelper::toString($row['scope'] ?? '', allowEmpty: true) ?? '';
+            $matchValue = '';
+
+            if ($scope === 'user_id')
+            {
+                $matchValue = TypeHelper::toString($row['user_id'] ?? '', allowEmpty: true) ?? '';
+            }
+            else if ($scope === 'ip')
+            {
+                $matchValue = self::formatStoredIp($row['ip'] ?? null);
+            }
+            else if ($scope === 'ua')
+            {
+                $matchValue = TypeHelper::toString($row['ua'] ?? '', allowEmpty: true) ?? '';
+            }
+            else if ($scope === 'device_fingerprint')
+            {
+                $matchValue = TypeHelper::toString($row['device_fingerprint'] ?? '', allowEmpty: true) ?? '';
+            }
+            else if ($scope === 'browser_fingerprint')
+            {
+                $matchValue = TypeHelper::toString($row['browser_fingerprint'] ?? '', allowEmpty: true) ?? '';
+            }
+            else
+            {
+                $matchValue = TypeHelper::toString($row['fingerprint'] ?? '', allowEmpty: true) ?? '';
+            }
+
+            $blocks[] = [
+                TypeHelper::toInt($row['id'] ?? ''),
+                $scope,
+                TypeHelper::toString($row['status'] ?? ''),
+                TypeHelper::toString($row['reason'] ?? ''),
+                TypeHelper::toString($row['user_id'] ?? ''),
+                TypeHelper::toString($matchValue),
+                TypeHelper::toString(DateHelper::date_only_format($row['last_seen']) ?? '', allowEmpty: true) ?? '',
+                TypeHelper::toString(DateHelper::date_only_format($row['expires_at']) ?? '', allowEmpty: true) ?? '',
+            ];
+        }
+
+        return $blocks;
+    }
+
+    /**
+     * Resolve the block scope and matching value from one request payload.
+     *
+     * Supports both the newer scope/match_value pair and older templates that
+     * still post dedicated scope fields.
+     *
+     * @param array<string, mixed> $input
+     * @return array{scope: string, match_value: string}
+     */
+    private static function resolveBlockScopePayload(array $input): array
+    {
+        $scope = Security::sanitizeString($input['scope'] ?? '');
+        $matchValue = Security::sanitizeString($input['match_value'] ?? '');
+        $userId = TypeHelper::toInt($input['user_id'] ?? 0) ?? 0;
+        $ip = Security::sanitizeString($input['ip'] ?? '');
+        $fingerprint = Security::sanitizeString($input['fingerprint'] ?? '');
+        $deviceFingerprint = Security::sanitizeString($input['device_fingerprint'] ?? '');
+        $browserFingerprint = Security::sanitizeString($input['browser_fingerprint'] ?? '');
+        $ua = Security::sanitizeString($input['ua'] ?? '');
+
+        if ($scope !== '' && $matchValue !== '')
+        {
+            return [
+                'scope' => $scope,
+                'match_value' => $matchValue,
+            ];
+        }
+
+        if ($userId > 0)
+        {
+            return ['scope' => 'user_id', 'match_value' => (string)$userId];
+        }
+
+        if ($ip !== '')
+        {
+            return ['scope' => 'ip', 'match_value' => $ip];
+        }
+
+        if ($deviceFingerprint !== '')
+        {
+            return ['scope' => 'device_fingerprint', 'match_value' => $deviceFingerprint];
+        }
+
+        if ($browserFingerprint !== '')
+        {
+            return ['scope' => 'browser_fingerprint', 'match_value' => $browserFingerprint];
+        }
+
+        if ($fingerprint !== '')
+        {
+            return ['scope' => 'fingerprint', 'match_value' => $fingerprint];
+        }
+
+        if ($ua !== '')
+        {
+            return ['scope' => 'ua', 'match_value' => $ua];
+        }
+
+        return ['scope' => '', 'match_value' => ''];
+    }
+
+    /**
+     * Normalize one posted block status to the supported enforcement states.
+     *
+     * @param string $status
+     * @return string
+     */
+    private static function normalizeBlockStatus(string $status): string
+    {
+        return in_array($status, ['blocked', 'banned', 'jailed', 'rate_limited'], true)
+            ? $status
+            : 'blocked';
+    }
+
+    /**
+     * Build the normalized storage payload for a block list upsert request.
+     *
+     * Returns null when the provided scope or value cannot be normalized into
+     * a valid stored record.
+     *
+     * @param string $scope
+     * @param string $matchValue
+     * @param string $status
+     * @param string $reason
+     * @param string|null $expires
+     * @return array<string, mixed>|null
+     */
+    private static function buildBlockUpsertPayload(string $scope, string $matchValue, string $status, string $reason, ?string $expires): ?array
+    {
+        $valueHash = '';
+        $ipStore = null;
+        $fpStore = null;
+        $dfpStore = null;
+        $bfpStore = null;
+        $uaStore = null;
+        $uidStore = null;
+
+        if ($scope === 'user_id')
+        {
+            $uidStore = TypeHelper::toInt($matchValue) ?? 0;
+            if ($uidStore < 1)
+            {
+                return null;
+            }
+
+            $valueHash = hash('sha256', 'user|' . $uidStore);
+        }
+        else if ($scope === 'ip')
+        {
+            $packed = self::packIpFilter($matchValue);
+            if ($packed === null)
+            {
+                return null;
+            }
+
+            $ipStore = $packed;
+            $ipNorm = @inet_ntop($packed);
+            if (!is_string($ipNorm) || $ipNorm === '')
+            {
+                $ipNorm = $matchValue;
+            }
+
+            $valueHash = hash('sha256', 'ip|' . $ipNorm);
+        }
+        else if ($scope === 'fingerprint')
+        {
+            $fpStore = $matchValue;
+            $valueHash = hash('sha256', 'fp|' . $matchValue);
+        }
+        else if ($scope === 'device_fingerprint')
+        {
+            $dfpStore = $matchValue;
+            $valueHash = hash('sha256', 'dfp|' . $matchValue);
+        }
+        else if ($scope === 'browser_fingerprint')
+        {
+            $bfpStore = $matchValue;
+            $valueHash = hash('sha256', 'bfp|' . $matchValue);
+        }
+        else if ($scope === 'ua')
+        {
+            $uaStore = mb_substr($matchValue, 0, 255);
+            $valueHash = hash('sha256', mb_strtolower($uaStore));
+        }
+        else
+        {
+            return null;
+        }
+
+        return [
+            'scope' => $scope,
+            'vh' => $valueHash,
+            'status' => $status,
+            'reason' => $reason !== '' ? $reason : null,
+            'uid' => $uidStore,
+            'ip' => $ipStore,
+            'ua' => $uaStore,
+            'fp' => $fpStore,
+            'dfp' => $dfpStore,
+            'bfp' => $bfpStore,
+            'exp' => $expires,
+            'status_upd' => $status,
+            'reason_upd' => $reason !== '' ? $reason : null,
+            'exp_upd' => $expires,
+        ];
+    }
+
+    /**
+     * Build the exact-match deletion condition for one block entry request.
+     *
+     * @param string $scope
+     * @param string $matchValue
+     * @return array{0: string, 1: array<string, mixed>}|null
+     */
+    private static function buildBlockRemovalCondition(string $scope, string $matchValue): ?array
+    {
+        $params = ['scope' => $scope];
+
+        if ($scope === 'user_id')
+        {
+            $uid = TypeHelper::toInt($matchValue) ?? 0;
+            if ($uid < 1)
+            {
+                return null;
+            }
+
+            $params['uid'] = $uid;
+            return ['scope = :scope AND user_id = :uid', $params];
+        }
+
+        if ($scope === 'ip')
+        {
+            $packedIp = self::packIpFilter($matchValue);
+            if ($packedIp === null)
+            {
+                return null;
+            }
+
+            $params['ip'] = $packedIp;
+            return ['scope = :scope AND ip = :ip', $params];
+        }
+
+        if ($scope === 'fingerprint')
+        {
+            $params['fp'] = $matchValue;
+            return ['scope = :scope AND fingerprint = :fp', $params];
+        }
+
+        if ($scope === 'device_fingerprint')
+        {
+            $params['dfp'] = $matchValue;
+            return ['scope = :scope AND device_fingerprint = :dfp', $params];
+        }
+
+        if ($scope === 'browser_fingerprint')
+        {
+            $params['bfp'] = $matchValue;
+            return ['scope = :scope AND browser_fingerprint = :bfp', $params];
+        }
+
+        if ($scope === 'ua')
+        {
+            $params['vh'] = hash('sha256', mb_strtolower($matchValue));
+            return ['scope = :scope AND value_hash = :vh', $params];
+        }
+
+        return null;
+    }
+
+    /**
+     * Render the filtered security log overview page.
+     *
+     * @return void
+     */
+    public static function securityLogs(): void
+    {
+        self::requirePanelPermission('view_security');
+
+        $template = self::initTemplate();
+        $filters = self::getSecurityLogFilters();
+
+        // Current page for pagination. Defaults to page 1.
+        $page = TypeHelper::toInt($_GET['page'] ?? 1) ?? 1;
+        if ($page < 1)
+        {
+            $page = 1;
+        }
+
+        // Pagination sizing. Keep in sync with template expectations.
+        $perPage = 15;
+        $offset = ($page - 1) * $perPage;
+        [$sqlWhere, $params] = self::buildSecurityLogFilterQuery($filters);
+
+        $total = 0;
+        $logRows = [];
+        $categoryRows = [];
+
+        // Total matching rows for pagination.
+        try
+        {
+            $total = SecurityLogModel::countMatching($sqlWhere, $params);
+        }
+        catch (Throwable $e)
+        {
+            $total = 0;
+        }
+
+        // Fetch the current page of results.
+        try
+        {
+            $logRows = SecurityLogModel::fetchPage($sqlWhere, $params, $perPage, $offset);
+        }
+        catch (Throwable $e)
+        {
+            $logRows = [];
+        }
+
+        // Fetch category options for filter dropdown.
+        try
+        {
+            $categoryRows = SecurityLogModel::listCategories();
+        }
+        catch (Throwable $e)
+        {
+            $categoryRows = [];
+        }
+
+        $logs = self::buildSecurityLogRows($logRows);
+        $categories = self::buildSecurityLogCategoryRows($categoryRows);
 
         // Build pagination links while preserving active filters.
         $totalPages = (int)ceil($total / $perPage);
@@ -3064,94 +3844,12 @@ class ControlPanelController extends BaseController
             $page = $totalPages;
         }
 
-        $queryParams = [];
-        if ($filters['ip'] !== '')
-        {
-            $queryParams['ip'] = $filters['ip'];
-        }
-
-        if ($filters['fingerprint'] !== '')
-        {
-            $queryParams['fingerprint'] = $filters['fingerprint'];
-        }
-
-        if ($filters['device_fingerprint'] !== '')
-        {
-            $queryParams['device_fingerprint'] = $filters['device_fingerprint'];
-        }
-
-        if ($filters['browser_fingerprint'] !== '')
-        {
-            $queryParams['browser_fingerprint'] = $filters['browser_fingerprint'];
-        }
-
-        if ($filters['session_id'] !== '')
-        {
-            $queryParams['session_id'] = $filters['session_id'];
-        }
-
-        if ($filters['user_id'] > 0)
-        {
-            $queryParams['user_id'] = $filters['user_id'];
-        }
-
-        if ($filters['category'] !== '')
-        {
-            $queryParams['category'] = $filters['category'];
-        }
-
-        if ($filters['q'] !== '')
-        {
-            $queryParams['q'] = $filters['q'];
-        }
-
-        $baseUrl = '/panel/security/logs';
-        $buildUrl = function (int $p) use ($baseUrl, $queryParams): string
-        {
-            $params = $queryParams;
-            if ($p > 1)
-            {
-                $params['page'] = $p;
-            }
-
-            $qs = http_build_query($params);
-            return $qs !== '' ? $baseUrl . '?' . $qs : $baseUrl;
-        };
-
-        $pagination_prev = $page > 1 ? $buildUrl($page - 1) : null;
-        $pagination_next = $page < $totalPages ? $buildUrl($page + 1) : null;
-
-        $range = 2;
-        $start = max(1, $page - $range);
-        $end = min($totalPages, $page + $range);
-
-        $pagination_pages = [];
-        if ($start > 1)
-        {
-            $pagination_pages[] = [$buildUrl(1), 1, false];
-            if ($start > 2)
-            {
-                $pagination_pages[] = [null, '...', false];
-            }
-        }
-
-        for ($i = $start; $i <= $end; $i++)
-        {
-            $pagination_pages[] = [
-                $buildUrl($i),
-                $i,
-                $i === $page
-            ];
-        }
-
-        if ($end < $totalPages)
-        {
-            if ($end < $totalPages - 1)
-            {
-                $pagination_pages[] = [null, '...', false];
-            }
-            $pagination_pages[] = [$buildUrl($totalPages), $totalPages, false];
-        }
+        $pagination = self::buildFilteredPaginationState(
+            '/panel/security/logs',
+            $page,
+            $totalPages,
+            self::buildSecurityLogQueryParams($filters)
+        );
 
         self::assignPanelPage(
             $template,
@@ -3162,59 +3860,52 @@ class ControlPanelController extends BaseController
         );
 
         $template->assign('logs', $logs);
-        $template->assign('filter_ip', TypeHelper::toString($filters['ip']));
-        $template->assign('filter_fingerprint', TypeHelper::toString($filters['fingerprint']));
-        $template->assign('filter_device_fingerprint', TypeHelper::toString($filters['device_fingerprint']));
-        $template->assign('filter_browser_fingerprint', TypeHelper::toString($filters['browser_fingerprint']));
-        $template->assign('filter_session_id', TypeHelper::toString($filters['session_id']));
-        $template->assign('filter_user_id', TypeHelper::toString($filters['user_id']));
-        $template->assign('filter_category', TypeHelper::toString($filters['category']));
-        $template->assign('filter_q', TypeHelper::toString($filters['q']));
+        $template->assign('filter_ip', TypeHelper::toString($filters['ip'] ?? ''));
+        $template->assign('filter_fingerprint', TypeHelper::toString($filters['fingerprint'] ?? ''));
+        $template->assign('filter_device_fingerprint', TypeHelper::toString($filters['device_fingerprint'] ?? ''));
+        $template->assign('filter_browser_fingerprint', TypeHelper::toString($filters['browser_fingerprint'] ?? ''));
+        $template->assign('filter_session_id', TypeHelper::toString($filters['session_id'] ?? ''));
+        $template->assign('filter_user_id', TypeHelper::toString($filters['user_id'] ?? 0));
+        $template->assign('filter_category', TypeHelper::toString($filters['category'] ?? ''));
+        $template->assign('filter_q', TypeHelper::toString($filters['q'] ?? ''));
         $template->assign('categories', $categories);
 
-        $template->assign('pagination_prev', $pagination_prev);
-        $template->assign('pagination_next', $pagination_next);
-        $template->assign('pagination_pages', $pagination_pages);
+        $template->assign('pagination_prev', $pagination['prev']);
+        $template->assign('pagination_next', $pagination['next']);
+        $template->assign('pagination_pages', $pagination['pages']);
 
         $template->render('panel/control_panel_security_logs.html');
     }
 
+
     /**
-     * Render the security log detail page for a single entry.
+     * Load one security log row for the detail page.
      *
-     * Displays full details such as message, fingerprint, IP, and user agent.
-     *
-     * @return void
+     * @param int $id Security log id.
+     * @return array<string, mixed>|null
      */
-    public static function securityLogView(): void
+    private static function loadSecurityLogDetailRow(int $id): ?array
     {
-        self::requirePanelPermission('view_security');
-
-        $id = TypeHelper::toInt($_GET['id'] ?? 0) ?? 0;
-        if ($id < 1)
-        {
-            header('Location: /panel/security/logs');
-            exit();
-        }
-
-        $template = self::initTemplate();
-
-        $log = null;
         try
         {
             $log = SecurityLogModel::findById($id);
+            return is_array($log) && !empty($log) ? $log : null;
         }
         catch (Throwable $e)
         {
-            $log = null;
+            return null;
         }
+    }
 
-        if (empty($log))
-        {
-            header('Location: /panel/security/logs');
-            exit();
-        }
-
+    /**
+     * Assign the security log detail template state.
+     *
+     * @param TemplateEngine $template Active template engine instance.
+     * @param array<string, mixed> $log Security log row.
+     * @return void
+     */
+    private static function assignSecurityLogViewPage(TemplateEngine $template, array $log): void
+    {
         $deviceFingerprint = TypeHelper::toString($log['device_fingerprint'] ?? '', allowEmpty: true) ?? '';
         $browserFingerprint = TypeHelper::toString($log['browser_fingerprint'] ?? '', allowEmpty: true) ?? '';
         $userId = TypeHelper::toInt($log['user_id'] ?? 0) ?? 0;
@@ -3240,10 +3931,37 @@ class ControlPanelController extends BaseController
         $template->assign('log_ua', TypeHelper::toString($log['ua'] ?? ''));
         $template->assign('linked_users', $linkedUsers);
         $template->assign('csrf_token', Security::generateCsrfToken());
-
         $template->assign('log_user_id', $userId > 0 ? (string)$userId : '');
         $template->assign('log_user', TypeHelper::toString(ucfirst(self::getUsernameById($userId)) ?? ''));
+    }
 
+    /**
+     * Render the security log detail page for a single entry.
+     *
+     * Displays full details such as message, fingerprint, IP, and user agent.
+     *
+     * @return void
+     */
+    public static function securityLogView(): void
+    {
+        self::requirePanelPermission('view_security');
+
+        $id = TypeHelper::toInt($_GET['id'] ?? 0) ?? 0;
+        if ($id < 1)
+        {
+            header('Location: /panel/security/logs');
+            exit();
+        }
+
+        $log = self::loadSecurityLogDetailRow($id);
+        if ($log === null)
+        {
+            header('Location: /panel/security/logs');
+            exit();
+        }
+
+        $template = self::initTemplate();
+        self::assignSecurityLogViewPage($template, $log);
         $template->render('panel/control_panel_security_log_view.html');
     }
 
@@ -3259,158 +3977,21 @@ class ControlPanelController extends BaseController
         self::requirePanelPermission('manage_block_list');
 
         $template = self::initTemplate();
+        $noticeState = self::resolveBlockListNotice();
+        $filters = self::getBlockListFilters();
+        [$sqlWhere, $params] = self::buildBlockListFilterQuery($filters);
 
-        $notice = '';
-        $noticeType = '';
-        $blockError = Security::sanitizeString($_GET['error'] ?? '');
-        if (isset($_GET['created']))
-        {
-            $notice = 'Block entry saved successfully.';
-            $noticeType = 'success';
-        }
-        else if (isset($_GET['removed']))
-        {
-            $notice = 'Matching block entry records were removed.';
-            $noticeType = 'success';
-        }
-        else if ($blockError === 'csrf')
-        {
-            $notice = 'The request could not be verified. Please try again.';
-            $noticeType = 'error';
-        }
-        else if ($blockError === 'scope')
-        {
-            $notice = 'Choose a supported scope and provide a matching value before creating a block entry.';
-            $noticeType = 'error';
-        }
-        else if ($blockError === 'match')
-        {
-            $notice = 'Provide at least one exact match value before removing entries.';
-            $noticeType = 'error';
-        }
-
-        $filters = [
-            'scope' => Security::sanitizeString($_GET['scope'] ?? ''),
-            'ip' => Security::sanitizeString($_GET['ip'] ?? ''),
-            'fingerprint' => Security::sanitizeString($_GET['fingerprint'] ?? ''),
-            'device_fingerprint' => Security::sanitizeString($_GET['device_fingerprint'] ?? ''),
-            'browser_fingerprint' => Security::sanitizeString($_GET['browser_fingerprint'] ?? ''),
-            'user_id' => TypeHelper::toInt($_GET['user_id'] ?? 0) ?? 0,
-            'status' => Security::sanitizeString($_GET['status'] ?? ''),
-        ];
-
-        $where = [];
-        $params = [];
-
-        if ($filters['scope'] !== '')
-        {
-            $where[] = 'scope = :scope';
-            $params['scope'] = $filters['scope'];
-        }
-
-        if ($filters['ip'] !== '')
-        {
-            $packedIp = self::packIpFilter($filters['ip']);
-            if ($packedIp !== null)
-            {
-                $where[] = 'ip = :ip';
-                $params['ip'] = $packedIp;
-            }
-            else
-            {
-                $where[] = '1 = 0';
-            }
-        }
-
-        if ($filters['fingerprint'] !== '')
-        {
-            $where[] = 'fingerprint LIKE :fp';
-            $params['fp'] = $filters['fingerprint'] . '%';
-        }
-
-        if ($filters['device_fingerprint'] !== '')
-        {
-            $where[] = 'device_fingerprint LIKE :dfp';
-            $params['dfp'] = $filters['device_fingerprint'] . '%';
-        }
-
-        if ($filters['browser_fingerprint'] !== '')
-        {
-            $where[] = 'browser_fingerprint LIKE :bfp';
-            $params['bfp'] = $filters['browser_fingerprint'] . '%';
-        }
-
-        if ($filters['user_id'] > 0)
-        {
-            $where[] = 'user_id = :uid';
-            $params['uid'] = $filters['user_id'];
-        }
-
-        if ($filters['status'] !== '')
-        {
-            $where[] = 'status = :st';
-            $params['st'] = $filters['status'];
-        }
-
-        $sqlWhere = '';
-        if (!empty($where))
-        {
-            $sqlWhere = 'WHERE ' . implode(' AND ', $where);
-        }
-
-        $blocks = [];
+        $blockRows = [];
         try
         {
-            $blocks = BlockListModel::listFiltered($sqlWhere, $params);
+            $blockRows = BlockListModel::listFiltered($sqlWhere, $params);
         }
         catch (Throwable $e)
         {
-            $blocks = [];
+            $blockRows = [];
         }
 
-        $blockRows = $blocks;
-        $blocks = [];
-        foreach ($blockRows as $b)
-        {
-            $scope = TypeHelper::toString($b['scope'] ?? '', allowEmpty: true) ?? '';
-            $matchValue = '';
-
-            if ($scope === 'user_id')
-            {
-                $matchValue = TypeHelper::toString($b['user_id'] ?? '', allowEmpty: true) ?? '';
-            }
-            else if ($scope === 'ip')
-            {
-                $matchValue = self::formatStoredIp($b['ip'] ?? null);
-            }
-            else if ($scope === 'ua')
-            {
-                $matchValue = TypeHelper::toString($b['ua'] ?? '', allowEmpty: true) ?? '';
-            }
-            else if ($scope === 'device_fingerprint')
-            {
-                $matchValue = TypeHelper::toString($b['device_fingerprint'] ?? '', allowEmpty: true) ?? '';
-            }
-            else if ($scope === 'browser_fingerprint')
-            {
-                $matchValue = TypeHelper::toString($b['browser_fingerprint'] ?? '', allowEmpty: true) ?? '';
-            }
-            else
-            {
-                $matchValue = TypeHelper::toString($b['fingerprint'] ?? '', allowEmpty: true) ?? '';
-            }
-
-            $blocks[] = [
-                TypeHelper::toInt($b['id'] ?? ''),
-                $scope,
-                TypeHelper::toString($b['status'] ?? ''),
-                TypeHelper::toString($b['reason'] ?? ''),
-                TypeHelper::toString($b['user_id'] ?? ''),
-                TypeHelper::toString($matchValue),
-                TypeHelper::toString(DateHelper::date_only_format($b['last_seen']) ?? '', allowEmpty: true) ?? '',
-                TypeHelper::toString(DateHelper::date_only_format($b['expires_at']) ?? '', allowEmpty: true) ?? '',
-            ];
-        }
+        $blocks = self::buildBlockListRows($blockRows);
 
         self::assignPanelPage(
             $template,
@@ -3421,18 +4002,19 @@ class ControlPanelController extends BaseController
         );
 
         $template->assign('blocks', $blocks);
-        $template->assign('control_panel_notice', $notice);
-        $template->assign('control_panel_notice_type', $noticeType);
-        $template->assign('filter_scope', TypeHelper::toString($filters['scope']));
-        $template->assign('filter_ip', TypeHelper::toString($filters['ip']));
-        $template->assign('filter_fingerprint', TypeHelper::toString($filters['fingerprint']));
-        $template->assign('filter_device_fingerprint', TypeHelper::toString($filters['device_fingerprint']));
-        $template->assign('filter_browser_fingerprint', TypeHelper::toString($filters['browser_fingerprint']));
-        $template->assign('filter_user_id', TypeHelper::toString($filters['user_id']));
-        $template->assign('filter_status', TypeHelper::toString($filters['status']));
+        $template->assign('control_panel_notice', $noticeState['notice']);
+        $template->assign('control_panel_notice_type', $noticeState['type']);
+        $template->assign('filter_scope', TypeHelper::toString($filters['scope'] ?? ''));
+        $template->assign('filter_ip', TypeHelper::toString($filters['ip'] ?? ''));
+        $template->assign('filter_fingerprint', TypeHelper::toString($filters['fingerprint'] ?? ''));
+        $template->assign('filter_device_fingerprint', TypeHelper::toString($filters['device_fingerprint'] ?? ''));
+        $template->assign('filter_browser_fingerprint', TypeHelper::toString($filters['browser_fingerprint'] ?? ''));
+        $template->assign('filter_user_id', TypeHelper::toString($filters['user_id'] ?? 0));
+        $template->assign('filter_status', TypeHelper::toString($filters['status'] ?? ''));
         $template->assign('csrf_token', Security::generateCsrfToken());
         $template->render('panel/control_panel_block_list.html');
     }
+
 
     /**
      * Create or update a block list entry (admin action).
@@ -3459,61 +4041,14 @@ class ControlPanelController extends BaseController
             exit();
         }
 
-        $status = Security::sanitizeString($_POST['status'] ?? 'blocked');
+        $status = self::normalizeBlockStatus(Security::sanitizeString($_POST['status'] ?? 'blocked'));
         $reason = Security::sanitizeString($_POST['reason'] ?? '');
         $duration = TypeHelper::toInt($_POST['duration_minutes'] ?? 0) ?? 0;
-
-        $scope = Security::sanitizeString($_POST['scope'] ?? '');
-        $matchValue = Security::sanitizeString($_POST['match_value'] ?? '');
-
-        // Backwards-compatible support for older templates posting individual fields.
-        $userId = TypeHelper::toInt($_POST['user_id'] ?? 0) ?? 0;
-        $ip = Security::sanitizeString($_POST['ip'] ?? '');
-        $fingerprint = Security::sanitizeString($_POST['fingerprint'] ?? '');
-        $deviceFingerprint = Security::sanitizeString($_POST['device_fingerprint'] ?? '');
-        $browserFingerprint = Security::sanitizeString($_POST['browser_fingerprint'] ?? '');
-        $ua = Security::sanitizeString($_POST['ua'] ?? '');
-
-        if ($scope === '' || $matchValue === '')
-        {
-            if ($userId > 0)
-            {
-                $scope = 'user_id';
-                $matchValue = (string)$userId;
-            }
-            else if ($ip !== '')
-            {
-                $scope = 'ip';
-                $matchValue = $ip;
-            }
-            else if ($deviceFingerprint !== '')
-            {
-                $scope = 'device_fingerprint';
-                $matchValue = $deviceFingerprint;
-            }
-            else if ($browserFingerprint !== '')
-            {
-                $scope = 'browser_fingerprint';
-                $matchValue = $browserFingerprint;
-            }
-            else if ($fingerprint !== '')
-            {
-                $scope = 'fingerprint';
-                $matchValue = $fingerprint;
-            }
-            else if ($ua !== '')
-            {
-                $scope = 'ua';
-                $matchValue = $ua;
-            }
-        }
-
-        if (!in_array($status, ['blocked', 'banned', 'jailed', 'rate_limited'], true))
-        {
-            $status = 'blocked';
-        }
-
+        $scopePayload = self::resolveBlockScopePayload($_POST);
+        $scope = $scopePayload['scope'];
+        $matchValue = $scopePayload['match_value'];
         $allowedScopes = ['user_id', 'ip', 'fingerprint', 'device_fingerprint', 'browser_fingerprint', 'ua'];
+
         if (!in_array($scope, $allowedScopes, true) || $matchValue === '')
         {
             header('Location: /panel/security/blocks?error=scope');
@@ -3526,150 +4061,89 @@ class ControlPanelController extends BaseController
             $expires = gmdate('Y-m-d H:i:s', time() + ($duration * 60));
         }
 
-        $valueHash = '';
-        $ipStore = null;
-        $fpStore = null;
-        $dfpStore = null;
-        $bfpStore = null;
-        $uaStore = null;
-        $uidStore = null;
-
-        if ($scope === 'user_id')
+        $payload = self::buildBlockUpsertPayload($scope, $matchValue, $status, $reason, $expires);
+        if ($payload === null)
         {
-            $uidStore = TypeHelper::toInt($matchValue) ?? 0;
-            if ($uidStore < 1)
-            {
-                header('Location: /panel/security/blocks?error=scope');
-                exit();
-            }
-            $valueHash = hash('sha256', 'user|' . $uidStore);
-        }
-        else if ($scope === 'ip')
-        {
-            $packed = self::packIpFilter($matchValue);
-            if ($packed === null)
-            {
-                header('Location: /panel/security/blocks?error=scope');
-                exit();
-            }
-
-            $ipStore = $packed;
-            $ipNorm = @inet_ntop($packed);
-            if (!is_string($ipNorm) || $ipNorm === '')
-            {
-                $ipNorm = $matchValue;
-            }
-            $valueHash = hash('sha256', 'ip|' . $ipNorm);
-        }
-        else if ($scope === 'fingerprint')
-        {
-            $fpStore = $matchValue;
-            $valueHash = hash('sha256', 'fp|' . $matchValue);
-        }
-        else if ($scope === 'device_fingerprint')
-        {
-            $dfpStore = $matchValue;
-            $valueHash = hash('sha256', 'dfp|' . $matchValue);
-        }
-        else if ($scope === 'browser_fingerprint')
-        {
-            $bfpStore = $matchValue;
-            $valueHash = hash('sha256', 'bfp|' . $matchValue);
-        }
-        else if ($scope === 'ua')
-        {
-            $uaStore = mb_substr($matchValue, 0, 255);
-            $valueHash = hash('sha256', mb_strtolower($uaStore));
+            header('Location: /panel/security/blocks?error=scope');
+            exit();
         }
 
-        BlockListModel::upsert([
-            'scope' => $scope,
-            'vh' => $valueHash,
-            'status' => $status,
-            'reason' => $reason !== '' ? $reason : null,
-            'uid' => $uidStore,
-            'ip' => $ipStore,
-            'ua' => $uaStore,
-            'fp' => $fpStore,
-            'dfp' => $dfpStore,
-            'bfp' => $bfpStore,
-            'exp' => $expires,
-            'status_upd' => $status,
-            'reason_upd' => $reason !== '' ? $reason : null,
-            'exp_upd' => $expires,
-        ]);
+        BlockListModel::upsert($payload);
 
         header('Location: /panel/security/blocks?created=1');
         exit();
     }
 
+
     /**
-     * Edit an existing block list entry (admin action).
+     * Normalize one posted block-edit payload.
      *
-     * Supports updating status/reason/expiry. Requires CSRF token validation.
+     * @param array<string, mixed> $block Current block entry.
+     * @return array{status: string, reason: ?string, expires_at: ?string}
+     */
+    private static function readBlockEditPayload(array $block): array
+    {
+        $status = Security::sanitizeString($_POST['status'] ?? $block['status']);
+        if (!in_array($status, ['blocked', 'banned', 'jailed', 'rate_limited'], true))
+        {
+            $status = TypeHelper::toString($block['status']);
+        }
+
+        $reason = Security::sanitizeString($_POST['reason'] ?? '');
+        $expiresAt = Security::sanitizeString($_POST['expires_at'] ?? '');
+
+        return [
+            'status' => $status,
+            'reason' => $reason !== '' ? $reason : null,
+            'expires_at' => $expiresAt !== '' ? $expiresAt : null,
+        ];
+    }
+
+    /**
+     * Process one block-edit submission.
      *
-     * @param int $id Block list entry ID.
+     * @param int $id Block entry id.
+     * @param array<string, mixed> $block Current block entry.
+     * @param array<int, string> $errors Collected validation errors.
+     * @param string $success Success banner text.
+     * @return array<string, mixed>
+     */
+    private static function processBlockEditSubmission(int $id, array $block, array &$errors, string &$success): array
+    {
+        $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
+        if (!Security::verifyCsrfToken($csrf))
+        {
+            $errors[] = 'Invalid request.';
+            return $block;
+        }
+
+        $payload = self::readBlockEditPayload($block);
+
+        try
+        {
+            BlockListModel::updateById($id, $payload['status'], $payload['reason'], $payload['expires_at']);
+            $success = 'Block entry updated.';
+        }
+        catch (Throwable $e)
+        {
+            $errors[] = 'Failed to update entry.';
+            return $block;
+        }
+
+        return BlockListModel::findById($id) ?: $block;
+    }
+
+    /**
+     * Assign the block-edit template state.
+     *
+     * @param TemplateEngine $template Active template engine instance.
+     * @param array<string, mixed> $block Current block entry.
+     * @param array<int, string> $errors Validation errors.
+     * @param string $success Success banner text.
      * @return void
      */
-    public static function blockEdit(int $id): void
+    private static function assignBlockEditPage(TemplateEngine $template, array $block, array $errors, string $success): void
     {
-        self::requirePanelPermission('manage_block_list');
-
-        $errors = [];
-        $success = '';
-
-        $block = BlockListModel::findById($id);
-
-        if (!$block)
-        {
-            http_response_code(404);
-            $template = self::initTemplate();
-            $template->assign('title', 'Not Found');
-            $template->assign('message', 'Block entry not found.');
-            $template->render('errors/error_page.html');
-            return;
-        }
-
-        if ($_SERVER['REQUEST_METHOD'] === 'POST')
-        {
-            $csrf = Security::sanitizeString($_POST['csrf_token'] ?? '');
-            if (!Security::verifyCsrfToken($csrf))
-            {
-                $errors[] = 'Invalid request.';
-            }
-
-            $status = Security::sanitizeString($_POST['status'] ?? $block['status']);
-            $reason = Security::sanitizeString($_POST['reason'] ?? '');
-            $expiresAt = Security::sanitizeString($_POST['expires_at'] ?? '');
-
-            if (!in_array($status, ['blocked', 'banned', 'jailed', 'rate_limited'], true))
-            {
-                $status = TypeHelper::toString($block['status']);
-            }
-
-            $expires = null;
-            if ($expiresAt !== '')
-            {
-                $expires = $expiresAt;
-            }
-
-            if (empty($errors))
-            {
-                try
-                {
-                    BlockListModel::updateById($id, $status, $reason !== '' ? $reason : null, $expires);
-
-                    $success = 'Block entry updated.';
-                    $block = BlockListModel::findById($id);
-                }
-                catch (Throwable $e)
-                {
-                    $errors[] = 'Failed to update entry.';
-                }
-            }
-        }
-
-        $template = self::initTemplate();
         self::assignPanelPage(
             $template,
             'block_list',
@@ -3691,6 +4165,37 @@ class ControlPanelController extends BaseController
         $template->assign('csrf_token', Security::generateCsrfToken());
         $template->assign('error', $errors);
         $template->assign('success', $success);
+    }
+
+    /**
+     * Edit an existing block list entry (admin action).
+     *
+     * Supports updating status/reason/expiry. Requires CSRF token validation.
+     *
+     * @param int $id Block list entry ID.
+     * @return void
+     */
+    public static function blockEdit(int $id): void
+    {
+        self::requirePanelPermission('manage_block_list');
+
+        $errors = [];
+        $success = '';
+        $block = BlockListModel::findById($id);
+
+        if (!$block)
+        {
+            self::renderErrorPage(404, 'Not Found', 'Block entry not found.');
+            return;
+        }
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')
+        {
+            $block = self::processBlockEditSubmission($id, $block, $errors, $success);
+        }
+
+        $template = self::initTemplate();
+        self::assignBlockEditPage($template, $block, $errors, $success);
         $template->render('panel/control_panel_block_edit.html');
     }
 
@@ -3719,110 +4224,20 @@ class ControlPanelController extends BaseController
             exit();
         }
 
-        $scope = Security::sanitizeString($_POST['scope'] ?? '');
-        $matchValue = Security::sanitizeString($_POST['match_value'] ?? '');
-
-        // Backwards-compatible support for older remove buttons.
-        $userId = TypeHelper::toInt($_POST['user_id'] ?? 0) ?? 0;
-        $ip = Security::sanitizeString($_POST['ip'] ?? '');
-        $fingerprint = Security::sanitizeString($_POST['fingerprint'] ?? '');
-        $deviceFingerprint = Security::sanitizeString($_POST['device_fingerprint'] ?? '');
-        $browserFingerprint = Security::sanitizeString($_POST['browser_fingerprint'] ?? '');
-        $ua = Security::sanitizeString($_POST['ua'] ?? '');
-
-        if ($scope === '' || $matchValue === '')
-        {
-            if ($userId > 0)
-            {
-                $scope = 'user_id';
-                $matchValue = (string)$userId;
-            }
-            else if ($ip !== '')
-            {
-                $scope = 'ip';
-                $matchValue = $ip;
-            }
-            else if ($deviceFingerprint !== '')
-            {
-                $scope = 'device_fingerprint';
-                $matchValue = $deviceFingerprint;
-            }
-            else if ($browserFingerprint !== '')
-            {
-                $scope = 'browser_fingerprint';
-                $matchValue = $browserFingerprint;
-            }
-            else if ($fingerprint !== '')
-            {
-                $scope = 'fingerprint';
-                $matchValue = $fingerprint;
-            }
-            else if ($ua !== '')
-            {
-                $scope = 'ua';
-                $matchValue = $ua;
-            }
-        }
-
-        $where = [];
-        $params = [];
-
-        if ($scope === 'user_id')
-        {
-            $uid = TypeHelper::toInt($matchValue) ?? 0;
-            if ($uid > 0)
-            {
-                $where[] = 'scope = :scope AND user_id = :uid';
-                $params['scope'] = $scope;
-                $params['uid'] = $uid;
-            }
-        }
-        else if ($scope === 'ip')
-        {
-            $packedIp = self::packIpFilter($matchValue);
-            if ($packedIp !== null)
-            {
-                $where[] = 'scope = :scope AND ip = :ip';
-                $params['scope'] = $scope;
-                $params['ip'] = $packedIp;
-            }
-        }
-        else if ($scope === 'fingerprint')
-        {
-            $where[] = 'scope = :scope AND fingerprint = :fp';
-            $params['scope'] = $scope;
-            $params['fp'] = $matchValue;
-        }
-        else if ($scope === 'device_fingerprint')
-        {
-            $where[] = 'scope = :scope AND device_fingerprint = :dfp';
-            $params['scope'] = $scope;
-            $params['dfp'] = $matchValue;
-        }
-        else if ($scope === 'browser_fingerprint')
-        {
-            $where[] = 'scope = :scope AND browser_fingerprint = :bfp';
-            $params['scope'] = $scope;
-            $params['bfp'] = $matchValue;
-        }
-        else if ($scope === 'ua')
-        {
-            $where[] = 'scope = :scope AND value_hash = :vh';
-            $params['scope'] = $scope;
-            $params['vh'] = hash('sha256', mb_strtolower($matchValue));
-        }
-
-        if (empty($where))
+        $scopePayload = self::resolveBlockScopePayload($_POST);
+        $condition = self::buildBlockRemovalCondition($scopePayload['scope'], $scopePayload['match_value']);
+        if ($condition === null)
         {
             header('Location: /panel/security/blocks?error=match');
             exit();
         }
 
-        BlockListModel::deleteWhere(implode(' OR ', $where), $params);
+        BlockListModel::deleteWhere($condition[0], $condition[1]);
 
         header('Location: /panel/security/blocks?removed=1');
         exit();
     }
+
 
     /**
      * Remove a single block list entry by ID (admin action).
@@ -3858,112 +4273,27 @@ class ControlPanelController extends BaseController
 
     /**
      * Render the pending image moderation queue.
+     *
      * @param mixed $page
      * @return void
      */
     public static function pending($page = null): void
     {
         $template = self::initTemplate();
-
-        // Require login and permission check
         self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'moderate_image_queue'], $template);
 
-        $page = TypeHelper::toInt($page ?? null) ?? 1;
-        if ($page < 1)
-        {
-            $page = 1;
-        }
-        $perPage = 15; // number of images per page
+        $page = self::normalizePanelPageNumber($page);
+        $perPage = 15;
         $offset = ($page - 1) * $perPage;
-
-        // Fetch total pending images count
         $totalCount = ImageModel::countPendingImages();
-
-        // Fetch paginated pending images
         $rows = ImageModel::fetchPendingImagesPage($offset, $perPage);
+        $pagination = self::buildPanelPaginationState('/panel/image-pending/page/', $page, $perPage, $totalCount);
+        $templateState = self::buildPendingQueueTemplateState($rows, $totalCount, $pagination);
 
-        // Flatten each row for template engine
-        $flattenedRows = [];
-        foreach ($rows as $index => $row)
+        foreach ($templateState as $key => $value)
         {
-            $contentRating = AgeGateHelper::normalizeContentRating(
-                TypeHelper::toString($row['content_rating'] ?? '', allowEmpty: true) ?? '',
-                TypeHelper::toInt($row['age_sensitive'] ?? 0) ?? 0
-            );
-
-            $imageDetails = [];
-            $width = TypeHelper::toInt($row['width'] ?? 0) ?? 0;
-            $height = TypeHelper::toInt($row['height'] ?? 0) ?? 0;
-            if ($width > 0 && $height > 0)
-            {
-                $imageDetails[] = $width . ' × ' . $height . ' px';
-            }
-
-            $sizeBytes = TypeHelper::toInt($row['size_bytes'] ?? 0) ?? 0;
-            if ($sizeBytes > 0)
-            {
-                $imageDetails[] = StorageHelper::formatFileSize($sizeBytes);
-            }
-
-            $mimeType = TypeHelper::toString($row['mime_type'] ?? '', allowEmpty: true) ?? '';
-            if ($mimeType !== '')
-            {
-                $imageDetails[] = $mimeType;
-            }
-
-            $flattenedRows[] = [
-                $index + 1,
-                TypeHelper::toString($row['image_hash'] ?? ''),
-                ucfirst(TypeHelper::toString($row['username'] ?? 'Unknown') ?? 'Unknown'),
-                DateHelper::format($row['created_at']),
-                !empty($imageDetails) ? implode(' • ', $imageDetails) : 'Details unavailable',
-                AgeGateHelper::getContentRatingLabel($contentRating),
-                'pending-rating-pill-' . $contentRating,
-            ];
+            $template->assign($key, $value);
         }
-
-        $notice = Security::sanitizeString($_GET['notice'] ?? '');
-        $noticeMessage = '';
-        switch ($notice)
-        {
-            case 'approved':
-                $noticeMessage = 'The image has been approved.';
-                break;
-
-            case 'saved':
-                $noticeMessage = 'Pending-image moderation changes were saved.';
-                break;
-
-            case 'rejected':
-                $noticeMessage = 'The image has been rejected.';
-                break;
-        }
-
-        // Assign template variables
-        $template->assign('pending_rows', $flattenedRows);
-        $template->assign('pending_count', $totalCount);
-        $template->assign('pending_count_display', NumericalHelper::formatCount($totalCount));
-        $template->assign('pending_notice', $noticeMessage);
-
-        // Pagination calculation
-        $totalPages = (int)ceil($totalCount / $perPage);
-
-        $paginationPages = [];
-        for ($i = 1; $i <= $totalPages; $i++)
-        {
-            $paginationPages[] = [
-                "/panel/image-pending/page/{$i}",
-                $i,
-                $i === $page // current
-            ];
-        }
-
-        $paginationPrev = $page > 1 ? "/panel/image-pending/page/" . ($page - 1) : null;
-        $paginationNext = $page < $totalPages ? "/panel/image-pending/page/" . ($page + 1) : null;
-
-        $template->assign('pagination_pages', $paginationPages);
-        $template->assign('pagination_prev', $paginationPrev);
-        $template->assign('pagination_next', $paginationNext);
 
         self::assignPanelPage(
             $template,
@@ -3977,6 +4307,153 @@ class ControlPanelController extends BaseController
     }
 
     /**
+     * Normalize one control-panel page value into a usable positive number.
+     *
+     * @param mixed $page Incoming route/page value.
+     * @return int Positive page number.
+     */
+    private static function normalizePanelPageNumber($page): int
+    {
+        $page = TypeHelper::toInt($page ?? null) ?? 1;
+        if ($page < 1)
+        {
+            return 1;
+        }
+
+        return $page;
+    }
+
+    /**
+     * Build one simple panel pagination payload for numbered page routes.
+     *
+     * @param string $basePath Route prefix ending with a slash.
+     * @param int $page Current page number.
+     * @param int $perPage Entries per page.
+     * @param int $totalCount Total number of matching entries.
+     * @return array{pagination_pages: array<int, array{0: string, 1: int, 2: bool}>, pagination_prev: string|null, pagination_next: string|null}
+     */
+    private static function buildPanelPaginationState(string $basePath, int $page, int $perPage, int $totalCount): array
+    {
+        $totalPages = max(1, (int)ceil($totalCount / $perPage));
+        if ($page > $totalPages)
+        {
+            $page = $totalPages;
+        }
+
+        $paginationPages = [];
+        for ($i = 1; $i <= $totalPages; $i++)
+        {
+            $paginationPages[] = [
+                $basePath . $i,
+                $i,
+                $i === $page,
+            ];
+        }
+
+        return [
+            'pagination_pages' => $paginationPages,
+            'pagination_prev' => $page > 1 ? $basePath . ($page - 1) : null,
+            'pagination_next' => $page < $totalPages ? $basePath . ($page + 1) : null,
+        ];
+    }
+
+    /**
+     * Build template assignments for the pending-image queue page.
+     *
+     * @param array $rows Pending queue rows from the image model.
+     * @param int $totalCount Total number of pending images.
+     * @param array $pagination Pagination state payload.
+     * @return array<string, mixed> Template assignment payload.
+     */
+    private static function buildPendingQueueTemplateState(array $rows, int $totalCount, array $pagination): array
+    {
+        return $pagination + [
+            'pending_rows' => self::buildPendingQueueRows($rows),
+            'pending_count' => $totalCount,
+            'pending_count_display' => NumericalHelper::formatCount($totalCount),
+            'pending_notice' => self::resolvePendingQueueNotice(),
+        ];
+    }
+
+    /**
+     * Flatten pending-image rows for the existing moderation queue template.
+     *
+     * @param array $rows Pending image rows.
+     * @return array<int, array{0: int, 1: string, 2: string, 3: string, 4: string, 5: string, 6: string}>
+     */
+    private static function buildPendingQueueRows(array $rows): array
+    {
+        $flattenedRows = [];
+        foreach ($rows as $index => $row)
+        {
+            $contentRating = AgeGateHelper::normalizeContentRating(
+                TypeHelper::toString($row['content_rating'] ?? '', allowEmpty: true) ?? '',
+                TypeHelper::toInt($row['age_sensitive'] ?? 0) ?? 0
+            );
+
+            $flattenedRows[] = [
+                $index + 1,
+                TypeHelper::toString($row['image_hash'] ?? ''),
+                ucfirst(TypeHelper::toString($row['username'] ?? 'Unknown') ?? 'Unknown'),
+                DateHelper::format($row['created_at']),
+                self::buildPendingQueueImageDetails($row),
+                AgeGateHelper::getContentRatingLabel($contentRating),
+                'pending-rating-pill-' . $contentRating,
+            ];
+        }
+
+        return $flattenedRows;
+    }
+
+    /**
+     * Build the compact metadata summary shown beside one pending queue entry.
+     *
+     * @param array $row Pending image row.
+     * @return string Formatted details string for the template.
+     */
+    private static function buildPendingQueueImageDetails(array $row): string
+    {
+        $imageDetails = [];
+
+        $width = TypeHelper::toInt($row['width'] ?? 0) ?? 0;
+        $height = TypeHelper::toInt($row['height'] ?? 0) ?? 0;
+        if ($width > 0 && $height > 0)
+        {
+            $imageDetails[] = $width . ' × ' . $height . ' px';
+        }
+
+        $sizeBytes = TypeHelper::toInt($row['size_bytes'] ?? 0) ?? 0;
+        if ($sizeBytes > 0)
+        {
+            $imageDetails[] = StorageHelper::formatFileSize($sizeBytes);
+        }
+
+        $mimeType = TypeHelper::toString($row['mime_type'] ?? '', allowEmpty: true) ?? '';
+        if ($mimeType !== '')
+        {
+            $imageDetails[] = $mimeType;
+        }
+
+        return !empty($imageDetails) ? implode(' • ', $imageDetails) : 'Details unavailable';
+    }
+
+    /**
+     * Resolve the current queue-page notice message from the query string.
+     *
+     * @return string User-facing queue notice copy.
+     */
+    private static function resolvePendingQueueNotice(): string
+    {
+        return match (Security::sanitizeString($_GET['notice'] ?? ''))
+        {
+            'approved' => 'The image has been approved.',
+            'saved' => 'Pending-image moderation changes were saved.',
+            'rejected' => 'The image has been rejected.',
+            default => '',
+        };
+    }
+
+    /**
      * Render and process one pending-image moderation review page.
      *
      * @param string $hash The image hash identifier from the route.
@@ -3985,8 +4462,6 @@ class ControlPanelController extends BaseController
     public static function pendingImageReview(string $hash): void
     {
         $template = self::initTemplate();
-
-        // Require login and permission check
         self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'moderate_image_queue'], $template);
 
         $hash = TypeHelper::toString($hash);
@@ -3998,52 +4473,8 @@ class ControlPanelController extends BaseController
 
         if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')
         {
-            $csrfToken = $_POST['csrf_token'] ?? '';
-            if (!Security::verifyCsrfToken($csrfToken))
-            {
-                self::renderInvalidRequest($template);
-                return;
-            }
-
-            $image = ImageModel::findPendingModerationImageByHash($hash);
-            if (!$image)
-            {
-                self::renderImageNotFound($template);
-                return;
-            }
-
-            $description = TypeHelper::toString($_POST['description'] ?? null, allowEmpty: true) ?? '';
-            $contentRating = AgeGateHelper::normalizeContentRating(TypeHelper::toString($_POST['content_rating'] ?? 'standard', allowEmpty: true) ?? 'standard');
-            $rejectReason = TypeHelper::toString($_POST['reject_reason'] ?? null, allowEmpty: true) ?? '';
-            $reviewAction = Security::sanitizeString($_POST['review_action'] ?? 'save');
-            $moderatorUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-
-            switch ($reviewAction)
-            {
-                case 'approve':
-                    ImageModel::updatePendingModerationDraft($hash, $description, $contentRating);
-                    $updatedRows = ImageModel::approvePendingImage($hash, $moderatorUserId, $contentRating);
-                    if ($updatedRows > 0)
-                    {
-                        self::createPendingImageNotification($hash, 'approved', $contentRating);
-                    }
-                    header('Location: /panel/image-pending?notice=approved');
-                    exit;
-
-                case 'reject':
-                    $updatedRows = ImageModel::rejectPendingImage($hash, $moderatorUserId, $rejectReason);
-                    if ($updatedRows > 0)
-                    {
-                        self::createPendingImageNotification($hash, 'rejected', 'standard', $rejectReason);
-                    }
-                    header('Location: /panel/image-pending?notice=rejected');
-                    exit;
-
-                default:
-                    ImageModel::updatePendingModerationDraft($hash, $description, $contentRating);
-                    header('Location: /panel/image-pending/review/' . rawurlencode($hash) . '?notice=saved');
-                    exit;
-            }
+            self::handlePendingImageReviewSubmission($template, $hash);
+            return;
         }
 
         $image = ImageModel::findPendingModerationImageByHash($hash);
@@ -4053,37 +4484,11 @@ class ControlPanelController extends BaseController
             return;
         }
 
-        $notice = Security::sanitizeString($_GET['notice'] ?? '');
-        $noticeMessage = '';
-        if ($notice === 'saved')
+        $templateState = self::buildPendingImageReviewTemplateState($image, $hash);
+        foreach ($templateState as $key => $value)
         {
-            $noticeMessage = 'Pending-image moderation changes were saved.';
+            $template->assign($key, $value);
         }
-
-        $contentRating = AgeGateHelper::normalizeContentRating(
-            TypeHelper::toString($image['content_rating'] ?? '', allowEmpty: true) ?? '',
-            TypeHelper::toInt($image['age_sensitive'] ?? 0) ?? 0
-        );
-
-        $template->assign('pending_review_notice', $noticeMessage);
-        $template->assign('pending_review_hash', TypeHelper::toString($image['image_hash'] ?? ''));
-        $template->assign('pending_review_description', TypeHelper::toString($image['description'] ?? '', allowEmpty: true) ?? '');
-        $template->assign('pending_review_reject_reason', TypeHelper::toString($image['reject_reason'] ?? '', allowEmpty: true) ?? '');
-        $template->assign('pending_review_content_rating', $contentRating);
-        $template->assign('pending_review_content_rating_label', AgeGateHelper::getContentRatingLabel($contentRating));
-        $template->assign('pending_review_uploader', ucfirst(self::getUsernameById(TypeHelper::toInt($image['user_id'] ?? 0) ?? 0)));
-        $template->assign('pending_review_created_at', !empty($image['created_at']) ? DateHelper::format($image['created_at']) : 'Unknown');
-        $template->assign('pending_review_updated_at', !empty($image['updated_at']) ? DateHelper::format($image['updated_at']) : 'Unknown');
-        $template->assign('pending_review_dimensions', (TypeHelper::toInt($image['width'] ?? 0) ?? 0) . ' × ' . (TypeHelper::toInt($image['height'] ?? 0) ?? 0) . ' px');
-        $template->assign('pending_review_file_size', StorageHelper::formatFileSize(TypeHelper::toInt($image['size_bytes'] ?? 0) ?? 0));
-        $template->assign('pending_review_mime_type', TypeHelper::toString($image['mime_type'] ?? 'Unknown'));
-        $template->assign('pending_review_original_path', TypeHelper::toString($image['original_path'] ?? '', allowEmpty: true) ?? '');
-        $template->assign('pending_review_md5', TypeHelper::toString($image['md5'] ?? '', allowEmpty: true) ?? '');
-        $template->assign('pending_review_sha1', TypeHelper::toString($image['sha1'] ?? '', allowEmpty: true) ?? '');
-        $template->assign('pending_review_sha256', TypeHelper::toString($image['sha256'] ?? '', allowEmpty: true) ?? '');
-        $template->assign('pending_review_sha512', TypeHelper::toString($image['sha512'] ?? '', allowEmpty: true) ?? '');
-        $template->assign('pending_review_preview_url', '/panel/image-pending/' . rawurlencode($hash));
-        $template->assign('pending_review_back_url', '/panel/image-pending');
 
         self::assignPanelPage(
             $template,
@@ -4094,6 +4499,192 @@ class ControlPanelController extends BaseController
         );
 
         $template->render('panel/control_panel_pending_review.html');
+    }
+
+    /**
+     * Process one pending-image moderation submission.
+     *
+     * @param TemplateEngine $template Prepared template instance.
+     * @param string $hash Pending image hash.
+     * @return void
+     */
+    private static function handlePendingImageReviewSubmission(TemplateEngine $template, string $hash): void
+    {
+        self::requireProtectedPanelPost($template);
+
+        $image = ImageModel::findPendingModerationImageByHash($hash);
+        if (!$image)
+        {
+            self::renderImageNotFound($template);
+            return;
+        }
+
+        $description = TypeHelper::toString($_POST['description'] ?? null, allowEmpty: true) ?? '';
+        $contentRating = AgeGateHelper::normalizeContentRating(TypeHelper::toString($_POST['content_rating'] ?? 'standard', allowEmpty: true) ?? 'standard');
+        $rejectReason = TypeHelper::toString($_POST['reject_reason'] ?? null, allowEmpty: true) ?? '';
+        $reviewAction = Security::sanitizeString($_POST['review_action'] ?? 'save');
+
+        switch ($reviewAction)
+        {
+            case 'approve':
+                ImageModel::updatePendingModerationDraft($hash, $description, $contentRating);
+                self::completePendingImageApproval($hash, $contentRating);
+                return;
+
+            case 'reject':
+                self::completePendingImageRejection($hash, $rejectReason);
+                return;
+
+            default:
+                ImageModel::updatePendingModerationDraft($hash, $description, $contentRating);
+                header('Location: /panel/image-pending/review/' . rawurlencode($hash) . '?notice=saved');
+                exit;
+        }
+    }
+
+    /**
+     * Build template assignments for one pending-image review page.
+     *
+     * @param array $image Pending moderation image row.
+     * @param string $hash Pending image hash from the route.
+     * @return array<string, mixed> Template assignment payload.
+     */
+    private static function buildPendingImageReviewTemplateState(array $image, string $hash): array
+    {
+        $contentRating = AgeGateHelper::normalizeContentRating(
+            TypeHelper::toString($image['content_rating'] ?? '', allowEmpty: true) ?? '',
+            TypeHelper::toInt($image['age_sensitive'] ?? 0) ?? 0
+        );
+
+        return [
+            'pending_review_notice' => Security::sanitizeString($_GET['notice'] ?? '') === 'saved' ? 'Pending-image moderation changes were saved.' : '',
+            'pending_review_hash' => TypeHelper::toString($image['image_hash'] ?? ''),
+            'pending_review_description' => TypeHelper::toString($image['description'] ?? '', allowEmpty: true) ?? '',
+            'pending_review_reject_reason' => TypeHelper::toString($image['reject_reason'] ?? '', allowEmpty: true) ?? '',
+            'pending_review_content_rating' => $contentRating,
+            'pending_review_content_rating_label' => AgeGateHelper::getContentRatingLabel($contentRating),
+            'pending_review_uploader' => ucfirst(self::getUsernameById(TypeHelper::toInt($image['user_id'] ?? 0) ?? 0)),
+            'pending_review_created_at' => !empty($image['created_at']) ? DateHelper::format($image['created_at']) : 'Unknown',
+            'pending_review_updated_at' => !empty($image['updated_at']) ? DateHelper::format($image['updated_at']) : 'Unknown',
+            'pending_review_dimensions' => (TypeHelper::toInt($image['width'] ?? 0) ?? 0) . ' × ' . (TypeHelper::toInt($image['height'] ?? 0) ?? 0) . ' px',
+            'pending_review_file_size' => StorageHelper::formatFileSize(TypeHelper::toInt($image['size_bytes'] ?? 0) ?? 0),
+            'pending_review_mime_type' => TypeHelper::toString($image['mime_type'] ?? 'Unknown'),
+            'pending_review_original_path' => TypeHelper::toString($image['original_path'] ?? '', allowEmpty: true) ?? '',
+            'pending_review_md5' => TypeHelper::toString($image['md5'] ?? '', allowEmpty: true) ?? '',
+            'pending_review_sha1' => TypeHelper::toString($image['sha1'] ?? '', allowEmpty: true) ?? '',
+            'pending_review_sha256' => TypeHelper::toString($image['sha256'] ?? '', allowEmpty: true) ?? '',
+            'pending_review_sha512' => TypeHelper::toString($image['sha512'] ?? '', allowEmpty: true) ?? '',
+            'pending_review_preview_url' => '/panel/image-pending/' . rawurlencode($hash),
+            'pending_review_back_url' => '/panel/image-pending',
+        ];
+    }
+
+    /**
+     * Require one valid control-panel POST request with CSRF protection.
+     *
+     * @param TemplateEngine $template Prepared template instance.
+     * @return void
+     */
+    private static function requireProtectedPanelPost(TemplateEngine $template): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            self::renderErrorPage(405, 'Method Not Allowed', 'Invalid request.', $template);
+            exit;
+        }
+
+        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
+        if (!Security::verifyCsrfToken($csrfToken))
+        {
+            self::renderInvalidRequest($template);
+            exit;
+        }
+    }
+
+    /**
+     * Resolve one pending-image action target from the route hash.
+     *
+     * @param TemplateEngine $template Prepared template instance.
+     * @param string $hash Pending image hash from the route.
+     * @return string|null Normalized image hash when the image is still pending.
+     */
+    private static function resolvePendingImageActionHash(TemplateEngine $template, string $hash): ?string
+    {
+        $hash = TypeHelper::toString($hash);
+        if ($hash === '')
+        {
+            self::renderErrorPage(404, '404 Not Found', 'Oops! We couldn’t find that image.', $template);
+            return null;
+        }
+
+        $image = ImageModel::findModerationStatusByHash($hash);
+        if (!$image)
+        {
+            self::renderImageNotFound($template);
+            return null;
+        }
+
+        if (($image['status'] ?? '') !== 'pending')
+        {
+            self::redirectPendingQueue();
+            return null;
+        }
+
+        return $hash;
+    }
+
+    /**
+     * Redirect back to the pending moderation queue with an optional notice.
+     *
+     * @param string $notice Optional queue notice state.
+     * @return void
+     */
+    private static function redirectPendingQueue(string $notice = ''): void
+    {
+        $location = '/panel/image-pending';
+        if ($notice !== '')
+        {
+            $location .= '?notice=' . rawurlencode($notice);
+        }
+
+        header('Location: ' . $location);
+        exit;
+    }
+
+    /**
+     * Approve one pending image and emit the matching queue notification.
+     *
+     * @param string $hash Pending image hash.
+     * @param string $contentRating Final content rating to store.
+     * @return void
+     */
+    private static function completePendingImageApproval(string $hash, string $contentRating): void
+    {
+        $updatedRows = ImageModel::approvePendingImage($hash, self::getCurrentUserId(), $contentRating);
+        if ($updatedRows > 0)
+        {
+            self::createPendingImageNotification($hash, 'approved', $contentRating);
+        }
+
+        self::redirectPendingQueue('approved');
+    }
+
+    /**
+     * Reject one pending image and emit the matching queue notification.
+     *
+     * @param string $hash Pending image hash.
+     * @param string $rejectReason Optional rejection reason.
+     * @return void
+     */
+    private static function completePendingImageRejection(string $hash, string $rejectReason = ''): void
+    {
+        $updatedRows = ImageModel::rejectPendingImage($hash, self::getCurrentUserId(), $rejectReason);
+        if ($updatedRows > 0)
+        {
+            self::createPendingImageNotification($hash, 'rejected', 'standard', $rejectReason);
+        }
+
+        self::redirectPendingQueue('rejected');
     }
 
     /**
@@ -4108,69 +4699,16 @@ class ControlPanelController extends BaseController
     public static function approveImage(string $hash): void
     {
         $template = self::initTemplate();
-
-        // Require login and permission check
         self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'moderate_image_queue'], $template);
+        self::requireProtectedPanelPost($template);
 
-        // Approve requests must be POST-only (prevents accidental approvals from URL visits)
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        $hash = self::resolvePendingImageActionHash($template, $hash);
+        if ($hash === null)
         {
-            http_response_code(405);
-            $template->assign('title', 'Method Not Allowed');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
             return;
         }
 
-        $csrfToken = $_POST['csrf_token'] ?? '';
-
-        // Verify CSRF token to prevent cross-site request forgery
-        if (!Security::verifyCsrfToken($csrfToken))
-        {
-            self::renderInvalidRequest($template);
-            return;
-        }
-
-        // Ensure a valid hash is provided
-        // (The router passes the hash from the URL, but we still validate it here.)
-        $hash = TypeHelper::toString($hash);
-        if ($hash === '')
-        {
-            self::renderErrorPage(404, '404 Not Found', 'Oops! We couldn’t find that image.', $template);
-            return;
-        }
-
-        // Find the target image and confirm moderation state
-        // (We only allow approving images that are currently pending.)
-        $image = ImageModel::findModerationStatusByHash($hash);
-
-        if (!$image)
-        {
-            self::renderImageNotFound($template);
-            return;
-        }
-
-        // Only pending images can be approved
-        // (If it has already been moderated, just return back to the pending list.)
-        if (($image['status'] ?? '') !== 'pending')
-        {
-            header('Location: /panel/image-pending');
-            exit;
-        }
-
-        // Approve image
-        // - Record the moderator user id for audit/history tracking
-        // - Store moderation timestamps for UI / reporting
-        $appUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        $updatedRows = ImageModel::approvePendingImage($hash, $appUserId, 'standard');
-        if ($updatedRows > 0)
-        {
-            self::createPendingImageNotification($hash, 'approved', 'standard');
-        }
-
-        // Redirect back to the pending list after action completes
-        header('Location: /panel/image-pending?notice=approved');
-        exit;
+        self::completePendingImageApproval($hash, 'standard');
     }
 
     /**
@@ -4185,69 +4723,16 @@ class ControlPanelController extends BaseController
     public static function approveImageSensitive(string $hash): void
     {
         $template = self::initTemplate();
-
-        // Require login and permission check
         self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'moderate_image_queue'], $template);
+        self::requireProtectedPanelPost($template);
 
-        // Approve requests must be POST-only (prevents accidental approvals from URL visits)
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        $hash = self::resolvePendingImageActionHash($template, $hash);
+        if ($hash === null)
         {
-            http_response_code(405);
-            $template->assign('title', 'Method Not Allowed');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
             return;
         }
 
-        $csrfToken = $_POST['csrf_token'] ?? '';
-
-        // Verify CSRF token to prevent cross-site request forgery
-        if (!Security::verifyCsrfToken($csrfToken))
-        {
-            self::renderInvalidRequest($template);
-            return;
-        }
-
-        // Ensure a valid hash is provided
-        // (The router passes the hash from the URL, but we still validate it here.)
-        $hash = TypeHelper::toString($hash);
-        if ($hash === '')
-        {
-            self::renderErrorPage(404, '404 Not Found', 'Oops! We couldn’t find that image.', $template);
-            return;
-        }
-
-        // Find the target image and confirm moderation state
-        // (We only allow approving images that are currently pending.)
-        $image = ImageModel::findModerationStatusByHash($hash);
-
-        if (!$image)
-        {
-            self::renderImageNotFound($template);
-            return;
-        }
-
-        // Only pending images can be approved
-        // (If it has already been moderated, just return back to the pending list.)
-        if (($image['status'] ?? '') !== 'pending')
-        {
-            header('Location: /panel/image-pending');
-            exit;
-        }
-
-        // Approve image
-        // - Record the moderator user id for audit/history tracking
-        // - Store moderation timestamps for UI / reporting
-        $appUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        $updatedRows = ImageModel::approvePendingImage($hash, $appUserId, 'sensitive');
-        if ($updatedRows > 0)
-        {
-            self::createPendingImageNotification($hash, 'approved', 'sensitive');
-        }
-
-        // Redirect back to the pending list after action completes
-        header('Location: /panel/image-pending?notice=approved');
-        exit;
+        self::completePendingImageApproval($hash, 'sensitive');
     }
 
     /**
@@ -4262,54 +4747,16 @@ class ControlPanelController extends BaseController
     public static function approveImageExplicit(string $hash): void
     {
         $template = self::initTemplate();
-
         self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'moderate_image_queue'], $template);
+        self::requireProtectedPanelPost($template);
 
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        $hash = self::resolvePendingImageActionHash($template, $hash);
+        if ($hash === null)
         {
-            http_response_code(405);
-            $template->assign('title', 'Method Not Allowed');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
             return;
         }
 
-        $csrfToken = $_POST['csrf_token'] ?? '';
-        if (!Security::verifyCsrfToken($csrfToken))
-        {
-            self::renderInvalidRequest($template);
-            return;
-        }
-
-        $hash = TypeHelper::toString($hash);
-        if ($hash === '')
-        {
-            self::renderErrorPage(404, '404 Not Found', 'Oops! We couldn’t find that image.', $template);
-            return;
-        }
-
-        $image = ImageModel::findModerationStatusByHash($hash);
-        if (!$image)
-        {
-            self::renderImageNotFound($template);
-            return;
-        }
-
-        if (($image['status'] ?? '') !== 'pending')
-        {
-            header('Location: /panel/image-pending');
-            exit;
-        }
-
-        $appUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        $updatedRows = ImageModel::approvePendingImage($hash, $appUserId, 'explicit');
-        if ($updatedRows > 0)
-        {
-            self::createPendingImageNotification($hash, 'approved', 'explicit');
-        }
-
-        header('Location: /panel/image-pending?notice=approved');
-        exit;
+        self::completePendingImageApproval($hash, 'explicit');
     }
 
     /**
@@ -4324,69 +4771,16 @@ class ControlPanelController extends BaseController
     public static function rejectImage(string $hash): void
     {
         $template = self::initTemplate();
-
-        // Require login and permission check
         self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'moderate_image_queue'], $template);
+        self::requireProtectedPanelPost($template);
 
-        // Reject requests must be POST-only (prevents accidental rejections from URL visits)
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        $hash = self::resolvePendingImageActionHash($template, $hash);
+        if ($hash === null)
         {
-            http_response_code(405);
-            $template->assign('title', 'Method Not Allowed');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
             return;
         }
 
-        $csrfToken = $_POST['csrf_token'] ?? '';
-
-        // Verify CSRF token to prevent cross-site request forgery
-        if (!Security::verifyCsrfToken($csrfToken))
-        {
-            self::renderInvalidRequest($template);
-            return;
-        }
-
-        // Ensure a valid hash is provided
-        // (The router passes the hash from the URL, but we still validate it here.)
-        $hash = TypeHelper::toString($hash);
-        if ($hash === '')
-        {
-            self::renderErrorPage(404, '404 Not Found', 'Oops! We couldn’t find that image.', $template);
-            return;
-        }
-
-        // Find the target image and confirm moderation state
-        // (We only allow rejecting images that are currently pending.)
-        $image = ImageModel::findModerationStatusByHash($hash);
-
-        if (!$image)
-        {
-            self::renderImageNotFound($template);
-            return;
-        }
-
-        // Only pending images can be rejected
-        // (If it has already been moderated, just return back to the pending list.)
-        if (($image['status'] ?? '') !== 'pending')
-        {
-            header('Location: /panel/image-pending');
-            exit;
-        }
-
-        // Reject image
-        // - Record the moderator user id for audit/history tracking
-        // - Store moderation timestamps for UI / reporting
-        $rejUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-        $updatedRows = ImageModel::rejectPendingImage($hash, $rejUserId);
-        if ($updatedRows > 0)
-        {
-            self::createPendingImageNotification($hash, 'rejected');
-        }
-
-        // Redirect back to the pending list after action completes
-        header('Location: /panel/image-pending?notice=rejected');
-        exit;
+        self::completePendingImageRejection($hash);
     }
 
     /**
@@ -4395,27 +4789,15 @@ class ControlPanelController extends BaseController
      * @param int|null $page Current pagination page.
      * @return void
      */
-    public static function imageReports($page = null): void
+
+    /**
+     * Convert one image report queue page into compact template rows.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<int, mixed>>
+     */
+    private static function buildImageReportQueueRows(array $rows): array
     {
-        $template = self::initTemplate();
-        self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'manage_image_reports'], $template);
-
-        $page = TypeHelper::toInt($page ?? null) ?? 1;
-        if ($page < 1)
-        {
-            $page = 1;
-        }
-
-        $perPage = 15;
-        $offset = ($page - 1) * $perPage;
-
-        $reportCounts = ImageReportModel::getQueueCounts();
-        $totalCount = TypeHelper::toInt($reportCounts['total'] ?? 0) ?? 0;
-        $openCount = TypeHelper::toInt($reportCounts['open'] ?? 0) ?? 0;
-        $closedCount = TypeHelper::toInt($reportCounts['closed'] ?? 0) ?? 0;
-
-        $rows = ImageReportModel::fetchQueuePage($perPage, $offset);
-
         $reportRows = [];
         foreach ($rows as $row)
         {
@@ -4443,6 +4825,139 @@ class ControlPanelController extends BaseController
                 '/panel/image-reports/view?id=' . $reportId,
             ];
         }
+
+        return $reportRows;
+    }
+
+    /**
+     * Convert report staff notes into template rows.
+     *
+     * @param array<int, array<string, mixed>> $staffNotes
+     * @return array<int, array<int, mixed>>
+     */
+    private static function buildImageReportStaffNoteRows(array $staffNotes): array
+    {
+        $noteRows = [];
+        foreach ($staffNotes as $note)
+        {
+            $noteRows[] = [
+                TypeHelper::toInt($note['user_id'] ?? 0) ?? 0,
+                ucfirst(TypeHelper::toString($note['username'] ?? 'Unknown Staff')),
+                DateHelper::date_only_format(TypeHelper::toString($note['created_at'] ?? '')),
+                TypeHelper::toString($note['comment_body'] ?? ''),
+                DateHelper::date_only_format(TypeHelper::toString($note['updated_at'] ?? '')),
+            ];
+        }
+
+        return $noteRows;
+    }
+
+    /**
+     * Assemble the image report detail template state.
+     *
+     * @param array<string, mixed> $report
+     * @param array<int, array<int, mixed>> $noteRows
+     * @param int $currentStaffUserId
+     * @return array<string, mixed>
+     */
+    private static function buildImageReportDetailTemplateState(array $report, array $noteRows, int $currentStaffUserId): array
+    {
+        $reporterUserId = TypeHelper::toInt($report['reporter_user_id'] ?? 0) ?? 0;
+        $assignedUserId = TypeHelper::toInt($report['assigned_to_user_id'] ?? 0) ?? 0;
+        $resolvedBy = TypeHelper::toInt($report['resolved_by'] ?? 0) ?? 0;
+        $status = TypeHelper::toString($report['status'] ?? 'open');
+        $normalizedStatus = ImageReportHelper::normalizeStatus($status);
+        $assignedAt = TypeHelper::toString($report['assigned_at'] ?? null, allowEmpty: true);
+        $resolvedAt = TypeHelper::toString($report['resolved_at'] ?? null, allowEmpty: true);
+
+        return [
+            'report_id' => TypeHelper::toInt($report['id'] ?? 0),
+            'report_image_hash' => TypeHelper::toString($report['image_hash'] ?? ''),
+            'report_image_status' => ucfirst(TypeHelper::toString($report['image_status'] ?? '')),
+            'report_image_visibility' => AgeGateHelper::getContentRatingLabel(AgeGateHelper::normalizeContentRating(
+                TypeHelper::toString($report['content_rating'] ?? '', allowEmpty: true) ?? '',
+                TypeHelper::toInt($report['age_sensitive'] ?? 0) ?? 0
+            )),
+            'report_image_created_at' => DateHelper::date_only_format(TypeHelper::toString($report['image_created_at'] ?? '')),
+            'report_category' => ImageReportHelper::categoryLabel(TypeHelper::toString($report['report_category'] ?? 'other')),
+            'report_subject' => TypeHelper::toString($report['report_subject'] ?? ''),
+            'report_message' => TypeHelper::toString($report['report_message'] ?? ''),
+            'report_status_label' => ImageReportHelper::workflowStatusLabel($status, $assignedUserId),
+            'report_status_class' => ImageReportHelper::workflowStatusClass($status, $assignedUserId),
+            'report_created_at' => DateHelper::date_only_format(TypeHelper::toString($report['created_at'] ?? '')),
+            'report_updated_at' => DateHelper::date_only_format(TypeHelper::toString($report['updated_at'] ?? '')),
+            'report_assigned_at' => $assignedAt ? DateHelper::date_only_format($assignedAt) : '',
+            'report_resolved_at' => $resolvedAt ? DateHelper::date_only_format($resolvedAt) : '',
+            'report_reporter' => $reporterUserId > 0 ? ucfirst(self::getUsernameById($reporterUserId)) : 'Guest',
+            'report_reporter_user_id' => $reporterUserId > 0 ? (string)$reporterUserId : '',
+            'report_session_id' => TypeHelper::toString($report['session_id'] ?? ''),
+            'report_ip' => self::formatStoredIp($report['ip'] ?? null),
+            'report_ua' => TypeHelper::toString($report['ua'] ?? ''),
+            'report_assigned_to' => $assignedUserId > 0 ? ucfirst(TypeHelper::toString($report['assigned_username'] ?? self::getUsernameById($assignedUserId))) : '',
+            'report_assigned_user_id' => $assignedUserId > 0 ? (string)$assignedUserId : '',
+            'report_resolved_by' => $resolvedBy > 0 ? ucfirst(self::getUsernameById($resolvedBy)) : '',
+            'report_public_image_url' => '/gallery/' . TypeHelper::toString($report['image_hash'] ?? ''),
+            'report_public_original_url' => '/gallery/original/' . TypeHelper::toString($report['image_hash'] ?? ''),
+            'report_is_open' => $normalizedStatus === 'open' ? 1 : 0,
+            'report_is_closed' => $normalizedStatus === 'closed' ? 1 : 0,
+            'report_can_assign_self' => $normalizedStatus === 'open' && $currentStaffUserId > 0 && $assignedUserId !== $currentStaffUserId ? 1 : 0,
+            'report_can_release_assignment' => $normalizedStatus === 'open' && $assignedUserId > 0 ? 1 : 0,
+            'report_is_assigned_to_current_user' => $assignedUserId > 0 && $assignedUserId === $currentStaffUserId ? 1 : 0,
+            'report_staff_notes' => $noteRows,
+            'report_notes_count' => count($noteRows),
+            'report_notice_state' => Security::sanitizeString($_GET['updated'] ?? ''),
+        ];
+    }
+
+    /**
+     * Normalize one posted image report workflow action.
+     *
+     * @param string $imageAction
+     * @return string
+     */
+    private static function normalizeImageReportAction(string $imageAction): string
+    {
+        $allowedImageActions = [
+            'none',
+            'set_standard',
+            'set_sensitive',
+            'set_explicit',
+            'set_pending',
+            'set_approved',
+            'set_rejected',
+            'set_deleted',
+        ];
+
+        return in_array($imageAction, $allowedImageActions, true)
+            ? $imageAction
+            : 'none';
+    }
+
+    /**
+     * Render the paginated image report queue.
+     *
+     * @param int|null $page Requested queue page number.
+     * @return void
+     */
+    public static function imageReports($page = null): void
+    {
+        $template = self::initTemplate();
+        self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'manage_image_reports'], $template);
+
+        $page = TypeHelper::toInt($page ?? null) ?? 1;
+        if ($page < 1)
+        {
+            $page = 1;
+        }
+
+        $perPage = 15;
+        $offset = ($page - 1) * $perPage;
+
+        $reportCounts = ImageReportModel::getQueueCounts();
+        $totalCount = TypeHelper::toInt($reportCounts['total'] ?? 0) ?? 0;
+        $openCount = TypeHelper::toInt($reportCounts['open'] ?? 0) ?? 0;
+        $closedCount = TypeHelper::toInt($reportCounts['closed'] ?? 0) ?? 0;
+        $reportRows = self::buildImageReportQueueRows(ImageReportModel::fetchQueuePage($perPage, $offset));
 
         $totalPages = (int)ceil($totalCount / $perPage);
         if ($totalPages < 1)
@@ -4485,6 +5000,7 @@ class ControlPanelController extends BaseController
         $template->render('panel/control_panel_reports.html');
     }
 
+
     /**
      * Render one image report detail page.
      *
@@ -4503,33 +5019,14 @@ class ControlPanelController extends BaseController
         }
 
         $report = ImageReportModel::findDetailedById($id);
-
         if (!$report)
         {
             header('Location: /panel/image-reports');
             exit();
         }
 
-        $staffNotes = ImageReportModel::fetchCommentsByReportId($id);
-
-        $reporterUserId = TypeHelper::toInt($report['reporter_user_id'] ?? 0) ?? 0;
-        $assignedUserId = TypeHelper::toInt($report['assigned_to_user_id'] ?? 0) ?? 0;
-        $resolvedBy = TypeHelper::toInt($report['resolved_by'] ?? 0) ?? 0;
-        $status = TypeHelper::toString($report['status'] ?? 'open');
-        $normalizedStatus = ImageReportHelper::normalizeStatus($status);
-        $currentStaffUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
-
-        $noteRows = [];
-        foreach ($staffNotes as $note)
-        {
-            $noteRows[] = [
-                TypeHelper::toInt($note['user_id'] ?? 0) ?? 0,
-                ucfirst(TypeHelper::toString($note['username'] ?? 'Unknown Staff')),
-                DateHelper::date_only_format(TypeHelper::toString($note['created_at'] ?? '')),
-                TypeHelper::toString($note['comment_body'] ?? ''),
-                DateHelper::date_only_format(TypeHelper::toString($note['updated_at'] ?? '')),
-            ];
-        }
+        $noteRows = self::buildImageReportStaffNoteRows(ImageReportModel::fetchCommentsByReportId($id));
+        $templateState = self::buildImageReportDetailTemplateState($report, $noteRows, self::getCurrentUserId());
 
         self::assignPanelPage(
             $template,
@@ -4539,46 +5036,14 @@ class ControlPanelController extends BaseController
             'queue'
         );
 
-        $template->assign('report_id', TypeHelper::toInt($report['id'] ?? 0));
-        $template->assign('report_image_hash', TypeHelper::toString($report['image_hash'] ?? ''));
-        $template->assign('report_image_status', ucfirst(TypeHelper::toString($report['image_status'] ?? '')));
-        $template->assign('report_image_visibility', AgeGateHelper::getContentRatingLabel(AgeGateHelper::normalizeContentRating(
-            TypeHelper::toString($report['content_rating'] ?? '', allowEmpty: true) ?? '',
-            TypeHelper::toInt($report['age_sensitive'] ?? 0) ?? 0
-        )));
-        $template->assign('report_image_created_at', DateHelper::date_only_format(TypeHelper::toString($report['image_created_at'] ?? '')));
-        $template->assign('report_category', ImageReportHelper::categoryLabel(TypeHelper::toString($report['report_category'] ?? 'other')));
-        $template->assign('report_subject', TypeHelper::toString($report['report_subject'] ?? ''));
-        $template->assign('report_message', TypeHelper::toString($report['report_message'] ?? ''));
-        $template->assign('report_status_label', ImageReportHelper::workflowStatusLabel($status, $assignedUserId));
-        $template->assign('report_status_class', ImageReportHelper::workflowStatusClass($status, $assignedUserId));
-        $template->assign('report_created_at', DateHelper::date_only_format(TypeHelper::toString($report['created_at'] ?? '')));
-        $template->assign('report_updated_at', DateHelper::date_only_format(TypeHelper::toString($report['updated_at'] ?? '')));
-        $assignedAt = TypeHelper::toString($report['assigned_at'] ?? null, allowEmpty: true);
-        $resolvedAt = TypeHelper::toString($report['resolved_at'] ?? null, allowEmpty: true);
-        $template->assign('report_assigned_at', $assignedAt ? DateHelper::date_only_format($assignedAt) : '');
-        $template->assign('report_resolved_at', $resolvedAt ? DateHelper::date_only_format($resolvedAt) : '');
-        $template->assign('report_reporter', $reporterUserId > 0 ? ucfirst(self::getUsernameById($reporterUserId)) : 'Guest');
-        $template->assign('report_reporter_user_id', $reporterUserId > 0 ? (string)$reporterUserId : '');
-        $template->assign('report_session_id', TypeHelper::toString($report['session_id'] ?? ''));
-        $template->assign('report_ip', self::formatStoredIp($report['ip'] ?? null));
-        $template->assign('report_ua', TypeHelper::toString($report['ua'] ?? ''));
-        $template->assign('report_assigned_to', $assignedUserId > 0 ? ucfirst(TypeHelper::toString($report['assigned_username'] ?? self::getUsernameById($assignedUserId))) : '');
-        $template->assign('report_assigned_user_id', $assignedUserId > 0 ? (string)$assignedUserId : '');
-        $template->assign('report_resolved_by', $resolvedBy > 0 ? ucfirst(self::getUsernameById($resolvedBy)) : '');
-        $template->assign('report_public_image_url', '/gallery/' . TypeHelper::toString($report['image_hash'] ?? ''));
-        $template->assign('report_public_original_url', '/gallery/original/' . TypeHelper::toString($report['image_hash'] ?? ''));
-        $template->assign('report_is_open', $normalizedStatus === 'open' ? 1 : 0);
-        $template->assign('report_is_closed', $normalizedStatus === 'closed' ? 1 : 0);
-        $template->assign('report_can_assign_self', $normalizedStatus === 'open' && $currentStaffUserId > 0 && $assignedUserId !== $currentStaffUserId ? 1 : 0);
-        $template->assign('report_can_release_assignment', $normalizedStatus === 'open' && $assignedUserId > 0 ? 1 : 0);
-        $template->assign('report_is_assigned_to_current_user', $assignedUserId > 0 && $assignedUserId === $currentStaffUserId ? 1 : 0);
-        $template->assign('report_staff_notes', $noteRows);
-        $template->assign('report_notes_count', count($noteRows));
-        $template->assign('report_notice_state', Security::sanitizeString($_GET['updated'] ?? ''));
+        foreach ($templateState as $key => $value)
+        {
+            $template->assign($key, $value);
+        }
 
         $template->render('panel/control_panel_report_view.html');
     }
+
 
     /**
      * Assign one image report to the current staff member.
@@ -4588,7 +5053,7 @@ class ControlPanelController extends BaseController
      */
     public static function assignImageReport(int $id): void
     {
-        $staffUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        $staffUserId = self::getCurrentUserId();
         self::syncImageReportAssignment($id, $staffUserId > 0 ? $staffUserId : null, 'assigned');
     }
 
@@ -4635,22 +5100,7 @@ class ControlPanelController extends BaseController
     {
         $template = self::initTemplate();
         self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'manage_image_reports'], $template);
-
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
-        {
-            http_response_code(405);
-            $template->assign('title', 'Method Not Allowed');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
-            return;
-        }
-
-        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
-        if (!Security::verifyCsrfToken($csrfToken))
-        {
-            self::renderInvalidRequest($template);
-            return;
-        }
+        self::requireProtectedPanelPost($template);
 
         $id = TypeHelper::toInt($id) ?? 0;
         if ($id < 1)
@@ -4660,48 +5110,28 @@ class ControlPanelController extends BaseController
         }
 
         $report = ImageReportModel::findWorkflowRowById($id);
-
         if (!$report)
         {
             header('Location: /panel/image-reports');
             exit();
         }
 
-        $staffUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        $staffUserId = self::getCurrentUserId();
         $staffComment = Security::sanitizeString($_POST['staff_comment'] ?? '');
-        $imageAction = strtolower(Security::sanitizeString($_POST['image_action'] ?? 'none'));
+        $imageAction = self::normalizeImageReportAction(strtolower(Security::sanitizeString($_POST['image_action'] ?? 'none')));
         $takeAssignment = isset($_POST['take_assignment']) && (TypeHelper::toInt($_POST['take_assignment'] ?? 0) ?? 0) === 1;
         $closeReport = isset($_POST['close_report']) && (TypeHelper::toInt($_POST['close_report'] ?? 0) ?? 0) === 1;
-
-        $allowedImageActions = [
-            'none',
-            'set_standard',
-            'set_sensitive',
-            'set_explicit',
-            'set_pending',
-            'set_approved',
-            'set_rejected',
-            'set_deleted',
-        ];
-
-        if (!in_array($imageAction, $allowedImageActions, true))
-        {
-            $imageAction = 'none';
-        }
-
         $didUpdate = false;
 
         if ($takeAssignment && $staffUserId > 0)
         {
             ImageReportModel::takeAssignmentIfOpen($id, $staffUserId);
-
             $didUpdate = true;
         }
 
         if ($staffComment !== '')
         {
             ImageReportModel::addComment($id, $staffUserId > 0 ? $staffUserId : null, $staffComment);
-
             $didUpdate = true;
         }
 
@@ -4731,6 +5161,7 @@ class ControlPanelController extends BaseController
         exit();
     }
 
+
     /**
      * Apply one assignment change for an image report.
      *
@@ -4743,22 +5174,7 @@ class ControlPanelController extends BaseController
     {
         $template = self::initTemplate();
         self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'manage_image_reports'], $template);
-
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
-        {
-            http_response_code(405);
-            $template->assign('title', 'Method Not Allowed');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
-            return;
-        }
-
-        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
-        if (!Security::verifyCsrfToken($csrfToken))
-        {
-            self::renderInvalidRequest($template);
-            return;
-        }
+        self::requireProtectedPanelPost($template);
 
         $id = TypeHelper::toInt($id) ?? 0;
         if ($id < 1)
@@ -4791,22 +5207,7 @@ class ControlPanelController extends BaseController
     {
         $template = self::initTemplate();
         self::requirePanelAnyPermission(['moderate_site', 'moderate_gallery', 'manage_image_reports'], $template);
-
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
-        {
-            http_response_code(405);
-            $template->assign('title', 'Method Not Allowed');
-            $template->assign('message', 'Invalid request.');
-            $template->render('errors/error_page.html');
-            return;
-        }
-
-        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
-        if (!Security::verifyCsrfToken($csrfToken))
-        {
-            self::renderInvalidRequest($template);
-            return;
-        }
+        self::requireProtectedPanelPost($template);
 
         $id = TypeHelper::toInt($id) ?? 0;
         if ($id < 1)
@@ -4816,7 +5217,7 @@ class ControlPanelController extends BaseController
         }
 
         $status = ImageReportHelper::normalizeStatus($status);
-        $staffUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        $staffUserId = self::getCurrentUserId();
 
         if ($status === 'closed')
         {
