@@ -757,7 +757,7 @@ function server_run_maintenance_pass(array $state): array
 
     if (!empty($state['jobs']['gallery_page_tokens']))
     {
-        $deletedGalleryPageTokens = GalleryPageTokenStore::cleanExpired();
+        $deletedGalleryPageTokens = ImageTokenStore::cleanExpired();
     }
 
     $totalRemoved = $sessionsRemoved + $rateCountersRemoved + $blocksRemoved + $logsRemoved + $deletedCacheFiles + $deletedGalleryPageTokens;

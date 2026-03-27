@@ -15,7 +15,7 @@
  * - Tokens are bound to the current session cookie value and stable device cookie
  *   to reduce reuse outside the original browsing context.
  */
-class GalleryPageTokenStore
+class ImageTokenStore
 {
     /**
      * Directory used to persist short-lived gallery page tokens.

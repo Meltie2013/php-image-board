@@ -591,7 +591,6 @@ class UserModel extends BaseModel
         return self::fetchAll("SELECT id, name FROM app_groups ORDER BY id ASC");
     }
 
-
     /**
      * Backwards-compatible wrapper for legacy role list callers.
      *

@@ -160,6 +160,7 @@ if (str_starts_with($requestPath, '/user/register') && !ControlServer::serviceEn
 $userId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
 if ($userId > 0)
 {
+
     RulesHelper::enforceBlockingRedirectIfNeeded($userId);
 }
 

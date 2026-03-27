@@ -46,7 +46,7 @@ class GalleryController extends BaseController
      */
     private static function getCurrentRequestDeviceId(): string
     {
-        return GalleryPageTokenStore::getCurrentDeviceId(self::getConfig());
+        return ImageTokenStore::getCurrentDeviceId(self::getConfig());
     }
 
 
@@ -272,7 +272,7 @@ class GalleryController extends BaseController
 
         $offset = ($page - 1) * $limit;
         $pageImages = ImageModel::fetchGalleryPage($viewerContentAccessLevel, $limit, $offset);
-        $galleryPageToken = GalleryPageTokenStore::issue(
+        $galleryPageToken = ImageTokenStore::issue(
             $pageImages,
             $userId,
             session_id(),
@@ -706,7 +706,7 @@ class GalleryController extends BaseController
         $canCommentImage = false;
         $canFavoriteImage = false;
         $canVoteImage = false;
-        $canReportImage = true;
+        $canReportImage = false;
 
         $editPermissionMessage = 'You do not have permission to edit this image.';
         $commentPermissionMessage = 'You do not have permission to comment on images.';
@@ -737,10 +737,11 @@ class GalleryController extends BaseController
         }
         else
         {
-            $commentPermissionMessage = 'Please login to comment on images.';
-            $favoritePermissionMessage = 'Please login to favorite images.';
-            $votePermissionMessage = 'Please login to like images.';
-            $reportPermissionMessage = '';
+            $editPermissionMessage = 'Please login to edit this image.';
+            $commentPermissionMessage = 'Please login to comment this image.';
+            $favoritePermissionMessage = 'Please login to favorite this image.';
+            $votePermissionMessage = 'Please login to like this image.';
+            $reportPermissionMessage = 'Please login to report this image.';
         }
 
         return [
@@ -906,7 +907,7 @@ class GalleryController extends BaseController
             $publicPath = '/' . $publicPath;
         }
 
-        $viewImageToken = GalleryPageTokenStore::issue([$img], $userId, session_id(), GalleryPageTokenStore::getCurrentDeviceId($config));
+        $viewImageToken = ImageTokenStore::issue([$img], $userId, session_id(), ImageTokenStore::getCurrentDeviceId($config));
 
         return [
             'img_image_url' => self::buildTokenizedImageUrl($imageHash, $viewImageToken),
@@ -1670,9 +1671,9 @@ class GalleryController extends BaseController
 
         $sessionCookieName = TypeHelper::toString($config['session']['name'] ?? 'cms_session', allowEmpty: false) ?? 'cms_session';
         $sessionId = TypeHelper::toString($_COOKIE[$sessionCookieName] ?? '', allowEmpty: true) ?? '';
-        $deviceId = GalleryPageTokenStore::getCurrentDeviceId($config);
+        $deviceId = ImageTokenStore::getCurrentDeviceId($config);
 
-        $image = GalleryPageTokenStore::getAuthorizedImage($token, $hash, $sessionId, $deviceId);
+        $image = ImageTokenStore::getAuthorizedImage($token, $hash, $sessionId, $deviceId);
         if (!$image)
         {
             self::sendGalleryImageError(404);

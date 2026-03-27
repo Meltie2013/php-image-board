@@ -519,7 +519,6 @@ class ImageModel extends BaseModel
         );
     }
 
-
     /**
      * Fetch one full pending image row for moderation review.
      *
@@ -782,7 +781,6 @@ class ImageModel extends BaseModel
         return self::fetchAll("SELECT image_hash FROM app_images WHERE image_hash IN ({$placeholders})", array_values($hashes));
     }
 
-
     /**
      * Insert one upload audit log row.
      *
@@ -850,5 +848,4 @@ class ImageModel extends BaseModel
             $payload
         );
     }
-
 }

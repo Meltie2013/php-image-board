@@ -777,6 +777,7 @@ class ControlPanelController extends BaseController
         $template->render('panel/control_panel_user_edit.html');
     }
 
+
     /**
      * Render the group management overview for Site Administrator users.
      *

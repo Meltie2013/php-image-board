@@ -116,6 +116,7 @@ class RulesModel extends BaseModel
                     'created_by' => null,
                     'updated_by' => null,
                 ]);
+
                 self::saveRule([
                     'category_id' => $accountCategoryId,
                     'title' => 'Protect Your Login',
@@ -147,6 +148,7 @@ class RulesModel extends BaseModel
                     'created_by' => null,
                     'updated_by' => null,
                 ]);
+
                 self::saveRule([
                     'category_id' => $contentCategoryId,
                     'title' => 'Use Accurate Ratings and Reports',
@@ -756,6 +758,7 @@ class RulesModel extends BaseModel
              LIMIT 1",
             ['id' => $userId]
         );
+
         if (!$user)
         {
             return null;

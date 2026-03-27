@@ -168,7 +168,6 @@ class GroupModel extends BaseModel
         self::writeBuiltInSeedCache();
     }
 
-
     /**
      * Determine whether the built-in seed cache is still valid.
      *
@@ -211,9 +210,7 @@ class GroupModel extends BaseModel
             'written_at' => gmdate('Y-m-d H:i:s'),
         ], true);
 
-        @file_put_contents($path, "<?php
-return " . $payload . ";
-");
+        @file_put_contents($path, "<?php return " . $payload . "; ");
     }
 
     /**

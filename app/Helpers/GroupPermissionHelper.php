@@ -462,7 +462,6 @@ class GroupPermissionHelper
         return in_array($current, $normalized, true);
     }
 
-
     /**
      * Determine whether the current request expects a JSON response.
      *
