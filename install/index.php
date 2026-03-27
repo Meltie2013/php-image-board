@@ -503,6 +503,54 @@ function installer_write_auth_config(string $username, string $password): array
 }
 
 /**
+ * Store installer form values for the initial administrator account.
+ *
+ * Password fields are intentionally excluded so failed validation can preserve
+ * the visible form values without keeping secrets in the session.
+ *
+ * @param array<string, mixed> $payload
+ * @return void
+ */
+function installer_store_initial_admin_form(array $payload): void
+{
+    $_SESSION['initial_admin_form'] = [
+        'username' => trim((string) ($payload['username'] ?? '')),
+        'display_name' => trim((string) ($payload['display_name'] ?? '')),
+        'email' => trim((string) ($payload['email'] ?? '')),
+    ];
+}
+
+/**
+ * Read the remembered initial administrator form values.
+ *
+ * @return array<string, string>
+ */
+function installer_get_initial_admin_form(): array
+{
+    $payload = $_SESSION['initial_admin_form'] ?? [];
+
+    if (!is_array($payload)) {
+        $payload = [];
+    }
+
+    return [
+        'username' => trim((string) ($payload['username'] ?? '')),
+        'display_name' => trim((string) ($payload['display_name'] ?? '')),
+        'email' => trim((string) ($payload['email'] ?? '')),
+    ];
+}
+
+/**
+ * Clear any remembered initial administrator form values.
+ *
+ * @return void
+ */
+function installer_clear_initial_admin_form(): void
+{
+    unset($_SESSION['initial_admin_form']);
+}
+
+/**
  * Load the distributed configuration template array.
  * @return array
  */
@@ -1285,6 +1333,183 @@ function installer_db_test(array $config): array
 }
 
 /**
+ * Read and sanitize the initial administrator account payload.
+ *
+ * @return array<string, string>
+ */
+function installer_read_initial_admin_payload(): array
+{
+    return [
+        'username' => trim((string) ($_POST['admin_username'] ?? '')),
+        'display_name' => trim((string) ($_POST['admin_display_name'] ?? '')),
+        'email' => trim((string) ($_POST['admin_email'] ?? '')),
+        'password' => (string) ($_POST['admin_password'] ?? ''),
+        'password_confirm' => (string) ($_POST['admin_password_confirm'] ?? ''),
+    ];
+}
+
+/**
+ * Validate the initial administrator account payload before the base schema is
+ * installed so the installer can stop early when required fields are missing.
+ *
+ * @param array<string, string> $payload
+ * @return array{ok: bool, errors: array<int, string>}
+ */
+function installer_validate_initial_admin_payload(array $payload): array
+{
+    $errors = [];
+
+    if ($payload['username'] === '') {
+        $errors[] = 'Initial administrator username is required.';
+    } elseif (!preg_match('/^[A-Za-z0-9_]{3,15}$/', $payload['username'])) {
+        $errors[] = 'Initial administrator username must be 3-15 characters long and use only letters, numbers, or underscores.';
+    }
+
+    if ($payload['display_name'] !== '' && strlen($payload['display_name']) > 100) {
+        $errors[] = 'Initial administrator display name must be 100 characters or fewer.';
+    }
+
+    if ($payload['email'] === '') {
+        $errors[] = 'Initial administrator email is required.';
+    } elseif (!filter_var($payload['email'], FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'Initial administrator email format is invalid.';
+    }
+
+    if ($payload['password'] === '') {
+        $errors[] = 'Initial administrator password is required.';
+    }
+
+    if ($payload['password'] !== $payload['password_confirm']) {
+        $errors[] = 'Initial administrator password confirmation does not match.';
+    }
+
+    if (strlen($payload['password']) < 12) {
+        $errors[] = 'Initial administrator password must be at least 12 characters.';
+    }
+
+    if (strlen($payload['password']) > 4096) {
+        $errors[] = 'Initial administrator password is too long.';
+    }
+
+    return [
+        'ok' => empty($errors),
+        'errors' => $errors,
+    ];
+}
+
+/**
+ * Determine whether the application already has at least one administrator.
+ *
+ * @param PDO $pdo
+ * @return bool
+ */
+function installer_has_administrator_account(PDO $pdo): bool
+{
+    try {
+        $stmt = $pdo->query(
+            "SELECT u.id
+             FROM app_users u
+             INNER JOIN app_groups g ON g.id = u.group_id
+             WHERE g.slug IN ('site-administrator', 'administrator')
+               AND u.status != 'deleted'
+             LIMIT 1"
+        );
+
+        $row = $stmt ? $stmt->fetch() : false;
+        return !empty($row);
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/**
+ * Check whether the submitted administrator username or email is already in use.
+ *
+ * @param PDO $pdo
+ * @param string $username
+ * @param string $email
+ * @return bool
+ */
+function installer_initial_admin_username_or_email_exists(PDO $pdo, string $username, string $email): bool
+{
+    $stmt = $pdo->prepare(
+        "SELECT id
+         FROM app_users
+         WHERE username = :username
+            OR email = :email
+         LIMIT 1"
+    );
+
+    $stmt->execute([
+        ':username' => $username,
+        ':email' => $email,
+    ]);
+
+    return (bool) $stmt->fetch();
+}
+
+/**
+ * Find the strongest built-in administrative group available for first-run
+ * account creation.
+ *
+ * @param PDO $pdo
+ * @return int
+ */
+function installer_find_initial_admin_group_id(PDO $pdo): int
+{
+    $stmt = $pdo->query(
+        "SELECT id
+         FROM app_groups
+         WHERE slug IN ('site-administrator', 'administrator')
+         ORDER BY FIELD(slug, 'site-administrator', 'administrator')
+         LIMIT 1"
+    );
+
+    $groupId = (int) ($stmt ? $stmt->fetchColumn() : 0);
+    return ($groupId > 0) ? $groupId : 1;
+}
+
+/**
+ * Create the first administrator account for the board.
+ *
+ * @param PDO $pdo
+ * @param array<string, string> $payload
+ * @return array{ok: bool, error: string}
+ */
+function installer_create_initial_admin(PDO $pdo, array $payload): array
+{
+    try {
+        if (installer_initial_admin_username_or_email_exists($pdo, $payload['username'], $payload['email'])) {
+            return ['ok' => false, 'error' => 'That administrator username or email address is already in use.'];
+        }
+
+        $groupId = installer_find_initial_admin_group_id($pdo);
+        $displayName = ($payload['display_name'] !== '') ? $payload['display_name'] : null;
+        $passwordHash = InstallerSecurity::hashPassword($payload['password']);
+
+        if ($passwordHash === '') {
+            return ['ok' => false, 'error' => 'Unable to hash the administrator password.'];
+        }
+
+        $stmt = $pdo->prepare(
+            "INSERT INTO app_users (group_id, username, display_name, email, password_hash, status, created_at, updated_at)
+             VALUES (:group_id, :username, :display_name, :email, :password_hash, 'active', NOW(), NOW())"
+        );
+
+        $stmt->bindValue(':group_id', $groupId, PDO::PARAM_INT);
+        $stmt->bindValue(':username', $payload['username'], PDO::PARAM_STR);
+        $stmt->bindValue(':display_name', $displayName, ($displayName === null) ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $stmt->bindValue(':email', $payload['email'], PDO::PARAM_STR);
+        $stmt->bindValue(':password_hash', $passwordHash, PDO::PARAM_STR);
+        $stmt->execute();
+
+        return ['ok' => true, 'error' => ''];
+    } catch (Throwable $e) {
+        return ['ok' => false, 'error' => $e->getMessage()];
+    }
+}
+
+/**
  * Ensure the updater bookkeeping table exists.
  * @param PDO $pdo
  * @return void
@@ -2015,14 +2240,40 @@ if ($action === 'install_db') {
         installer_redirect('index.php?tab=install&page=config');
     }
 
-    $res = installer_apply_sql_file($pdo, INSTALL_SQL_FILE);
+    $adminPayload = installer_read_initial_admin_payload();
+    installer_store_initial_admin_form($adminPayload);
 
-    if (!$res['ok']) {
-        installer_flash_add('danger', 'Database install failed: ' . $res['error']);
-        installer_redirect('index.php?tab=install&page=database');
+    $databaseReady = installer_database_ready();
+    $adminAlreadyExists = false;
+
+    if ($databaseReady) {
+        $adminAlreadyExists = installer_has_administrator_account($pdo);
     }
 
-    installer_flash_add('success', 'Base database installed successfully.');
+    if (!$adminAlreadyExists) {
+        $validation = installer_validate_initial_admin_payload($adminPayload);
+
+        if (!$validation['ok']) {
+            foreach ($validation['errors'] as $error) {
+                installer_flash_add('danger', $error);
+            }
+
+            installer_redirect('index.php?tab=install&page=database');
+        }
+    }
+
+    if (!$databaseReady) {
+        $res = installer_apply_sql_file($pdo, INSTALL_SQL_FILE);
+
+        if (!$res['ok']) {
+            installer_flash_add('danger', 'Database install failed: ' . $res['error']);
+            installer_redirect('index.php?tab=install&page=database');
+        }
+
+        installer_flash_add('success', 'Base database installed successfully.');
+    } else {
+        installer_flash_add('info', 'Base database already appears to be installed. Skipping schema import and continuing with final setup.');
+    }
 
     // -------------------------------------------------
     // Seed the database-backed settings registry
@@ -2031,11 +2282,26 @@ if ($action === 'install_db') {
     $seed = installer_seed_settings_registry($pdo);
 
     if (!$seed['ok']) {
-        installer_flash_add('danger', 'Base schema installed, but the settings registry seed failed. The installer remains unlocked so the issue can be corrected: ' . $seed['error']);
+        installer_flash_add('danger', 'Base schema is available, but the settings registry seed failed. The installer remains unlocked so the issue can be corrected: ' . $seed['error']);
         installer_redirect('index.php?tab=install&page=database');
     }
 
     installer_flash_add('success', 'Settings registry seeded successfully.');
+
+    if (installer_has_administrator_account($pdo)) {
+        installer_clear_initial_admin_form();
+        installer_flash_add('info', 'An administrator account already exists. Initial administrator creation was skipped.');
+    } else {
+        $createAdmin = installer_create_initial_admin($pdo, $adminPayload);
+
+        if (!$createAdmin['ok']) {
+            installer_flash_add('danger', 'Initial administrator account creation failed: ' . $createAdmin['error']);
+            installer_redirect('index.php?tab=install&page=database');
+        }
+
+        installer_clear_initial_admin_form();
+        installer_flash_add('success', 'Initial administrator account created successfully.');
+    }
 
     if (installer_write_lock_file()) {
         installer_flash_add('success', 'Installer locked. Use the update tab for future maintenance.');
@@ -3210,26 +3476,90 @@ if ($page === 'config') {
 }
 
 echo '<h2>Database Install</h2>';
-echo '<p>This is the final first-run step. When the base schema installs successfully, the installer writes its lock file and future maintenance shifts into the updater workspace.</p>';
+echo '<p>This is the final first-run step. The installer will make sure the base schema exists, create the initial administrator account, and then write the installer lock file so future maintenance shifts into the updater workspace.</p>';
 installer_render_install_progress($installState, $page);
 
 $config = installer_load_config_existing();
 $pdo = $config ? installer_pdo_from_config($config) : null;
+$initialAdminForm = installer_get_initial_admin_form();
 if (!$config) {
     echo '<div class="alert alert-danger">Missing config/config.php. Complete the configuration step first.</div>';
 } elseif (!$pdo) {
     echo '<div class="alert alert-danger">Unable to connect using the current config/config.php database settings. Re-test the connection on the configuration step before installing the base schema.</div>';
 } else {
-    echo '<div class="installer-card installer-card--padded">';
-    echo '<div class="installer-card-title">Base Database Install</div>';
-    echo '<p>Installs <b>install/base_database.sql</b> into the configured database and then writes the installer lock file so the updater remains available without exposing the initial setup flow.</p>';
+    $databaseReady = installer_database_ready();
+    $adminExists = $databaseReady ? installer_has_administrator_account($pdo) : false;
+
     echo '<form method="post">';
     echo '<input type="hidden" name="action" value="install_db">';
     echo '<input type="hidden" name="csrf_token" value="' . InstallerSecurity::e(InstallerSecurity::csrfToken()) . '">';
     echo '<input type="hidden" name="return_to" value="index.php?tab=install&page=database">';
-    echo '<div class="installer-button-row"><button type="submit">Install Base Database</button></div>';
-    echo '</form>';
+
+    echo '<div class="installer-card installer-card--padded">';
+    echo '<div class="installer-card-title">Base Database Install</div>';
+
+    if ($databaseReady) {
+        echo '<p>The base schema already appears to be present. Submitting this step will skip the schema import, make sure the settings registry is seeded, and finalize the first-run install.</p>';
+    } else {
+        echo '<p>Installs <b>install/base_database.sql</b> into the configured database, creates the first administrator account, and then writes the installer lock file so the updater remains available without exposing the initial setup flow.</p>';
+    }
+
     echo '</div>';
+
+    echo '<div class="installer-card installer-card--padded" style="margin-top: 14px;">';
+    echo '<div class="installer-card-title">Initial Administrator Account</div>';
+    echo '<p>This account is for the board itself and is separate from the installer/updater login. The first account is created with administrative access during the initial install.</p>';
+
+    if ($adminExists) {
+        echo '<div class="alert alert-success">An administrator account already exists in the current database. Initial administrator creation will be skipped and this step will only finalize the install.</div>';
+    } else {
+        echo '<div class="installer-auth-field-grid installer-auth-field-grid-two">';
+
+        echo '<div class="installer-auth-field-group">';
+        echo '<label for="admin-username">Username</label>';
+        echo '<input class="installer-input" id="admin-username" type="text" name="admin_username" maxlength="15" value="' . InstallerSecurity::e($initialAdminForm['username']) . '" required>';
+        echo '</div>';
+
+        echo '<div class="installer-auth-field-group">';
+        echo '<label for="admin-display-name">Display Name <span class="installer-auth-label-helper">Optional</span></label>';
+        echo '<input class="installer-input" id="admin-display-name" type="text" name="admin_display_name" maxlength="100" value="' . InstallerSecurity::e($initialAdminForm['display_name']) . '">';
+        echo '</div>';
+
+        echo '</div>';
+
+        echo '<div class="installer-auth-field-grid installer-auth-field-grid-two">';
+
+        echo '<div class="installer-auth-field-group">';
+        echo '<label for="admin-email">Email Address</label>';
+        echo '<input class="installer-input" id="admin-email" type="email" name="admin_email" maxlength="191" value="' . InstallerSecurity::e($initialAdminForm['email']) . '" required>';
+        echo '</div>';
+
+        echo '<div class="installer-auth-field-group">';
+        echo '<div class="installer-auth-label-row">';
+        echo '<label for="admin-password">Password</label>';
+        echo '<span class="installer-auth-label-helper">Minimum 12 characters</span>';
+        echo '</div>';
+        echo '<input class="installer-input" id="admin-password" type="password" name="admin_password" autocomplete="new-password" required>';
+        echo '</div>';
+
+        echo '</div>';
+
+        echo '<div class="installer-auth-field-group">';
+        echo '<label for="admin-password-confirm">Confirm Password</label>';
+        echo '<input class="installer-input" id="admin-password-confirm" type="password" name="admin_password_confirm" autocomplete="new-password" required>';
+        echo '</div>';
+    }
+
+    echo '<div class="installer-button-row">';
+    if ($databaseReady) {
+        echo '<button type="submit">Finalize Initial Install</button>';
+    } else {
+        echo '<button type="submit">Install Base Database</button>';
+    }
+    echo '</div>';
+
+    echo '</div>';
+    echo '</form>';
 }
 
 echo '</section></div></main>';
