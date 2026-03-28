@@ -56,6 +56,7 @@ class ControlPanelController extends BaseController
         $canManageGroupPermissions = GroupPermissionHelper::hasPermission('manage_group_permissions');
         $canManageSettings = GroupPermissionHelper::hasPermission('manage_settings');
         $canManageRules = GroupPermissionHelper::hasPermission('manage_rules');
+        $canManageBlogPosts = GroupPermissionHelper::hasPermission('manage_blog_posts');
         $canViewSecurity = GroupPermissionHelper::hasPermission('view_security');
         $canManageBlocks = GroupPermissionHelper::hasPermission('manage_block_list');
         $canModerateImages = GroupPermissionHelper::hasAnyPermission(['moderate_site', 'moderate_gallery', 'moderate_image_queue', 'manage_image_reports']);
@@ -77,6 +78,7 @@ class ControlPanelController extends BaseController
         $template->assign('cp_can_manage_group_permissions', $canManageGroupPermissions ? 1 : 0);
         $template->assign('cp_can_manage_settings', $canManageSettings ? 1 : 0);
         $template->assign('cp_can_manage_rules', $canManageRules ? 1 : 0);
+        $template->assign('cp_can_manage_blog_posts', $canManageBlogPosts ? 1 : 0);
         $template->assign('cp_can_view_security', $canViewSecurity ? 1 : 0);
         $template->assign('cp_can_manage_blocks', $canManageBlocks ? 1 : 0);
         $template->assign('cp_can_moderate_images', $canModerateImages ? 1 : 0);
@@ -1041,6 +1043,27 @@ class ControlPanelController extends BaseController
         if (strlen($value) > 80)
         {
             $value = substr($value, 0, 80);
+            $value = trim($value, '-');
+        }
+
+        return $value;
+    }
+
+    /**
+     * Normalize a blog title into a safe public slug.
+     *
+     * @param string $value
+     * @return string
+     */
+    private static function normalizeBlogSlug(string $value): string
+    {
+        $value = strtolower(trim($value));
+        $value = preg_replace('/[^a-z0-9]+/', '-', $value) ?? '';
+        $value = trim($value, '-');
+
+        if (strlen($value) > 120)
+        {
+            $value = substr($value, 0, 120);
             $value = trim($value, '-');
         }
 
@@ -5539,4 +5562,325 @@ class ControlPanelController extends BaseController
         readfile($fullPath);
         exit;
     }
+
+    /**
+     * Render the blog management overview.
+     *
+     * @return void
+     */
+    public static function blog(): void
+    {
+        self::requirePanelPermission('manage_blog_posts');
+
+        $template = self::initTemplate();
+        $notice = Security::sanitizeString($_GET['notice'] ?? '');
+        $noticeMessage = '';
+        $noticeType = 'success';
+
+        if ($notice === 'saved')
+        {
+            $noticeMessage = 'Blog post saved successfully.';
+        }
+        else if ($notice === 'published')
+        {
+            $noticeMessage = 'Blog post published successfully.';
+        }
+        else if ($notice === 'hidden')
+        {
+            $noticeMessage = 'Blog post hidden from the public blog page.';
+        }
+        else if ($notice === 'deleted')
+        {
+            $noticeMessage = 'Blog post deleted successfully.';
+        }
+        else if ($notice === 'schema_missing')
+        {
+            $noticeMessage = 'The blog database tables are not available yet. Please apply the latest blog migration first.';
+            $noticeType = 'error';
+        }
+
+        $blogRows = [];
+        foreach (BlogModel::listPostsForAdmin() as $row)
+        {
+            $status = strtolower(TypeHelper::toString($row['status'] ?? 'draft', allowEmpty: true) ?? 'draft');
+            $statusLabel = match ($status)
+            {
+                'published' => 'Published',
+                'hidden' => 'Hidden',
+                'deleted' => 'Deleted',
+                default => 'Draft',
+            };
+
+            $statusClass = match ($status)
+            {
+                'published' => 'admin-status-active',
+                'hidden' => 'admin-status-rate_limited',
+                'deleted' => 'admin-status-deleted',
+                default => 'admin-status-pending',
+            };
+
+            $postSlug = TypeHelper::toString($row['slug'] ?? '');
+            $blogRows[] = [
+                TypeHelper::toInt($row['id'] ?? 0) ?? 0,
+                TypeHelper::toString($row['title'] ?? ''),
+                $postSlug,
+                TypeHelper::toString($row['author_name'] ?? 'Unknown'),
+                $statusLabel,
+                $statusClass,
+                $status === 'published'
+                    ? DateHelper::format(TypeHelper::toString($row['published_at'] ?? '', allowEmpty: true))
+                    : 'Not Published',
+                TypeHelper::toInt($row['comment_count'] ?? 0) ?? 0,
+                !empty($row['allow_comments']) ? 1 : 0,
+                $status === 'published' && $postSlug !== '' ? '/blog/' . $postSlug : '',
+            ];
+        }
+
+        self::assignPanelPage(
+            $template,
+            'blog',
+            'Blog Management',
+            'Draft, publish, hide, and remove official staff blog posts without leaving the Control Panel.',
+            'content'
+        );
+
+        $template->assign('control_panel_notice', $noticeMessage);
+        $template->assign('control_panel_notice_type', $noticeType);
+        $template->assign('blog_rows', $blogRows);
+        $template->render('panel/control_panel_blog.html');
+    }
+
+    /**
+     * Create one blog post draft.
+     *
+     * @return void
+     */
+    public static function blogCreate(): void
+    {
+        self::requirePanelPermission('manage_blog_posts');
+        self::handleBlogEditor(0);
+    }
+
+    /**
+     * Edit one blog post.
+     *
+     * @param int $id
+     * @return void
+     */
+    public static function blogEdit(int $id): void
+    {
+        self::requirePanelPermission('manage_blog_posts');
+        self::handleBlogEditor($id);
+    }
+
+    /**
+     * Publish one blog post.
+     *
+     * @param int $id
+     * @return void
+     */
+    public static function blogPublish(int $id): void
+    {
+        self::requirePanelPermission('manage_blog_posts');
+        self::handleBlogStatusAction($id, 'publish');
+    }
+
+    /**
+     * Hide one blog post.
+     *
+     * @param int $id
+     * @return void
+     */
+    public static function blogHide(int $id): void
+    {
+        self::requirePanelPermission('manage_blog_posts');
+        self::handleBlogStatusAction($id, 'hide');
+    }
+
+    /**
+     * Delete one blog post.
+     *
+     * @param int $id
+     * @return void
+     */
+    public static function blogDelete(int $id): void
+    {
+        self::requirePanelPermission('manage_blog_posts');
+        self::handleBlogStatusAction($id, 'delete');
+    }
+
+    /**
+     * Shared blog create/edit handler.
+     *
+     * @param int $id
+     * @return void
+     */
+    private static function handleBlogEditor(int $id): void
+    {
+        if (!BlogModel::isSchemaAvailable())
+        {
+            header('Location: /panel/blog?notice=schema_missing');
+            exit();
+        }
+
+        $post = $id > 0 ? BlogModel::findPostById($id) : null;
+        if ($id > 0 && !$post)
+        {
+            self::renderErrorPage(404, 'Blog Post Not Found', 'That blog post could not be found.');
+            return;
+        }
+
+        $errors = [];
+        $currentUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        $isCreate = $post === null;
+        $form = [
+            'title' => TypeHelper::toString($post['title'] ?? '', allowEmpty: true) ?? '',
+            'slug' => TypeHelper::toString($post['slug'] ?? '', allowEmpty: true) ?? '',
+            'excerpt' => TypeHelper::toString($post['excerpt'] ?? '', allowEmpty: true) ?? '',
+            'body' => TypeHelper::toString($post['body'] ?? '', allowEmpty: true) ?? '',
+            'allow_comments' => !array_key_exists('allow_comments', $post ?? []) || !empty($post['allow_comments']) ? 1 : 0,
+        ];
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST')
+        {
+            $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
+            if (!Security::verifyCsrfToken($csrfToken))
+            {
+                self::renderInvalidRequest();
+                return;
+            }
+
+            $form['title'] = trim(Security::sanitizeString($_POST['title'] ?? ''));
+            $submittedSlug = trim(Security::sanitizeString($_POST['slug'] ?? ''));
+            $form['slug'] = $submittedSlug !== '' ? self::normalizeBlogSlug($submittedSlug) : self::normalizeBlogSlug($form['title']);
+            $form['excerpt'] = trim(Security::sanitizeString($_POST['excerpt'] ?? ''));
+            $form['body'] = trim(Security::sanitizeString($_POST['body'] ?? ''));
+            $form['allow_comments'] = !empty($_POST['allow_comments']) ? 1 : 0;
+
+            if ($form['title'] === '')
+            {
+                $errors[] = 'Post title is required.';
+            }
+
+            if ($form['slug'] === '')
+            {
+                $errors[] = 'Post slug is required.';
+            }
+
+            if ($form['body'] === '')
+            {
+                $errors[] = 'Post body is required.';
+            }
+
+            $existing = BlogModel::findPostBySlug($form['slug']);
+            if ($existing && (TypeHelper::toInt($existing['id'] ?? 0) ?? 0) !== $id)
+            {
+                $errors[] = 'Another blog post already uses that slug.';
+            }
+
+            if (empty($errors))
+            {
+                $currentStatus = strtolower(TypeHelper::toString($post['status'] ?? 'draft', allowEmpty: true) ?? 'draft');
+                if (!in_array($currentStatus, ['draft', 'published', 'hidden', 'deleted'], true))
+                {
+                    $currentStatus = 'draft';
+                }
+
+                $savedId = BlogModel::savePost([
+                    'id' => $id,
+                    'user_id' => $currentUserId,
+                    'title' => $form['title'],
+                    'slug' => $form['slug'],
+                    'excerpt' => $form['excerpt'],
+                    'body' => $form['body'],
+                    'allow_comments' => $form['allow_comments'],
+                    'status' => $isCreate ? 'draft' : ($currentStatus === 'deleted' ? 'draft' : $currentStatus),
+                ]);
+
+                if ($savedId > 0)
+                {
+                    header('Location: /panel/blog?notice=saved');
+                    exit();
+                }
+
+                $errors[] = 'The blog post could not be saved.';
+            }
+        }
+
+        $template = self::initTemplate();
+        self::assignPanelPage(
+            $template,
+            'blog',
+            $isCreate ? 'Create Blog Post' : 'Edit Blog Post',
+            'Write and revise official staff blog posts before publishing them to the public blog page.',
+            'content'
+        );
+
+        $template->assign('blog_form_mode', $isCreate ? 'create' : 'edit');
+        $template->assign('blog_id', $id);
+        $template->assign('blog_title', $form['title']);
+        $template->assign('blog_slug', $form['slug']);
+        $template->assign('blog_excerpt', $form['excerpt']);
+        $template->assign('blog_body', $form['body']);
+        $template->assign('blog_allow_comments', $form['allow_comments']);
+        $template->assign('error', $errors);
+        $template->assign('csrf_token', Security::generateCsrfToken());
+        $template->render('panel/control_panel_blog_edit.html');
+    }
+
+    /**
+     * Handle one blog status action from the listing page.
+     *
+     * @param int $id
+     * @param string $action
+     * @return void
+     */
+    private static function handleBlogStatusAction(int $id, string $action): void
+    {
+        if (!BlogModel::isSchemaAvailable())
+        {
+            header('Location: /panel/blog?notice=schema_missing');
+            exit();
+        }
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST')
+        {
+            self::renderInvalidRequest();
+            return;
+        }
+
+        $csrfToken = Security::sanitizeString($_POST['csrf_token'] ?? '');
+        if (!Security::verifyCsrfToken($csrfToken))
+        {
+            self::renderInvalidRequest();
+            return;
+        }
+
+        $post = BlogModel::findPostById($id);
+        if (!$post)
+        {
+            self::renderErrorPage(404, 'Blog Post Not Found', 'That blog post could not be found.');
+            return;
+        }
+
+        $currentUserId = TypeHelper::toInt(SessionManager::get('user_id')) ?? 0;
+        if ($action === 'publish')
+        {
+            BlogModel::publishPost($id, $currentUserId > 0 ? $currentUserId : null);
+            header('Location: /panel/blog?notice=published');
+            exit();
+        }
+
+        if ($action === 'hide')
+        {
+            BlogModel::hidePost($id);
+            header('Location: /panel/blog?notice=hidden');
+            exit();
+        }
+
+        BlogModel::deletePost($id, $currentUserId > 0 ? $currentUserId : null);
+        header('Location: /panel/blog?notice=deleted');
+        exit();
+    }
+
 }

@@ -17,7 +17,7 @@
                     </div>
 
                     <div class="admin-page-actions">
-                        <a href="/panel/rules/categories" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back to Categories</a>
+                        <a href="/panel/blog" class="admin-btn admin-btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back to Blog</a>
                     </div>
                 </div>
 
@@ -32,49 +32,47 @@
                 <section class="admin-panel">
                     <div class="admin-panel-heading">
                         <div>
-                            <h3>{if $rule_category_form_mode == 'create'}New Rules Category{else}Edit Rules Category{/if}</h3>
-                            <p>Saving this category publishes a fresh rules update so users can review the latest structure.</p>
+                            <h3>{if $blog_form_mode == 'create'}New Blog Post{else}Edit Blog Post{/if}</h3>
+                            <p>Saving here preserves the post as a draft unless it has already been published. Use the list page to publish, hide, or delete the post.</p>
                         </div>
                     </div>
 
                     <div class="admin-panel-body">
-                        <form method="POST" action="{if $rule_category_form_mode == 'create'}/panel/rules/categories/create{else}/panel/rules/categories/edit/{$rule_category_id}{/if}" class="admin-form">
+                        <form method="POST" action="{if $blog_form_mode == 'create'}/panel/blog/create{else}/panel/blog/edit/{$blog_id}{/if}" class="admin-form">
                             <input type="hidden" name="csrf_token" value="{$csrf_token}">
 
                             <div class="admin-form-grid-two">
                                 <div class="admin-field">
-                                    <label>Category Title</label>
-                                    <input type="text" name="title" value="{$rule_category_title}" required>
+                                    <label>Post Title</label>
+                                    <input type="text" name="title" value="{$blog_title}" required>
                                 </div>
 
                                 <div class="admin-field">
-                                    <label>Category Slug</label>
-                                    <input type="text" name="slug" value="{$rule_category_slug}">
-                                </div>
-                            </div>
-
-                            <div class="admin-form-grid-two">
-                                <div class="admin-field">
-                                    <label>Description</label>
-                                    <textarea name="description" rows="4">{$rule_category_description}</textarea>
-                                </div>
-
-                                <div class="admin-field">
-                                    <label>Sort Order</label>
-                                    <input type="number" name="sort_order" value="{$rule_category_sort_order}" min="0">
+                                    <label>Post Slug</label>
+                                    <input type="text" name="slug" value="{$blog_slug}">
                                 </div>
                             </div>
 
                             <div class="admin-field">
+                                <label>Post Summary</label>
+                                <textarea name="excerpt" rows="4" placeholder="Optional short summary shown on the blog index page.">{$blog_excerpt}</textarea>
+                            </div>
+
+                            <div class="admin-field">
+                                <label>Post Body</label>
+                                <textarea name="body" rows="16" required>{$blog_body}</textarea>
+                            </div>
+
+                            <div class="admin-field">
                                 <label style="display:flex; gap:10px; align-items:center;">
-                                    <input type="checkbox" name="is_active" value="1" {if $rule_category_is_active}checked{/if}>
-                                    Show this category on the public rules page
+                                    <input type="checkbox" name="allow_comments" value="1" {if $blog_allow_comments}checked{/if}>
+                                    Allow comments below the published blog post
                                 </label>
                             </div>
 
                             <div class="admin-form-footer">
-                                <button type="submit" class="admin-btn admin-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Category</button>
-                                <a href="/panel/rules/categories" class="admin-btn admin-btn-secondary">Back</a>
+                                <button type="submit" class="admin-btn admin-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Post</button>
+                                <a href="/panel/blog" class="admin-btn admin-btn-secondary">Back</a>
                             </div>
                         </form>
                     </div>

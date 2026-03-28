@@ -19,6 +19,11 @@
 /tools
 
 # -------------------------
+# ignore local font-awesome folder
+# -------------------------
+/assets/fontawesome/**
+
+# -------------------------
 # ignore tools and install folder
 # -------------------------
 /install/**/installer.lock

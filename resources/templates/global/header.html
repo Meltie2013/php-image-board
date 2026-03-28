@@ -4,19 +4,25 @@
     <meta charset="UTF-8">
     <title>{$site_name}</title>
 
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"> -->
+    <link rel="stylesheet" href="/assets/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="/assets/css/style.css">
     <link rel="stylesheet" href="/assets/css/default/gallery.css">
+    <link rel="stylesheet" href="/assets/css/default/blog.css">
     <link rel="stylesheet" href="/assets/css/default/profile.css">
     <link rel="stylesheet" href="/assets/css/default/control-panel.css">
 </head>
 <body>
     <header>
-        <div class="logo">{$site_name}</div>
+        <div class="logo"><a href="/index.php">{$site_name}</a></div>
 
         <nav>
             <a class="nav-icon" href="/community/rules" aria-label="Community Rules" data-tooltip="Community Rules">
                 <i class="fa-solid fa-book"></i>
+            </a>
+
+            <a class="nav-icon" href="/blog" aria-label="Official Blog" data-tooltip="Official Blog">
+                <i class="fa-solid fa-newspaper"></i>
             </a>
 
             <a class="nav-icon" href="#" aria-label="Community Forum" data-tooltip="Community Forum">

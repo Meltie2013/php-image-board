@@ -1,0 +1,99 @@
+/*
+ * blog.css
+ * Section: BLOG VIEW
+ */
+
+.blog-view-board {
+    gap: 18px;
+}
+
+.blog-view-intro {
+    max-width: 760px;
+}
+
+.blog-view-summary,
+.blog-view-body,
+.blog-comments-surface {
+    gap: 14px;
+}
+
+.blog-post-body-rendered h1,
+.blog-post-body-rendered h2,
+.blog-post-body-rendered h3,
+.blog-post-body-rendered h4 {
+    margin: 22px 0 10px;
+    color: #ffffff;
+    line-height: 1.2;
+}
+
+.blog-post-body-rendered h1:first-child,
+.blog-post-body-rendered h2:first-child,
+.blog-post-body-rendered h3:first-child,
+.blog-post-body-rendered h4:first-child {
+    margin-top: 0;
+}
+
+.blog-post-body-rendered ul,
+.blog-post-body-rendered ol {
+    padding-left: 20px;
+    margin: 0;
+}
+
+.blog-post-body-rendered blockquote {
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border-left: 3px solid rgba(114, 119, 255, 0.72);
+    background: rgba(20, 23, 31, 0.92);
+}
+
+.blog-post-body-rendered pre,
+.blog-post-body-rendered code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+.blog-post-body-rendered pre {
+    margin: 0;
+    padding: 14px;
+    overflow-x: auto;
+    border-radius: 14px;
+    background: rgba(7, 9, 13, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.blog-comment-form {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 2px;
+    padding: 14px 15px;
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.blog-comment-form textarea {
+    width: 100%;
+    min-height: 132px;
+    padding: 14px 15px;
+    resize: vertical;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(14, 17, 22, 0.82);
+    color: #f2f3ff;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.blog-comment-form textarea:focus {
+    border-color: rgba(132, 138, 255, 0.82);
+    box-shadow: 0 0 0 1px rgba(132, 138, 255, 0.32);
+    outline: none;
+}
+
+.blog-comment-form .gallery-hero-btn {
+    min-width: 0;
+    min-height: 40px;
+    padding: 0 14px;
+    justify-self: flex-start;
+    font-size: 12px;
+}

@@ -1,0 +1,302 @@
+/*
+ * blog.css
+ * Section: BLOG SHARED LAYOUT
+ */
+
+.blog-container {
+    width: min(1400px, 94vw);
+    margin: 20px auto 0;
+    padding: 0;
+}
+
+.blog-shell {
+    display: grid;
+    gap: 18px;
+    padding-top: 18px;
+    padding-bottom: 20px;
+}
+
+.blog-board {
+    position: relative;
+    width: min(1120px, 100%);
+    display: grid;
+    gap: 20px;
+    margin: 0 auto;
+    padding: 18px;
+    overflow: hidden;
+    background: var(--color-surface);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    box-shadow: var(--shadow-strong), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.blog-board::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border-top: 3px solid rgba(114, 119, 255, 0.88);
+    pointer-events: none;
+}
+
+.blog-board::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle at top right, rgba(111, 116, 255, 0.14), transparent 36%);
+    pointer-events: none;
+}
+
+.blog-board > * {
+    position: relative;
+    z-index: 1;
+}
+
+.blog-board-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 2px 2px 14px;
+    margin-bottom: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.blog-board-header-actions {
+    align-items: flex-start;
+}
+
+.blog-board-intro {
+    width: 100%;
+}
+
+.blog-board-kicker {
+    display: inline-block;
+    margin-bottom: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #c5c8ff;
+}
+
+.blog-board-intro h1,
+.blog-card h2 {
+    margin: 0;
+    color: #ffffff;
+    letter-spacing: 0.01em;
+}
+
+.blog-board-intro h1 {
+    font-size: clamp(22px, 2vw, 30px);
+    line-height: 1.08;
+}
+
+.blog-card h2 {
+    font-size: clamp(18px, 1.7vw, 22px);
+    line-height: 1.18;
+}
+
+.blog-board-intro p,
+.blog-card p,
+.blog-comments-login-note small,
+.blog-comments-empty small {
+    margin: 8px 0 0;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.blog-board-notes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.blog-board-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: rgba(9, 11, 15, 0.52);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    color: #dee1f6;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.blog-board-note i {
+    color: #c7cafc;
+    font-size: 12px;
+}
+
+.blog-board-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.blog-action-btn.gallery-hero-btn,
+.blog-post-read-btn.gallery-hero-btn {
+    min-width: 0;
+    min-height: 40px;
+    padding: 0 14px;
+    font-size: 12px;
+}
+
+.blog-post-list,
+.blog-comments-list {
+    display: grid;
+    gap: 14px;
+}
+
+.blog-card {
+    display: grid;
+    gap: 12px;
+    padding: 18px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(15, 17, 22, 0.84);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.blog-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.blog-card-meta {
+    display: grid;
+    gap: 8px;
+    width: 100%;
+}
+
+.blog-card-meta-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.blog-card-kicker {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: rgba(9, 11, 15, 0.52);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    color: #dfe2fb;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.blog-card-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 0 11px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--color-text-main);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.blog-card-copy,
+.blog-post-content-panel,
+.blog-comments-login-note,
+.blog-comments-empty {
+    padding: 14px 15px;
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--color-text-muted);
+    line-height: 1.72;
+    font-size: 13px;
+}
+
+.blog-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.blog-card-copy p {
+    margin: 0;
+}
+
+.blog-comments-login-note small,
+.blog-comments-empty small {
+    display: block;
+    margin: 0;
+}
+
+.blog-post-copy a,
+.blog-post-body-rendered a,
+.blog-comments-login-note a {
+    color: #ffffff;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.blog-post-copy a:hover,
+.blog-post-body-rendered a:hover,
+.blog-comments-login-note a:hover {
+    color: #d8dbff;
+}
+
+.blog-post-excerpt,
+.blog-post-body-rendered,
+.blog-post-body-rendered p,
+.blog-post-body-rendered li,
+.blog-post-body-rendered blockquote,
+.blog-comment-body,
+.blog-comment-body p {
+    color: rgba(237, 240, 255, 0.88);
+    font-size: 13px;
+    line-height: 1.74;
+}
+
+.blog-post-excerpt > :first-child,
+.blog-post-body-rendered > :first-child,
+.blog-comment-body > :first-child {
+    margin-top: 0;
+}
+
+.blog-post-excerpt > :last-child,
+.blog-post-body-rendered > :last-child,
+.blog-comment-body > :last-child {
+    margin-bottom: 0;
+}
+
+.blog-empty-state-panel.notification-empty-state {
+    min-height: 220px;
+}
+
+.blog-empty-state-panel i {
+    font-size: 22px;
+    color: var(--color-text-muted);
+}
+
+.blog-empty-state-panel p {
+    margin: 0;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+}

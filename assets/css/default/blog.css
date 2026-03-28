@@ -1,0 +1,12 @@
+/*
+ * Official Blog Theme
+ *
+ * Blog styles are grouped under their own entrypoint so the blog surface
+ * stays separate from the gallery theme files.
+ */
+
+@import "blog/blog-shared.css";
+@import "blog/blog-index.css";
+@import "blog/blog-view.css";
+@import "blog/blog-comments.css";
+@import "blog/blog-responsive.css";

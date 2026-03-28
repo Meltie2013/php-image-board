@@ -6,22 +6,42 @@
 /* =========================================================
    COMMUNITY NOTIFICATIONS
 ========================================================= */
+.notifications-container {
+    width: min(1400px, 94vw);
+    margin: 20px auto 0;
+    padding: 0;
+}
+
+.notifications-page-shell,
+.notifications-shell {
+    display: grid;
+    gap: 18px;
+    padding-top: 18px;
+    padding-bottom: 20px;
+}
+
+.notifications-index-board {
+    gap: 20px;
+}
+
 .notifications-list {
     display: grid;
-    gap: 10px;
+    gap: 14px;
 }
 
 .notification-card {
     display: grid;
-    gap: 8px;
-    padding: 12px 14px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 16px;
+    gap: 12px;
+    padding: 18px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(15, 17, 22, 0.84);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .notification-card-unread {
-    border-color: rgba(224, 184, 77, 0.28);
+    border-color: rgba(141, 145, 255, 0.22);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(141, 145, 255, 0.10);
 }
 
 .notification-card-header {
@@ -29,18 +49,41 @@
     justify-content: space-between;
     align-items: flex-start;
     gap: 12px;
-    margin-bottom: 0;
 }
 
 .notification-card-meta {
     display: grid;
-    gap: 3px;
+    gap: 8px;
+    width: 100%;
+}
+
+.notification-card-meta-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.notification-card-kicker {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: rgba(9, 11, 15, 0.52);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    color: #dfe2fb;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 .notification-card-header h2 {
     margin: 0;
-    font-size: 1.35rem;
-    line-height: 1.2;
+    font-size: clamp(18px, 1.7vw, 22px);
+    line-height: 1.18;
+    letter-spacing: 0.01em;
 }
 
 .notification-card-header p,
@@ -49,69 +92,74 @@
 }
 
 .notification-card-header p {
-    font-size: 1.05rem;
-}
-
-.notification-card-header p,
-.notification-card-copy {
     color: var(--color-text-muted);
+    font-size: 12px;
+    line-height: 1.55;
 }
 
 .notification-card-badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 24px;
-    padding: 0 9px;
+    min-height: 28px;
+    padding: 0 11px;
     border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.04);
     color: var(--color-text-main);
     font-size: 10px;
     font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     white-space: nowrap;
 }
 
 .notification-card-copy {
-    padding: 8px 10px;
-    border-radius: 10px;
+    padding: 14px 15px;
+    border-radius: 15px;
     border: 1px solid rgba(255, 255, 255, 0.06);
-    background: rgba(0, 0, 0, 0.14);
-    line-height: 1.45;
-    font-size: 1.12rem;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--color-text-muted);
+    line-height: 1.72;
+    font-size: 13px;
 }
 
 .notification-card-actions {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-top: 0;
 }
 
 .notification-card .gallery-hero-btn {
     min-width: 0;
-    min-height: 32px;
-    padding: 0 12px;
+    min-height: 40px;
+    padding: 0 14px;
     justify-content: center;
-    font-size: 1.05rem;
+    font-size: 12px;
 }
 
 .notification-card .gallery-hero-btn i {
     font-size: 0.95em;
 }
 
+.notification-empty-state {
+    min-height: 220px;
+}
+
 .notifications-pagination {
-    margin-top: 14px;
+    margin-top: 2px;
 }
 
 @media (max-width: 900px)
 {
-    .notification-card-header {
-        flex-direction: column;
-        align-items: flex-start;
+    .notification-card,
+    .notification-empty-state {
+        padding: 16px;
     }
 
-    .notification-card {
-        padding: 12px;
+    .notification-card-header,
+    .notification-card-meta-top {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }

@@ -1,6 +1,7 @@
     {if $is_logged_in && $site_user_has_pending_rules_notice}
     <div class="rules-site-notice {if $site_user_rules_notice_blocking}rules-site-notice-blocking{else}rules-site-notice-warning{/if}">
         <div class="rules-site-notice-copy">
+            <span class="rules-site-notice-kicker">{if $site_user_rules_notice_blocking}Action Required{else}Rules Notice{/if}</span>
             <strong>{$site_user_rules_notice_title}</strong>
             <span>{$site_user_rules_notice_message}</span>
             {if $site_user_rules_notice_deadline}

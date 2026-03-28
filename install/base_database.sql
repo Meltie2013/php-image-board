@@ -266,6 +266,8 @@ INSERT INTO `app_group_permissions` (`group_id`, `permission_token`, `permission
     (1, 'manage_group_permissions', 1),
     (1, 'manage_settings', 1),
     (1, 'manage_rules', 1),
+    (1, 'manage_blog_posts', 1),
+    (1, 'comment_blog_posts', 1),
     (1, 'view_security', 1),
     (1, 'manage_block_list', 1),
     (1, 'moderate_site', 1),
@@ -287,6 +289,8 @@ INSERT INTO `app_group_permissions` (`group_id`, `permission_token`, `permission
     (2, 'manage_users', 1),
     (2, 'manage_settings', 1),
     (2, 'manage_rules', 1),
+    (2, 'manage_blog_posts', 1),
+    (2, 'comment_blog_posts', 1),
     (2, 'view_security', 1),
     (2, 'manage_block_list', 1),
     (2, 'moderate_site', 1),
@@ -306,6 +310,8 @@ INSERT INTO `app_group_permissions` (`group_id`, `permission_token`, `permission
     (3, 'edit_any_image', 1),
     (3, 'access_control_panel', 1),
     (3, 'manage_rules', 0),
+    (3, 'manage_blog_posts', 1),
+    (3, 'comment_blog_posts', 1),
     (3, 'moderate_site', 1),
     (3, 'moderate_forums', 1),
     (3, 'moderate_gallery', 1),
@@ -320,6 +326,7 @@ INSERT INTO `app_group_permissions` (`group_id`, `permission_token`, `permission
     (4, 'edit_own_image', 1),
     (4, 'access_control_panel', 1),
     (4, 'manage_rules', 0),
+    (4, 'comment_blog_posts', 1),
     (4, 'moderate_forums', 1),
     (5, 'view_gallery', 1),
     (5, 'upload_images', 1),
@@ -331,6 +338,7 @@ INSERT INTO `app_group_permissions` (`group_id`, `permission_token`, `permission
     (5, 'edit_any_image', 1),
     (5, 'access_control_panel', 1),
     (5, 'manage_rules', 0),
+    (5, 'comment_blog_posts', 1),
     (5, 'moderate_gallery', 1),
     (5, 'moderate_image_queue', 1),
     (5, 'manage_image_reports', 1),
@@ -343,6 +351,7 @@ INSERT INTO `app_group_permissions` (`group_id`, `permission_token`, `permission
     (6, 'favorite_images', 1),
     (6, 'edit_own_image', 1),
     (6, 'manage_rules', 0),
+    (6, 'comment_blog_posts', 1),
     (7, 'view_gallery', 0),
     (7, 'upload_images', 0),
     (7, 'comment_images', 0),
@@ -357,6 +366,8 @@ INSERT INTO `app_group_permissions` (`group_id`, `permission_token`, `permission
     (7, 'manage_group_permissions', 0),
     (7, 'manage_settings', 0),
     (7, 'manage_rules', 0),
+    (7, 'manage_blog_posts', 0),
+    (7, 'comment_blog_posts', 0),
     (7, 'view_security', 0),
     (7, 'manage_block_list', 0),
     (7, 'moderate_site', 0),
@@ -434,6 +445,7 @@ INSERT INTO `app_settings_categories` (`id`, `slug`, `title`, `description`, `ic
     (1, 'debugging', 'Debugging', 'Developer-only switches used while troubleshooting uploads, rendering, and runtime issues.', 'fa-bug', 10, 1),
     (2, 'gallery', 'Gallery', 'Controls gallery page sizing, pagination, comments, and upload storage limits.', 'fa-images', 20, 1),
     (3, 'profile', 'User Profile', 'Profile presentation defaults, avatar sizing, and age-gate requirements.', 'fa-id-card', 30, 1),
+    (8, 'blog', 'Blog', 'Controls blog post pagination, comment sizing, and staff publishing defaults.', 'fa-newspaper', 35, 1),
     (4, 'site', 'Site', 'Board identity, naming, and build metadata exposed across the public interface.', 'fa-window-maximize', 40, 1),
     (5, 'template', 'Template', 'Template engine behavior, cache handling, and approved helper functions.', 'fa-code', 50, 1),
     (6, 'upload', 'Upload', 'Controls how new upload hashes are generated and how upload behavior is presented.', 'fa-upload', 60, 1),
@@ -474,6 +486,8 @@ INSERT INTO `app_settings_data` (`id`, `category_id`, `key`, `title`, `descripti
     (7, 2, 'gallery.upload_max_storage', 'Maximum Gallery Storage', 'Defines the total storage available for uploaded images using shorthand values such as 500mb, 10gb, or 1tb.', '10gb', 'string', 'text', 50, 1),
     (8, 3, 'profile.avatar_size', 'Default Avatar Size', 'Sets the default avatar display size in pixels for user profile areas.', '250', 'int', 'number', 10, 1),
     (9, 3, 'profile.years', 'Sensitive Content Age Requirement', 'Defines the minimum age required for users to view content protected by the board age gate.', '13', 'int', 'number', 20, 1),
+    (16, 8, 'blog.posts_per_page', 'Blog Posts Per Page', 'Sets how many published blog posts appear on each public blog page before pagination is used.', '10', 'int', 'number', 10, 1),
+    (17, 8, 'blog.comments_per_page', 'Blog Comments Per Page', 'Controls how many comments appear at once under a published blog post before pagination is used.', '10', 'int', 'number', 20, 1),
     (10, 4, 'site.name', 'Site Name', 'Primary board name shown in the header, footer, page titles, and shared templates.', 'PHP Image Board', 'string', 'text', 10, 1),
     (11, 4, 'site.version', 'Build Version', 'Version or build string shown in the interface for release tracking and support reference.', '0.2.3', 'string', 'text', 20, 1),
     (12, 5, 'template.allowed_functions', 'Allowed Template Functions', 'JSON array of trusted PHP function names that templates may call. This list should stay minimal and only contain simple, safe helpers.', '["strtoupper","strtolower","ucfirst","lcfirst"]', 'json', 'json', 10, 1),
@@ -556,6 +570,46 @@ CREATE TABLE `app_users` (
     `failed_logins` int(10) UNSIGNED NOT NULL DEFAULT 0,
     `last_failed_login` datetime DEFAULT NULL,
     `last_login` datetime DEFAULT NULL,
+    `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+    `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `app_blog_posts`
+--
+
+CREATE TABLE `app_blog_posts` (
+    `id` bigint(20) UNSIGNED NOT NULL,
+    `user_id` bigint(20) UNSIGNED NOT NULL,
+    `slug` varchar(120) NOT NULL,
+    `title` varchar(180) NOT NULL,
+    `excerpt` text DEFAULT NULL,
+    `body` mediumtext NOT NULL,
+    `status` enum('draft','published','hidden','deleted') NOT NULL DEFAULT 'draft',
+    `allow_comments` tinyint(1) NOT NULL DEFAULT 1,
+    `published_by` bigint(20) UNSIGNED DEFAULT NULL,
+    `published_at` datetime DEFAULT NULL,
+    `deleted_by` bigint(20) UNSIGNED DEFAULT NULL,
+    `deleted_at` datetime DEFAULT NULL,
+    `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+    `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `app_blog_comments`
+--
+
+CREATE TABLE `app_blog_comments` (
+    `id` bigint(20) UNSIGNED NOT NULL,
+    `post_id` bigint(20) UNSIGNED NOT NULL,
+    `user_id` bigint(20) UNSIGNED NOT NULL,
+    `comment_body` text NOT NULL,
+    `is_deleted` tinyint(1) NOT NULL DEFAULT 0,
+    `deleted_at` datetime DEFAULT NULL,
     `created_at` datetime NOT NULL DEFAULT current_timestamp(),
     `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -795,6 +849,27 @@ ALTER TABLE `app_sessions`
     ADD KEY `idx_sessions_browser_fingerprint` (`browser_fingerprint`);
 
 --
+-- Indexes for table `app_blog_posts`
+--
+ALTER TABLE `app_blog_posts`
+    ADD PRIMARY KEY (`id`),
+    ADD UNIQUE KEY `uniq_app_blog_posts_slug` (`slug`),
+    ADD KEY `idx_app_blog_posts_user` (`user_id`),
+    ADD KEY `idx_app_blog_posts_status` (`status`),
+    ADD KEY `idx_app_blog_posts_published_at` (`published_at`),
+    ADD KEY `idx_app_blog_posts_published_by` (`published_by`),
+    ADD KEY `idx_app_blog_posts_deleted_by` (`deleted_by`);
+
+--
+-- Indexes for table `app_blog_comments`
+--
+ALTER TABLE `app_blog_comments`
+    ADD PRIMARY KEY (`id`),
+    ADD KEY `idx_app_blog_comments_post` (`post_id`),
+    ADD KEY `idx_app_blog_comments_user` (`user_id`),
+    ADD KEY `idx_app_blog_comments_created_at` (`created_at`);
+
+--
 -- Indexes for table `app_settings_categories`
 --
 ALTER TABLE `app_settings_categories`
@@ -1014,10 +1089,22 @@ ALTER TABLE `app_device_overrides`
   MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT for table `app_blog_posts`
+--
+ALTER TABLE `app_blog_posts`
+    MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `app_blog_comments`
+--
+ALTER TABLE `app_blog_comments`
+    MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `app_settings_categories`
 --
 ALTER TABLE `app_settings_categories`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `app_settings_data`
@@ -1084,6 +1171,21 @@ ALTER TABLE `app_rule_acceptances`
 --
 ALTER TABLE `app_notifications`
     ADD CONSTRAINT `fk_notifications_user` FOREIGN KEY (`user_id`) REFERENCES `app_users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Constraints for table `app_blog_posts`
+--
+ALTER TABLE `app_blog_posts`
+    ADD CONSTRAINT `fk_blog_posts_user` FOREIGN KEY (`user_id`) REFERENCES `app_users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    ADD CONSTRAINT `fk_blog_posts_published_by` FOREIGN KEY (`published_by`) REFERENCES `app_users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+    ADD CONSTRAINT `fk_blog_posts_deleted_by` FOREIGN KEY (`deleted_by`) REFERENCES `app_users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
+-- Constraints for table `app_blog_comments`
+--
+ALTER TABLE `app_blog_comments`
+    ADD CONSTRAINT `fk_blog_comments_post` FOREIGN KEY (`post_id`) REFERENCES `app_blog_posts` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    ADD CONSTRAINT `fk_blog_comments_user` FOREIGN KEY (`user_id`) REFERENCES `app_users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `app_settings_data`

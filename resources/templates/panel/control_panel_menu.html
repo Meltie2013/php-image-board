@@ -118,6 +118,29 @@
     </details>
     {/if}
 
+    {if $cp_can_manage_blog_posts}
+    <details class="admin-menu-dropdown" {if $current_control_panel_section == 'content'}open{/if}>
+        <summary class="admin-menu-dropdown-toggle">
+            <span class="admin-menu-dropdown-copy">
+                <span class="admin-menu-group-title admin-menu-dropdown-title">Content</span>
+                <span class="admin-menu-dropdown-desc">Official blog publishing tools for staff announcements and longer-form updates.</span>
+            </span>
+            <span class="admin-menu-dropdown-icon" aria-hidden="true"><i class="fa-solid fa-chevron-down"></i></span>
+        </summary>
+        <div class="admin-menu-group admin-menu-group-dropdown">
+            <div class="admin-menu-links admin-menu-dropdown-links">
+                <a href="/panel/blog" class="admin-menu-link {if $current_control_panel_nav == 'blog'}is-active{/if}">
+                    <span class="admin-menu-link-icon"><i class="fa-solid fa-newspaper"></i></span>
+                    <span class="admin-menu-link-text">
+                        <span class="admin-menu-link-title">Blog Posts</span>
+                        <span class="admin-menu-link-desc">Create drafts, publish updates, and manage public staff blog entries.</span>
+                    </span>
+                </a>
+            </div>
+        </div>
+    </details>
+    {/if}
+
     {if $cp_can_manage_rules}
     <details class="admin-menu-dropdown" {if $current_control_panel_section == 'rules'}open{/if}>
         <summary class="admin-menu-dropdown-toggle">

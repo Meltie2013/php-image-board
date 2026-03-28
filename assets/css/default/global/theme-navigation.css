@@ -24,7 +24,9 @@ header {
     gap: 16px;
 }
 
-header .logo {
+header .logo,
+header .logo a {
+    color: #ffffff;
     font-size: 18px;
     font-weight: 700;
     letter-spacing: 0.08em;

@@ -502,6 +502,7 @@ function installer_write_auth_config(string $username, string $password): array
     ];
 }
 
+
 /**
  * Store installer form values for the initial administrator account.
  *
@@ -1331,6 +1332,7 @@ function installer_db_test(array $config): array
         return ['ok' => false, 'error' => $e->getMessage()];
     }
 }
+
 
 /**
  * Read and sanitize the initial administrator account payload.

@@ -75,7 +75,7 @@ class DateHelper
      *
      * @return string
      */
-    public static function format(?string $date, string $format = "F jS, Y \\a\\t g:i a"): string
+    public static function format(?string $date, string $format = "D F jS, Y \\a\\t g:i a"): string
     {
         if ($date === null)
         {
@@ -157,7 +157,7 @@ class DateHelper
      *
      * @return string
      */
-    public static function date_only_format(?string $date, string $format = "F jS, Y \\a\\t g:i a"): string
+    public static function date_only_format(?string $date, string $format = "D F jS, Y \\a\\t g:i a"): string
     {
         if ($date === null)
         {
@@ -182,7 +182,7 @@ class DateHelper
      *
      * @return string
      */
-    public static function birthday_format(?string $date, string $format = "F jS, Y"): string
+    public static function birthday_format(?string $date, string $format = "D F jS, Y"): string
     {
         if (empty($date))
         {

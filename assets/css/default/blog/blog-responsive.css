@@ -1,0 +1,52 @@
+/*
+ * blog.css
+ * Section: BLOG RESPONSIVE
+ */
+
+@media (max-width: 900px)
+{
+    .blog-board-header,
+    .blog-card-header,
+    .blog-card-meta-top {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .blog-board-actions {
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 760px)
+{
+    .blog-board,
+    .blog-card {
+        padding: 16px;
+    }
+
+    .blog-board-intro h1,
+    .blog-card h2 {
+        font-size: 22px;
+    }
+
+    .blog-comments-pagination.gallery-pagination {
+        justify-content: center;
+    }
+}
+
+@media (max-width: 540px)
+{
+    .blog-container {
+        width: min(100%, calc(100vw - 24px));
+    }
+
+    .blog-board-notes,
+    .blog-board-actions,
+    .blog-comments-pagination.gallery-pagination {
+        width: 100%;
+    }
+
+    .blog-comments-pagination.gallery-pagination a {
+        flex: 1 1 100%;
+    }
+}

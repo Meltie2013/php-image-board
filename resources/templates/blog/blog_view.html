@@ -1,0 +1,133 @@
+{include file="global/header.html"}
+
+    <main class="blog-container blog-shell">
+        <section class="blog-board blog-view-board">
+            <div class="blog-board-header blog-board-header-actions">
+                <div class="blog-board-intro blog-view-intro">
+                    <span class="blog-board-kicker">Official Blog</span>
+                    <h1>{$blog_post_title}</h1>
+                    <p>Written by {$blog_post_author_name}{if $blog_post_author_has_birthday_badge} <i class="fa-solid fa-cake-candles birthday-badge-inline" title="Happy Birthday!"></i>{/if} &middot; Published {$blog_post_published_at}{if $blog_post_updated_at} &middot; Updated {$blog_post_updated_at}{/if} &middot; {$blog_post_comment_count} comments</p>
+                </div>
+
+                <div class="blog-board-actions">
+                    <a href="/blog" class="gallery-hero-btn blog-action-btn">
+                        <i class="fa-solid fa-arrow-left"></i>
+                        Back to Blog
+                    </a>
+                </div>
+            </div>
+
+            {if $blog_post_excerpt_html}
+            <article class="blog-card blog-view-summary">
+                <div class="blog-card-header">
+                    <div class="blog-card-meta">
+                        <div class="blog-card-meta-top">
+                            <span class="blog-card-kicker">Summary</span>
+                            <div class="blog-card-badge">Quick Read</div>
+                        </div>
+                        <h2>Post Summary</h2>
+                        <p>A short overview of this blog update before the full article.</p>
+                    </div>
+                </div>
+
+                <div class="blog-card-copy blog-post-content-panel">
+                    <div class="blog-post-excerpt">{raw $blog_post_excerpt_html}</div>
+                </div>
+            </article>
+            {/if}
+
+            <article class="blog-card blog-view-body">
+                <div class="blog-card-header">
+                    <div class="blog-card-meta">
+                        <div class="blog-card-meta-top">
+                            <span class="blog-card-kicker">Official Blog</span>
+                            <div class="blog-card-badge">Blog Post</div>
+                        </div>
+                        <h2>{$blog_post_title}</h2>
+                        <p>Written by {$blog_post_author_name} &middot; Published {$blog_post_published_at}{if $blog_post_updated_at} &middot; Updated {$blog_post_updated_at}{/if}</p>
+                    </div>
+                </div>
+
+                <div class="blog-card-copy blog-post-content-panel">
+                    <div class="blog-post-body-rendered">{raw $blog_post_body_html}</div>
+                </div>
+            </article>
+
+            <article class="blog-card blog-comments-surface" id="blog-comments">
+                <div class="blog-card-header">
+                    <div class="blog-card-meta">
+                        <div class="blog-card-meta-top">
+                            <span class="blog-card-kicker">Discussion</span>
+                            <div class="blog-card-badge">{$blog_post_comment_count} comments</div>
+                        </div>
+                        <h2>Post Comments</h2>
+                        <p>Discussion appears directly below the original post so members can read the update and the conversation together.</p>
+                    </div>
+                </div>
+
+                {if $blog_post_allow_comments}
+                    {if $is_logged_in}
+                        {if $can_comment_blog}
+                <form method="POST" action="/blog/{$blog_post_slug}/comment" class="blog-comment-form">
+                    <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                    <textarea name="comment_body" rows="5" maxlength="1000" placeholder="Write your comment..."></textarea>
+                    <button type="submit" class="gallery-hero-btn gallery-hero-btn-button">Post Comment</button>
+                </form>
+                        {else}
+                <div class="alert alert-warning">{$comment_blog_permission_message}</div>
+                        {/if}
+                    {else}
+                <div class="blog-comments-login-note">
+                    <small>Greetings guest! To post a comment, please <a href="/user/register/">register</a> or <a href="/user/login?return_to={$current_request_uri}">login</a>.</small>
+                </div>
+                    {/if}
+                {else}
+                <div class="alert alert-warning">Comments are currently disabled for this blog post.</div>
+                {/if}
+
+                {if $comment_rows}
+                <div class="blog-comments-list">
+                    {foreach $comment_rows as list($comment_author_name, $comment_author_initial, $comment_author_avatar, $comment_created_at, $comment_body_html, $comment_has_birthday_badge)}
+                    <article class="blog-card blog-comment-card">
+                        <div class="blog-card-header">
+                            <div class="blog-card-meta">
+                                <div class="blog-card-meta-top">
+                                    <span class="blog-card-kicker">Comment</span>
+                                    <div class="blog-card-badge">{$comment_created_at}</div>
+                                </div>
+                                <h2>{$comment_author_name}{if $comment_has_birthday_badge} <i class="fa-solid fa-cake-candles birthday-badge-inline" title="Happy Birthday!"></i>{/if}</h2>
+                            </div>
+                        </div>
+
+                        <div class="blog-card-copy blog-comment-body">{raw $comment_body_html}</div>
+                    </article>
+                    {/foreach}
+                </div>
+
+                {if $comments_total_pages > 1}
+                <div class="gallery-pagination blog-comments-pagination">
+                    {if $comments_has_prev}
+                    <a class="blog-comments-page-btn" href="{$comments_prev_url}">Prev</a>
+                    {else}
+                    <a class="blog-comments-page-btn disabled">Prev</a>
+                    {/if}
+
+                    <a class="disabled blog-comments-page-info">Page {$comments_page} of {$comments_total_pages}</a>
+
+                    {if $comments_has_next}
+                    <a class="blog-comments-page-btn" href="{$comments_next_url}">Next</a>
+                    {else}
+                    <a class="blog-comments-page-btn disabled">Next</a>
+                    {/if}
+                </div>
+                {/if}
+                {else if $is_logged_in}
+                <div class="blog-comments-empty">
+                    <small>Be the first to comment on this blog post!</small>
+                </div>
+                {/if}
+            </article>
+        </section>
+    </main>
+
+{include file="global/footer.html"}

@@ -1,18 +1,17 @@
 {include file="global/header.html"}
 
-    <main class="gallery-container gallery-index-shell rules-page-shell">
+    <main class="rules-container rules-shell">
         {if $rules_is_logged_in}
-        {include file="global/rules_notice.html"}
         {/if}
 
         <section class="gallery-index-board rules-index-board">
-            <div class="gallery-index-board-header gallery-index-board-header-actions">
-                <div class="gallery-index-board-intro">
+            <div class="gallery-index-board-header gallery-index-board-header-actions rules-board-header">
+                <div class="gallery-index-board-intro rules-board-intro">
                     <span class="gallery-panel-kicker">Community Standards</span>
                     <h1>{$rules_page_title}</h1>
                     <p>{$rules_page_description}</p>
 
-                    <div class="gallery-index-board-notes">
+                    <div class="gallery-index-board-notes rules-board-notes">
                         {if $rules_has_release}
                         <span class="gallery-index-board-note">
                             <i class="fa-solid fa-tag"></i>
@@ -32,14 +31,20 @@
 
             {if $rules_release_summary}
             <div class="rules-release-summary rules-surface-card">
-                <i class="fa-solid fa-circle-info"></i>
-                <p>{$rules_release_summary}</p>
+                <div class="rules-release-summary-icon">
+                    <i class="fa-solid fa-circle-info"></i>
+                </div>
+                <div class="rules-release-summary-copy">
+                    <span class="rules-section-kicker">Latest Release Summary</span>
+                    <p>{$rules_release_summary}</p>
+                </div>
             </div>
             {/if}
 
             {if $rules_is_logged_in && $rules_has_pending}
             <div class="rules-acceptance-panel rules-surface-card {if $rules_is_blocking}rules-acceptance-panel-blocking{/if}">
-                <div>
+                <div class="rules-acceptance-copy">
+                    <span class="rules-section-kicker">Member Acknowledgement</span>
                     <h2>{if $rules_is_blocking}Rules Acceptance Required{else}Rules Acceptance Pending{/if}</h2>
                     <p>{$rules_notice_message}</p>
                     {if $rules_deadline_display}
@@ -60,7 +65,8 @@
             </div>
             {else if $rules_is_logged_in && $rules_is_accepted}
             <div class="rules-acceptance-panel rules-surface-card rules-acceptance-panel-success">
-                <div>
+                <div class="rules-acceptance-copy">
+                    <span class="rules-section-kicker">Member Acknowledgement</span>
                     <h2>Rules Accepted</h2>
                     <p>Your account has already accepted the latest rules release.</p>
                 </div>

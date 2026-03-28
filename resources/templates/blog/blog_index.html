@@ -1,0 +1,78 @@
+{include file="global/header.html"}
+
+    <main class="blog-container blog-shell">
+        <section class="blog-board blog-index-board">
+            <div class="blog-board-header">
+                <div class="blog-board-intro">
+                    <span class="blog-board-kicker">Official Blog</span>
+                    <h1>Community Updates</h1>
+                    <p>Read site updates, feature rollouts, moderation notes, and longer-form announcements from the staff team.</p>
+
+                    <div class="blog-board-notes">
+                        <span class="blog-board-note"><i class="fa-regular fa-newspaper"></i> {$blog_total_posts} published posts</span>
+                        <span class="blog-board-note"><i class="fa-solid fa-pen"></i> Written by authorized staff</span>
+                    </div>
+                </div>
+            </div>
+
+            {if !empty($blog_posts)}
+            <div class="blog-post-list">
+                {foreach $blog_posts as list($post_slug, $post_title, $post_excerpt_html, $post_author_name, $post_author_initial, $post_author_avatar, $post_comment_count, $post_published_at, $post_updated_at)}
+                <article class="blog-card blog-post-card">
+                    <div class="blog-card-header">
+                        <div class="blog-card-meta">
+                            <div class="blog-card-meta-top">
+                                <span class="blog-card-kicker">Official Blog</span>
+                                <div class="blog-card-badge">{$post_comment_count} comments</div>
+                            </div>
+
+                            <h2><a href="/blog/{$post_slug}">{$post_title}</a></h2>
+                            <p>Written by {$post_author_name} &middot; Published {$post_published_at}{if $post_updated_at} &middot; Updated {$post_updated_at}{/if}</p>
+                        </div>
+                    </div>
+
+                    <div class="blog-card-copy blog-post-copy">{raw $post_excerpt_html}</div>
+
+                    <div class="blog-card-actions blog-post-footer">
+                        <a href="/blog/{$post_slug}" class="gallery-hero-btn blog-post-read-btn">
+                            <i class="fa-solid fa-book-open"></i>
+                            Read Post
+                        </a>
+                    </div>
+                </article>
+                {/foreach}
+            </div>
+
+            {if $pagination_prev || $pagination_next}
+            <div class="gallery-pagination blog-pagination">
+                {if $pagination_prev}
+                <a href="{$pagination_prev}">Prev</a>
+                {/if}
+
+                {foreach $pagination_pages as list($page_url, $page_number, $current)}
+                {if $page_url}
+                <a href="{$page_url}" class="{if $current}current{/if}">
+                    {$page_number}
+                </a>
+                {else}
+                <a class="disabled">
+                    {$page_number}
+                </a>
+                {/if}
+                {/foreach}
+
+                {if $pagination_next}
+                <a href="{$pagination_next}">Next</a>
+                {/if}
+            </div>
+            {/if}
+            {else}
+            <div class="blog-empty-state-panel notification-empty-state">
+                <i class="fa-regular fa-newspaper"></i>
+                <p>No blog posts have been published yet.</p>
+            </div>
+            {/if}
+        </section>
+    </main>
+
+{include file="global/footer.html"}

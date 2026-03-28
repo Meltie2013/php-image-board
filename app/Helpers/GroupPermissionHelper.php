@@ -104,6 +104,16 @@ class GroupPermissionHelper
                 'description' => 'Allows editing rules categories, rule entries, and publishing rules updates.',
                 'input_type' => 'select',
             ],
+            'manage_blog_posts' => [
+                'label' => 'Can Manage Blog Posts',
+                'description' => 'Allows creating, editing, publishing, hiding, and deleting staff blog posts.',
+                'input_type' => 'select',
+            ],
+            'comment_blog_posts' => [
+                'label' => 'Can Comment On Blog Posts',
+                'description' => 'Allows posting comments on published blog posts.',
+                'input_type' => 'select',
+            ],
             'view_security' => [
                 'label' => 'Can View Security Logs',
                 'description' => 'Allows reviewing security logs and audit details.',
@@ -186,6 +196,8 @@ class GroupPermissionHelper
                     'manage_users',
                     'manage_settings',
                     'manage_rules',
+                    'manage_blog_posts',
+                    'comment_blog_posts',
                     'view_security',
                     'manage_block_list',
                     'moderate_site',
@@ -212,6 +224,8 @@ class GroupPermissionHelper
                     'edit_own_image',
                     'edit_any_image',
                     'access_control_panel',
+                    'manage_blog_posts',
+                    'comment_blog_posts',
                     'moderate_site',
                     'moderate_forums',
                     'moderate_gallery',
@@ -233,6 +247,7 @@ class GroupPermissionHelper
                     'favorite_images',
                     'edit_own_image',
                     'access_control_panel',
+                    'comment_blog_posts',
                     'moderate_forums',
                 ] as $token)
                 {
@@ -251,6 +266,7 @@ class GroupPermissionHelper
                     'edit_own_image',
                     'edit_any_image',
                     'access_control_panel',
+                    'comment_blog_posts',
                     'moderate_gallery',
                     'moderate_image_queue',
                     'manage_image_reports',

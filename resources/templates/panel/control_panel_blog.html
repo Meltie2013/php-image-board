@@ -1,0 +1,110 @@
+{include file="global/header.html"}
+
+    <main class="admin-container">
+        <div class="admin-shell admin-layout">
+            <div class="admin-sidebar">
+                <div class="admin-sidebar-inner admin-menu">
+                    {include file="panel/control_panel_menu.html"}
+                </div>
+            </div>
+
+            <div class="admin-content admin-dashboard">
+                <div class="admin-page-header">
+                    <div>
+                        <div class="admin-kicker">Control Panel</div>
+                        <h2>{$control_panel_page_title}</h2>
+                        <p>{$control_panel_page_description}</p>
+                    </div>
+
+                    <div class="admin-page-actions">
+                        <a href="/panel/blog/create" class="admin-btn admin-btn-primary"><i class="fa-solid fa-plus"></i> New Post</a>
+                    </div>
+                </div>
+
+                {if !empty($control_panel_notice)}
+                    <div class="admin-notice admin-notice-{$control_panel_notice_type}">
+                        <i class="fa-solid {if $control_panel_notice_type == 'success'}fa-circle-check{else}fa-circle-exclamation{/if}"></i>
+                        <p>{$control_panel_notice}</p>
+                    </div>
+                {/if}
+
+                <section class="admin-panel">
+                    <div class="admin-panel-heading">
+                        <div>
+                            <h3>Blog Posts</h3>
+                            <p>Create draft posts, publish them when ready, hide them from the public page, or delete them when they are no longer needed.</p>
+                        </div>
+                    </div>
+
+                    <div class="admin-panel-body">
+                        <div class="pending-images-wrapper">
+                            <table class="pending-images-table">
+                                <thead>
+                                    <tr>
+                                        <th>Post</th>
+                                        <th>Author</th>
+                                        <th>Status</th>
+                                        <th>Published</th>
+                                        <th>Comments</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {if !empty($blog_rows)}
+                                    {foreach $blog_rows as list($post_id, $post_title, $post_slug, $post_author_name, $post_status_label, $post_status_class, $post_published_at, $post_comment_count, $post_allow_comments, $post_public_url)}
+                                    <tr>
+                                        <td>
+                                            <strong>{$post_title}</strong><br>
+                                            <small>{$post_slug}</small>
+                                        </td>
+                                        <td>{$post_author_name}</td>
+                                        <td><span class="admin-status {$post_status_class}">{$post_status_label}</span></td>
+                                        <td>{$post_published_at}</td>
+                                        <td>{$post_comment_count} {if $post_allow_comments}<small>(open)</small>{else}<small>(closed)</small>{/if}</td>
+                                        <td>
+                                            <div class="admin-row-actions">
+                                                <a href="/panel/blog/edit/{$post_id}" class="admin-btn admin-btn-secondary">Edit</a>
+
+                                                {if $post_public_url}
+                                                <a href="{$post_public_url}" class="admin-btn admin-btn-secondary">View</a>
+                                                {/if}
+
+                                                {if $post_status_label != 'Published'}
+                                                <form method="POST" action="/panel/blog/publish/{$post_id}">
+                                                    <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                                    <button type="submit" class="admin-btn admin-btn-secondary">Publish</button>
+                                                </form>
+                                                {/if}
+
+                                                {if $post_status_label == 'Published'}
+                                                <form method="POST" action="/panel/blog/hide/{$post_id}">
+                                                    <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                                    <button type="submit" class="admin-btn admin-btn-secondary">Hide</button>
+                                                </form>
+                                                {/if}
+
+                                                {if $post_status_label != 'Deleted'}
+                                                <form method="POST" action="/panel/blog/delete/{$post_id}">
+                                                    <input type="hidden" name="csrf_token" value="{$csrf_token}">
+                                                    <button type="submit" class="admin-btn admin-btn-secondary">Delete</button>
+                                                </form>
+                                                {/if}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {/foreach}
+                                    {else}
+                                    <tr>
+                                        <td colspan="6">No blog posts have been created yet.</td>
+                                    </tr>
+                                    {/if}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+{include file="global/footer.html"}

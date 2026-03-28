@@ -59,7 +59,8 @@ class SettingsManager
         'profile',
         'debugging',
         'upload',
-        'rules'
+        'rules',
+        'blog'
     ];
 
     /**

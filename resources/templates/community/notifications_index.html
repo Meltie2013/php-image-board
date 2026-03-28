@@ -1,10 +1,9 @@
 {include file="global/header.html"}
 
-    <main class="gallery-container gallery-index-shell rules-page-shell">
-        {include file="global/rules_notice.html"}
-        <section class="gallery-index-board rules-index-board">
-            <div class="gallery-index-board-header gallery-index-board-header-actions">
-                <div class="gallery-index-board-intro">
+    <main class="notifications-container notifications-shell">
+        <section class="gallery-index-board rules-index-board notifications-index-board">
+            <div class="gallery-index-board-header gallery-index-board-header-actions notifications-board-header">
+                <div class="gallery-index-board-intro notifications-board-intro">
                     <span class="gallery-panel-kicker">Community Inbox</span>
                     <h1>{$notifications_page_title}</h1>
                     <p>{$notifications_page_description}</p>
@@ -17,12 +16,14 @@
                 <article class="notification-card rules-surface-card {if !$notification_is_read}notification-card-unread{/if}">
                     <div class="notification-card-header">
                         <div class="notification-card-meta">
+                            <div class="notification-card-meta-top">
+                                <span class="notification-card-kicker">{if !$notification_is_read}Unread Notification{else}Notification{/if}</span>
+                                <div class="notification-card-badge">
+                                    {if $notification_type == 'rules_update'}Rules Update{else if $notification_type == 'image_approved'}Image Approved{else if $notification_type == 'image_rejected'}Image Update{else}Notice{/if}
+                                </div>
+                            </div>
                             <h2>{$notification_title}</h2>
                             <p>{$notification_created_at}</p>
-                        </div>
-
-                        <div class="notification-card-badge">
-                            {if $notification_type == 'rules_update'}Rules Update{else if $notification_type == 'image_approved'}Image Approved{else if $notification_type == 'image_rejected'}Image Update{else}Notice{/if}
                         </div>
                     </div>
 
@@ -60,7 +61,7 @@
             </div>
             {/if}
             {else}
-            <div class="rules-empty-state">
+            <div class="rules-empty-state notification-empty-state">
                 <i class="fa-regular fa-bell-slash"></i>
                 <p>You do not have any notifications yet.</p>
             </div>

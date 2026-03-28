@@ -172,7 +172,7 @@ $router = new Router();
 // Default route
 $router->setDefault(function ()
 {
-    GalleryController::index();
+    BlogController::index();
 });
 
 // 404 page
@@ -202,6 +202,11 @@ $gallery_page_token = '([a-f0-9]{32})';
 $router->add([
     ["/image/$image_hash/token/$gallery_page_token", function ($hash, $token) { GalleryController::servePageImage($token, $hash); }, ['GET']],
 
+    ['/blog', [BlogController::class, 'index'], ['GET']],
+    ['/blog/page/(\d+)', [BlogController::class, 'index'], ['GET']],
+    ['/blog/([a-z0-9-]+)', function ($slug) { BlogController::view($slug); }, ['GET']],
+    ['/blog/([a-z0-9-]+)/comment', function ($slug) { BlogController::comment($slug); }, ['POST']],
+
     ['/gallery', [GalleryController::class, 'index'], ['GET']],
     ['/gallery/upload-image', [UploadController::class, 'upload'], ['GET', 'POST']],
     ['/gallery/page/(\d+)', [GalleryController::class, 'index'], ['GET']],
@@ -230,6 +235,12 @@ $router->add([
     ['/panel/users/edit/(\d+)', function ($id) { ControlPanelController::userEdit((int)$id); }, ['GET', 'POST']],
     ['/panel/groups', [ControlPanelController::class, 'groups'], ['GET', 'POST']],
     ['/panel/groups/edit/(\d+)', function ($id) { ControlPanelController::groupEdit((int)$id); }, ['GET', 'POST']],
+    ['/panel/blog', [ControlPanelController::class, 'blog'], ['GET']],
+    ['/panel/blog/create', [ControlPanelController::class, 'blogCreate'], ['GET', 'POST']],
+    ['/panel/blog/edit/(\d+)', function ($id) { ControlPanelController::blogEdit((int)$id); }, ['GET', 'POST']],
+    ['/panel/blog/publish/(\d+)', function ($id) { ControlPanelController::blogPublish((int)$id); }, ['POST']],
+    ['/panel/blog/hide/(\d+)', function ($id) { ControlPanelController::blogHide((int)$id); }, ['POST']],
+    ['/panel/blog/delete/(\d+)', function ($id) { ControlPanelController::blogDelete((int)$id); }, ['POST']],
     ['/panel/rules', [ControlPanelController::class, 'rules'], ['GET']],
     ['/panel/rules/create', [ControlPanelController::class, 'ruleCreate'], ['GET', 'POST']],
     ['/panel/rules/edit/(\d+)', function ($id) { ControlPanelController::ruleEdit((int)$id); }, ['GET', 'POST']],

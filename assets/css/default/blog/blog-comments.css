@@ -1,0 +1,25 @@
+/*
+ * blog.css
+ * Section: BLOG COMMENTS
+ */
+
+.blog-comments-list {
+    margin-top: 2px;
+}
+
+.blog-comment-card {
+    gap: 12px;
+}
+
+.blog-comment-body.blog-card-copy {
+    margin: 0;
+}
+
+.blog-comments-pagination.gallery-pagination {
+    justify-content: space-between;
+    margin-top: 4px;
+}
+
+.blog-comments-pagination .blog-comments-page-info {
+    pointer-events: none;
+}
